@@ -104,24 +104,29 @@ func enqueueCompose(ctx context.Context, tx repository.DramaTx, p *model.DramaPr
 	return job, nil
 }
 
-// composeInput 读时间线并对账后冻结成剪辑清单：待采用占位跳过并记下序号；有失效段整体拒绝（67048），
+// composeInput 读时间线并对账后冻结成剪辑清单：待采用占位跳过并记下序号；任何一条轨上有失效段整体拒绝（67048），
 // 不让用户以为合成了时间线上看到的样子。
+// 本轮只合成主轨；叠加、配音/BGM、字幕等附属轨的合成（overlay、amix、字幕烧录）下一步做，在那之前它们不进成片。
 func composeInput(ctx context.Context, tx repository.DramaTx, p *model.DramaProject, ep model.DramaEpisode) (*dramaComposeInput, error) {
 	t, err := loadEpisodeTimeline(ctx, tx, p, &ep)
 	if err != nil {
 		return nil, err
 	}
 	if len(t.broken) > 0 {
-		at := slices.IndexFunc(t.clips, func(c drama.TimelineClip) bool { return c.ID == t.broken[0] })
-		return nil, errcode.ErrDramaTimelineBroken.WithMsg(fmt.Sprintf("时间线第 %d 段的素材已失效，请换版本或删掉", at+1))
+		return nil, errcode.ErrDramaTimelineBroken.WithMsg(brokenMessage(t.tracks, t.broken[0]))
 	}
+	mainAt := drama.MainTrack(t.tracks)
+	if mainAt < 0 {
+		return nil, errcode.ErrDramaNothingToCompose
+	}
+	main := t.tracks[mainAt]
 	seqOf := make(map[uint64]int, len(t.segs))
 	for _, sg := range t.segs {
 		seqOf[sg.ID] = sg.Seq
 	}
 	input := &dramaComposeInput{EpisodeID: ep.ID, SegmentVersion: ep.SegmentVersion, AssetIDs: []uint64{}, SkippedSeqs: []int{}, Ratio: p.Ratio}
-	for _, c := range t.clips {
-		clip := composeClip{Media: drama.MediaVideo, InMS: c.InMS, OutMS: c.OutMS, Muted: c.Muted || t.muted}
+	for _, c := range main.Clips {
+		clip := composeClip{Media: drama.MediaVideo, InMS: c.InMS, OutMS: c.OutMS, Muted: c.Muted || main.Muted}
 		switch {
 		case c.Kind == drama.ClipAsset:
 			clip.AssetID, clip.Media = c.AssetID, c.Media
@@ -141,6 +146,20 @@ func composeInput(ctx context.Context, tx repository.DramaTx, p *model.DramaProj
 	}
 	slices.Sort(input.SkippedSeqs)
 	return input, nil
+}
+
+// brokenMessage 失效段的提示：写明是哪条轨的第几段。
+func brokenMessage(tracks []drama.Track, clipID string) string {
+	for _, tr := range tracks {
+		if at := slices.IndexFunc(tr.Clips, func(c drama.TimelineClip) bool { return c.ID == clipID }); at >= 0 {
+			name := tr.Name
+			if name == "" {
+				name = tr.Kind
+			}
+			return fmt.Sprintf("时间线「%s」第 %d 段的素材已失效，请换版本或删掉", name, at+1)
+		}
+	}
+	return "时间线里有素材已失效，请换版本或删掉"
 }
 
 // handleCompose 将重型文件处理放在事务外，成片素材、集引用和任务成功原子提交。

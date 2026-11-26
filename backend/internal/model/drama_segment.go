@@ -128,21 +128,51 @@ type DramaSegmentStats struct {
 
 // ---- 成片粗剪时间线的对外视图与请求（表结构见 drama_timeline.go） ----
 
-// DramaTimelineClip 时间线上的一段；视频的 in/out 是素材内的毫秒位置，图片的 out 就是时长。
+// DramaTimelineClip 时间线上的一段；时长 = out_ms - in_ms：视频、音频的 in/out 是素材内的位置，图片和文字 in 恒为 0。
+// 数字字段（start_ms、volume、淡变、叠加参数、size）始终序列化，没有用到的为 0，前端按所在轨的种类取用。
 type DramaTimelineClip struct {
 	ID   string `json:"id"`
 	Kind string `json:"kind"`
-	// SegmentID / TaskID / Pinned 只用于 kind=segment；TaskID 为 0 表示片段还没有采用（待采用占位）
+	// SegmentID / TaskID / Pinned 只用于 kind=segment；主轨 TaskID 为 0 表示片段还没有采用（待采用占位），附属轨必须有 TaskID
 	SegmentID idcodec.ID `json:"segment_id,omitempty"`
 	TaskID    idcodec.ID `json:"task_id,omitempty"`
-	// Pinned 用户在时间线里手动选了版本，不再跟随片段的采用
+	// Pinned 用户在时间线里手动选了版本，不再跟随片段的采用；附属轨上的版本恒为固定
 	Pinned bool `json:"pinned"`
 	// AssetID / Media 只用于 kind=asset
 	AssetID idcodec.ID `json:"asset_id,omitempty"`
 	Media   string     `json:"media,omitempty"`
 	InMS    int64      `json:"in_ms"`
 	OutMS   int64      `json:"out_ms"`
-	Muted   bool       `json:"muted"`
+	// StartMS 在时间线上的起点；主轨不存（恒为 0），按顺序首尾相接
+	StartMS int64 `json:"start_ms"`
+	Muted   bool  `json:"muted"`
+	// Volume 音量百分比 0–200，0 即静音
+	Volume    int   `json:"volume"`
+	FadeInMS  int64 `json:"fade_in_ms"`
+	FadeOutMS int64 `json:"fade_out_ms"`
+	// X/Y/Scale/Opacity 只用于叠加轨：中心点位置（画面宽高的百分比）、占画面宽度的百分比、不透明度
+	X       int `json:"x"`
+	Y       int `json:"y"`
+	Scale   int `json:"scale"`
+	Opacity int `json:"opacity"`
+	// Text/Style/Pos/Size 只用于 kind=text：文字、样式（subtitle/title）、位置（top/middle/bottom）、字号百分比
+	Text  string `json:"text,omitempty"`
+	Style string `json:"style,omitempty"`
+	Pos   string `json:"pos,omitempty"`
+	Size  int    `json:"size"`
+}
+
+// DramaTimelineTrack 时间线上的一条轨；显示顺序为 字幕 → 叠加 → 主轨 → 音频。
+type DramaTimelineTrack struct {
+	ID   string `json:"id" binding:"max=64" label:"轨道 ID"`
+	Kind string `json:"kind"`
+	// Role 只有音频轨有：voice / music / sfx，缺省按 sfx
+	Role   string              `json:"role,omitempty"`
+	Name   string              `json:"name" binding:"max=60" label:"轨道名"`
+	Muted  bool                `json:"muted"`
+	Hidden bool                `json:"hidden"`
+	Locked bool                `json:"locked"`
+	Clips  []DramaTimelineClip `json:"clips" binding:"max=200" label:"片段"`
 }
 
 // DramaTimelineChange 对账产生的一条变化；ClipID 为空表示对应的段已移除。
@@ -155,23 +185,21 @@ type DramaTimelineChange struct {
 
 // DramaTimelineView 是对账后的时间线；Revision 为 0 表示还没保存过（默认时间线）。
 type DramaTimelineView struct {
-	Clips             []DramaTimelineClip   `json:"clips"`
-	Muted             bool                  `json:"muted"`
+	Tracks            []DramaTimelineTrack  `json:"tracks"`
 	RemovedSegmentIDs []idcodec.ID          `json:"removed_segment_ids"`
 	Imports           []idcodec.ID          `json:"imports"`
 	Revision          int64                 `json:"revision"`
 	Changes           []DramaTimelineChange `json:"changes"`
-	// InvalidClipIDs 固定的版本或素材已不可用的段，合成前必须处理
+	// InvalidClipIDs 所有轨上固定的版本或素材已不可用的段，合成前必须处理
 	InvalidClipIDs []string `json:"invalid_clip_ids"`
-	// Assets 素材段和「已导入」引用到的素材视图（只含当前用户仍可读的）
+	// Assets 所有轨的素材段和「已导入」引用到的素材视图（只含当前用户仍可读的，可含音频）
 	Assets []AssetView `json:"assets"`
 }
 
 // SaveDramaTimelineReq 带版本保存整份时间线；revision 为 0 表示第一次保存。
 type SaveDramaTimelineReq struct {
-	Revision          int64               `json:"revision" binding:"min=0" label:"版本"`
-	Clips             []DramaTimelineClip `json:"clips" binding:"max=200" label:"时间线"`
-	Muted             bool                `json:"muted"`
-	RemovedSegmentIDs []idcodec.ID        `json:"removed_segment_ids" binding:"max=500" label:"已删除片段"`
-	Imports           []idcodec.ID        `json:"imports" binding:"max=200" label:"已导入素材"`
+	Revision          int64                `json:"revision" binding:"min=0" label:"版本"`
+	Tracks            []DramaTimelineTrack `json:"tracks" binding:"max=15,dive" label:"轨道"`
+	RemovedSegmentIDs []idcodec.ID         `json:"removed_segment_ids" binding:"max=500" label:"已删除片段"`
+	Imports           []idcodec.ID         `json:"imports" binding:"max=200" label:"已导入素材"`
 }

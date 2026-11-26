@@ -25,20 +25,27 @@ func segs() []drama.TimelineSegment {
 }
 
 func seg(id string, sid, task uint64, in, out int64) drama.TimelineClip {
-	return drama.TimelineClip{ID: id, Kind: drama.ClipSegment, SegmentID: sid, TaskID: task, InMS: in, OutMS: out}
+	return drama.TimelineClip{ID: id, Kind: drama.ClipSegment, SegmentID: sid, TaskID: task, InMS: in, OutMS: out, Volume: 100}
 }
 
 func TestDefaultTimeline(t *testing.T) {
 	got := drama.DefaultTimeline(segs(), ids())
-	want := []drama.TimelineClip{
+	main := []drama.TimelineClip{
 		seg("n1", 1, 11, 0, 15000), seg("n2", 2, 21, 0, 15000), seg("n3", 3, 31, 0, 15000), seg("n4", 4, 0, 0, 15000),
+	}
+	want := []drama.Track{
+		{ID: "text1", Kind: drama.TrackText, Name: "字幕", Clips: []drama.TimelineClip{}},
+		{ID: "overlay1", Kind: drama.TrackOverlay, Name: "叠加", Clips: []drama.TimelineClip{}},
+		{ID: "main", Kind: drama.TrackMain, Name: "主轨", Clips: main},
+		{ID: "voice1", Kind: drama.TrackAudio, Role: drama.RoleVoice, Name: "配音", Clips: []drama.TimelineClip{}},
+		{ID: "music1", Kind: drama.TrackAudio, Role: drama.RoleMusic, Name: "BGM", Clips: []drama.TimelineClip{}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("默认时间线 = %+v，期望 %+v", got, want)
 	}
 }
 
-func TestReconcileTimeline(t *testing.T) {
+func TestReconcileClips(t *testing.T) {
 	base := func() []drama.TimelineClip {
 		return []drama.TimelineClip{
 			seg("a", 1, 11, 0, 15000),
@@ -187,7 +194,7 @@ func TestReconcileTimeline(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			before := tc.clips()
-			got, removed, changes := drama.ReconcileTimeline(before, tc.removed, tc.change(segs()), ids())
+			got, removed, changes := drama.ReconcileClips(before, tc.removed, tc.change(segs()), ids())
 			want := tc.want(tc.clips())
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("段 = %+v\n期望 %+v", got, want)
@@ -214,7 +221,7 @@ func TestBrokenClips(t *testing.T) {
 		seg("d", 4, 0, 0, 15000),
 	}
 	assets := map[uint64]drama.TimelineAsset{9: {Media: drama.MediaImage}}
-	got := drama.BrokenClips(clips, segs(), assets)
+	got := drama.BrokenClips(mainOnly(clips), segs(), assets)
 	if want := []string{"p", "y"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("失效段 = %v，期望 %v", got, want)
 	}
@@ -228,7 +235,7 @@ func TestValidateTimeline(t *testing.T) {
 		{ID: "y", Kind: drama.ClipAsset, AssetID: 8, Media: drama.MediaVideo, InMS: 500, OutMS: 6000},
 		seg("d", 4, 0, 0, 15000),
 	}
-	if err := drama.ValidateTimeline(ok, segs(), assets); err != nil {
+	if err := drama.ValidateTimeline(mainOnly(ok), segs(), assets); err != nil {
 		t.Fatalf("合法时间线报错：%v", err)
 	}
 	bad := []struct {
@@ -236,22 +243,22 @@ func TestValidateTimeline(t *testing.T) {
 		clips []drama.TimelineClip
 		want  string
 	}{
-		{"段 ID 重复", []drama.TimelineClip{seg("a", 1, 11, 0, 15000), seg("a", 2, 21, 0, 15000)}, "第 2 段：段 ID 重复"},
-		{"段 ID 为空", []drama.TimelineClip{seg("", 1, 11, 0, 15000)}, "第 1 段：段 ID 不合法"},
-		{"不认识的种类", []drama.TimelineClip{{ID: "a", Kind: "audio", OutMS: 1000}}, "第 1 段：不支持的段类型"},
-		{"不足 0.5 秒", []drama.TimelineClip{seg("a", 1, 11, 0, 400)}, "第 1 段：每段至少 0.5 秒"},
-		{"入点为负", []drama.TimelineClip{seg("a", 1, 11, -1, 4000)}, "第 1 段：每段至少 0.5 秒"},
-		{"超出素材长度", []drama.TimelineClip{seg("a", 1, 12, 0, 13000)}, "第 1 段：超出素材长度"},
-		{"片段不属于这一集", []drama.TimelineClip{seg("a", 7, 11, 0, 1000)}, "第 1 段：片段不存在"},
-		{"版本不属于片段", []drama.TimelineClip{seg("a", 1, 21, 0, 1000)}, "第 1 段：这个版本不可用"},
-		{"素材不存在", []drama.TimelineClip{{ID: "a", Kind: drama.ClipAsset, AssetID: 7, Media: drama.MediaVideo, OutMS: 1000}}, "第 1 段：素材不存在"},
-		{"素材种类不符", []drama.TimelineClip{{ID: "a", Kind: drama.ClipAsset, AssetID: 9, Media: drama.MediaVideo, OutMS: 1000}}, "第 1 段：素材类型不符"},
-		{"图片带入点", []drama.TimelineClip{{ID: "a", Kind: drama.ClipAsset, AssetID: 9, Media: drama.MediaImage, InMS: 100, OutMS: 3000}}, "第 1 段：图片时长要在 0.5–30 秒"},
-		{"图片超 30 秒", []drama.TimelineClip{{ID: "a", Kind: drama.ClipAsset, AssetID: 9, Media: drama.MediaImage, OutMS: 31000}}, "第 1 段：图片时长要在 0.5–30 秒"},
+		{"段 ID 重复", []drama.TimelineClip{seg("a", 1, 11, 0, 15000), seg("a", 2, 21, 0, 15000)}, "主轨 第 2 段：段 ID 重复"},
+		{"段 ID 为空", []drama.TimelineClip{seg("", 1, 11, 0, 15000)}, "主轨 第 1 段：段 ID 不合法"},
+		{"不认识的种类", []drama.TimelineClip{{ID: "a", Kind: "audio", OutMS: 1000}}, "主轨 第 1 段：不支持的段类型"},
+		{"不足 0.5 秒", []drama.TimelineClip{seg("a", 1, 11, 0, 400)}, "主轨 第 1 段：每段至少 0.5 秒"},
+		{"入点为负", []drama.TimelineClip{seg("a", 1, 11, -1, 4000)}, "主轨 第 1 段：每段至少 0.5 秒"},
+		{"超出素材长度", []drama.TimelineClip{seg("a", 1, 12, 0, 13000)}, "主轨 第 1 段：超出素材长度"},
+		{"片段不属于这一集", []drama.TimelineClip{seg("a", 7, 11, 0, 1000)}, "主轨 第 1 段：片段不存在"},
+		{"版本不属于片段", []drama.TimelineClip{seg("a", 1, 21, 0, 1000)}, "主轨 第 1 段：这个版本不可用"},
+		{"素材不存在", []drama.TimelineClip{{ID: "a", Kind: drama.ClipAsset, AssetID: 7, Media: drama.MediaVideo, OutMS: 1000}}, "主轨 第 1 段：素材不存在"},
+		{"素材种类不符", []drama.TimelineClip{{ID: "a", Kind: drama.ClipAsset, AssetID: 9, Media: drama.MediaVideo, OutMS: 1000}}, "主轨 第 1 段：素材类型不符"},
+		{"图片带入点", []drama.TimelineClip{{ID: "a", Kind: drama.ClipAsset, AssetID: 9, Media: drama.MediaImage, InMS: 100, OutMS: 3000}}, "主轨 第 1 段：图片时长要在 0.5–30 秒"},
+		{"图片超 30 秒", []drama.TimelineClip{{ID: "a", Kind: drama.ClipAsset, AssetID: 9, Media: drama.MediaImage, OutMS: 31000}}, "主轨 第 1 段：图片时长要在 0.5–30 秒"},
 	}
 	for _, tc := range bad {
 		t.Run(tc.name, func(t *testing.T) {
-			err := drama.ValidateTimeline(tc.clips, segs(), assets)
+			err := drama.ValidateTimeline(mainOnly(tc.clips), segs(), assets)
 			if err == nil || err.Error() != tc.want {
 				t.Fatalf("错误 = %v，期望 %q", err, tc.want)
 			}
@@ -261,7 +268,12 @@ func TestValidateTimeline(t *testing.T) {
 	for i := range 130 {
 		long = append(long, drama.TimelineClip{ID: fmt.Sprintf("x%d", i), Kind: drama.ClipAsset, AssetID: 9, Media: drama.MediaImage, OutMS: 15000})
 	}
-	if err := drama.ValidateTimeline(long, segs(), assets); err == nil || err.Error() != "时间线总长不能超过 30 分钟" {
+	if err := drama.ValidateTimeline(mainOnly(long), segs(), assets); err == nil || err.Error() != "时间线总长不能超过 30 分钟" {
 		t.Fatalf("总长超限错误 = %v", err)
 	}
+}
+
+// mainOnly 只有一条主轨的时间线。
+func mainOnly(clips []drama.TimelineClip) []drama.Track {
+	return []drama.Track{{ID: "main", Kind: drama.TrackMain, Name: "主轨", Clips: clips}}
 }

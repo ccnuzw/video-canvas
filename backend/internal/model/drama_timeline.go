@@ -6,8 +6,21 @@ import "gorm.io/datatypes"
 const (
 	TimelineKindSegment = "segment" // 分镜片段的某条视频结果
 	TimelineKindAsset   = "asset"   // 画布素材或本地导入的素材
+	TimelineKindText    = "text"    // 字幕轨上的文字段
 	TimelineMediaVideo  = "video"
 	TimelineMediaImage  = "image"
+	TimelineMediaAudio  = "audio"
+)
+
+// 时间线轨道种类与音频轨用途。
+const (
+	TimelineTrackMain    = "main"    // 主轨：首尾相接，对账只作用于它
+	TimelineTrackOverlay = "overlay" // 叠加画面
+	TimelineTrackAudio   = "audio"   // 配音 / BGM / 音效
+	TimelineTrackText    = "text"    // 字幕
+	TimelineRoleVoice    = "voice"
+	TimelineRoleMusic    = "music"
+	TimelineRoleSfx      = "sfx"
 )
 
 // 时间线变更种类：对账时片场改动给时间线带来的变化。
@@ -19,15 +32,13 @@ const (
 	TimelineChangeAdded     = "added"     // 新增片段，已插入时间线
 )
 
-// DramaEpisodeTimeline 一集的粗剪剪辑清单；不存在时由片段现算默认时间线，第一次保存才落库。
+// DramaEpisodeTimeline 一集的粗剪剪辑清单（多轨）；不存在时由片段现算默认时间线，第一次保存才落库。
 type DramaEpisodeTimeline struct {
 	BaseModel
 	UserID    uint64 `gorm:"not null;index"`
 	EpisodeID uint64 `gorm:"not null;uniqueIndex:uk_drama_episode_timeline"`
-	// Clips 是 []DramaTimelineClip，按播放顺序首尾相接
-	Clips datatypes.JSON `gorm:"type:jsonb;not null;default:'[]'"`
-	// Muted 整轨静音
-	Muted bool `gorm:"not null;default:false"`
+	// Tracks 是 []drama.Track，显示顺序为 字幕 → 叠加 → 主轨 → 音频；主轨的段按播放顺序首尾相接
+	Tracks datatypes.JSON `gorm:"type:jsonb;not null;default:'[]'"`
 	// RemovedSegmentIDs 用户主动从轨上删掉的片段（[]uint64），对账不自动加回
 	RemovedSegmentIDs datatypes.JSON `gorm:"type:jsonb;not null;default:'[]'"`
 	// Imports 「已导入」里的素材（[]uint64）

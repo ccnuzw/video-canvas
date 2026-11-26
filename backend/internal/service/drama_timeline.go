@@ -21,17 +21,16 @@ const maxTimelineImports = 200
 
 // episodeTimeline 对账后的时间线，以及对账、校验、合成要用到的片段和素材信息。
 type episodeTimeline struct {
-	// row 已保存的时间线；nil 表示还没保存过，clips 是现算的默认时间线
+	// row 已保存的时间线；nil 表示还没保存过，tracks 是现算的默认时间线
 	row     *model.DramaEpisodeTimeline
-	clips   []drama.TimelineClip
+	tracks  []drama.Track
 	removed []uint64
 	imports []uint64
-	muted   bool
 	changes []drama.TimelineChange
 	segs    []drama.TimelineSegment
 	// taskAsset 成功结果任务 → 它的视频素材
 	taskAsset map[uint64]uint64
-	// assets 时间线和「已导入」引用到的、仍属于当前用户的图片或视频素材
+	// assets 时间线和「已导入」引用到的、仍属于当前用户的图片、视频或音频素材
 	assets map[uint64]drama.TimelineAsset
 	broken []string
 }
@@ -63,7 +62,7 @@ func timelineSegments(ctx context.Context, tx repository.DramaTx, p *model.Drama
 	}
 	assets := make(map[uint64]drama.TimelineAsset, len(rows))
 	for _, a := range rows {
-		if a.Kind == drama.MediaVideo || a.Kind == drama.MediaImage {
+		if a.Kind == drama.MediaVideo || a.Kind == drama.MediaImage || a.Kind == drama.MediaAudio {
 			assets[a.ID] = drama.TimelineAsset{Media: a.Kind, DurationMS: a.DurationMs}
 		}
 	}
@@ -125,33 +124,27 @@ func loadEpisodeTimeline(ctx context.Context, tx repository.DramaTx, p *model.Dr
 		}
 	}
 	// 2. 片段、结果与引用的素材。
-	extra := slices.Clone(t.imports)
-	for _, c := range t.clips {
-		if c.Kind == drama.ClipAsset {
-			extra = append(extra, c.AssetID)
-		}
-	}
+	extra := append(slices.Clone(t.imports), trackAssetIDs(t.tracks)...)
 	t.segs, t.taskAsset, t.assets, err = timelineSegments(ctx, tx, p, ep, extra)
 	if err != nil {
 		return nil, err
 	}
-	// 3. 对账：默认时间线本身就是片场的样子，不报变化。
-	if t.row == nil {
-		t.clips = drama.DefaultTimeline(t.segs, newClipID)
+	// 3. 对账只作用于主轨，其他轨原样；默认时间线本身就是片场的样子，不报变化。
+	if t.row == nil || len(t.tracks) == 0 {
+		t.tracks = drama.DefaultTimeline(t.segs, newClipID)
 	} else {
-		t.clips, t.removed, t.changes = drama.ReconcileTimeline(t.clips, t.removed, t.segs, newClipID)
+		t.tracks, t.removed, t.changes = drama.ReconcileTimeline(t.tracks, t.removed, t.segs, newClipID)
 	}
-	t.broken = drama.BrokenClips(t.clips, t.segs, t.assets)
+	t.broken = drama.BrokenClips(t.tracks, t.segs, t.assets)
 	return t, nil
 }
 
 // decodeTimelineRow 解析落库的 JSON 列。
 func decodeTimelineRow(row *model.DramaEpisodeTimeline, t *episodeTimeline) error {
-	t.muted = row.Muted
 	for _, part := range []struct {
 		raw []byte
 		to  any
-	}{{row.Clips, &t.clips}, {row.RemovedSegmentIDs, &t.removed}, {row.Imports, &t.imports}} {
+	}{{row.Tracks, &t.tracks}, {row.RemovedSegmentIDs, &t.removed}, {row.Imports, &t.imports}} {
 		if len(part.raw) == 0 {
 			continue
 		}
@@ -203,7 +196,7 @@ func (s *DramaSegmentService) SaveTimeline(ctx context.Context, userID, dramaID 
 	return s.Timeline(ctx, userID, dramaID, no)
 }
 
-// saveTimelineTx 校验版本和内容后写入；版本不一致返回 67046，内容不合法返回 67047 并写明第几段。
+// saveTimelineTx 校验版本和内容后写入；版本不一致返回 67046，内容不合法返回 67047 并写明轨道和第几段。
 func saveTimelineTx(ctx context.Context, tx repository.DramaTx, p *model.DramaProject, ep *model.DramaEpisode, req *model.SaveDramaTimelineReq) error {
 	// 1. 乐观锁：没保存过时版本必须是 0，保存过时必须和库里一致；不一致说明别的标签页改过。
 	row, err := tx.Timeline(ctx, p.UserID, ep.ID)
@@ -216,24 +209,19 @@ func saveTimelineTx(ctx context.Context, tx repository.DramaTx, p *model.DramaPr
 	if row.Revision != req.Revision {
 		return errcode.ErrDramaTimelineConflict
 	}
-	// 2. 校验：片段和版本必须属于这一集，素材必须属于当前用户且种类相符，长度不越界。
-	clips := clipsFromView(req.Clips)
-	extra := idsOf(req.Imports)
-	for _, c := range clips {
-		if c.Kind == drama.ClipAsset {
-			extra = append(extra, c.AssetID)
-		}
-	}
-	segs, _, assets, err := timelineSegments(ctx, tx, p, ep, extra)
+	// 2. 校验：轨道结构、片段和版本必须属于这一集，素材必须属于当前用户且种类相符，长度不越界。
+	tracks := tracksFromView(req.Tracks)
+	segs, _, assets, err := timelineSegments(ctx, tx, p, ep, append(idsOf(req.Imports), trackAssetIDs(tracks)...))
 	if err != nil {
 		return err
 	}
-	if err := drama.ValidateTimeline(clips, segs, assets); err != nil {
+	if err := drama.ValidateTimeline(tracks, segs, assets); err != nil {
 		return errcode.ErrDramaTimelineInvalid.WithMsg(err.Error())
 	}
-	// 3. 删除名单只留现存片段，已导入只留当前用户的图片或视频并去重：这两项只影响界面，脏数据静默丢弃。
+	tracks = drama.NormalizeTracks(tracks)
+	// 3. 删除名单只留现存片段，已导入只留当前用户的图片、视频或音频并去重：这两项只影响界面，脏数据静默丢弃。
 	removed, imports := keepRemoved(idsOf(req.RemovedSegmentIDs), segs), keepImports(idsOf(req.Imports), assets)
-	if row.Clips, err = json.Marshal(clips); err != nil {
+	if row.Tracks, err = json.Marshal(tracks); err != nil {
 		return err
 	}
 	if row.RemovedSegmentIDs, err = json.Marshal(removed); err != nil {
@@ -242,7 +230,6 @@ func saveTimelineTx(ctx context.Context, tx repository.DramaTx, p *model.DramaPr
 	if row.Imports, err = json.Marshal(imports); err != nil {
 		return err
 	}
-	row.Muted = req.Muted
 	// 4. 写入；并发的首次保存或版本冲突同样按 67046 处理，让前端载入最新版本。
 	if err := tx.SaveTimeline(ctx, row, req.Revision); err != nil {
 		if errors.Is(err, repository.ErrStateConflict) {
@@ -264,7 +251,7 @@ func keepRemoved(ids []uint64, segs []drama.TimelineSegment) []uint64 {
 	return out
 }
 
-// keepImports 已导入只保留当前用户的图片或视频，去重并限制数量。
+// keepImports 已导入只保留当前用户的图片、视频或音频，去重并限制数量。
 func keepImports(ids []uint64, assets map[uint64]drama.TimelineAsset) []uint64 {
 	out := []uint64{}
 	for _, id := range ids {
@@ -286,35 +273,59 @@ func idsOf(in []idcodec.ID) []uint64 {
 	return out
 }
 
-// clipsFromView 把请求里的段转成领域结构；待采用占位不可能固定版本，图片没有入点。
-func clipsFromView(in []model.DramaTimelineClip) []drama.TimelineClip {
-	out := make([]drama.TimelineClip, 0, len(in))
-	for _, c := range in {
-		clip := drama.TimelineClip{ID: c.ID, Kind: c.Kind, InMS: c.InMS, OutMS: c.OutMS, Muted: c.Muted}
-		switch c.Kind {
-		case drama.ClipSegment:
-			clip.SegmentID, clip.TaskID, clip.Pinned = uint64(c.SegmentID), uint64(c.TaskID), c.Pinned && c.TaskID != 0
-		case drama.ClipAsset:
-			clip.AssetID, clip.Media = uint64(c.AssetID), c.Media
+// tracksFromView 把请求里的轨道转成领域结构；待采用占位不可能固定版本，其余整理交给 drama.NormalizeTracks。
+func tracksFromView(in []model.DramaTimelineTrack) []drama.Track {
+	out := make([]drama.Track, 0, len(in))
+	for _, tr := range in {
+		clips := make([]drama.TimelineClip, 0, len(tr.Clips))
+		for _, c := range tr.Clips {
+			clips = append(clips, clipFromView(c))
 		}
-		out = append(out, clip)
+		out = append(out, drama.Track{ID: tr.ID, Kind: tr.Kind, Role: tr.Role, Name: tr.Name, Muted: tr.Muted, Hidden: tr.Hidden, Locked: tr.Locked, Clips: clips})
 	}
 	return out
 }
 
+// clipFromView 把请求里的一段转成领域结构，只带该种类用得到的来源字段。
+func clipFromView(c model.DramaTimelineClip) drama.TimelineClip {
+	clip := drama.TimelineClip{
+		ID: c.ID, Kind: c.Kind, InMS: c.InMS, OutMS: c.OutMS, StartMS: c.StartMS, Muted: c.Muted,
+		Volume: c.Volume, FadeInMS: c.FadeInMS, FadeOutMS: c.FadeOutMS,
+		X: c.X, Y: c.Y, Scale: c.Scale, Opacity: c.Opacity,
+		Text: c.Text, Style: c.Style, Pos: c.Pos, Size: c.Size,
+	}
+	switch c.Kind {
+	case drama.ClipSegment:
+		clip.SegmentID, clip.TaskID, clip.Pinned = uint64(c.SegmentID), uint64(c.TaskID), c.Pinned && c.TaskID != 0
+	case drama.ClipAsset:
+		clip.AssetID, clip.Media = uint64(c.AssetID), c.Media
+	}
+	return clip
+}
+
+// trackAssetIDs 所有轨上素材段引用的素材 ID。
+func trackAssetIDs(tracks []drama.Track) []uint64 {
+	var ids []uint64
+	for _, tr := range tracks {
+		for _, c := range tr.Clips {
+			if c.Kind == drama.ClipAsset {
+				ids = append(ids, c.AssetID)
+			}
+		}
+	}
+	return ids
+}
+
 // timelineView 组装对外视图，并在事务外取素材地址；读不到的素材不返回。
 func (s *DramaSegmentService) timelineView(ctx context.Context, userID uint64, t *episodeTimeline) *model.DramaTimelineView {
-	v := &model.DramaTimelineView{Clips: []model.DramaTimelineClip{}, Muted: t.muted, RemovedSegmentIDs: []idcodec.ID{}, Imports: []idcodec.ID{}, Changes: []model.DramaTimelineChange{}, InvalidClipIDs: []string{}, Assets: []model.AssetView{}}
+	v := &model.DramaTimelineView{Tracks: make([]model.DramaTimelineTrack, 0, len(t.tracks)), RemovedSegmentIDs: []idcodec.ID{}, Imports: []idcodec.ID{}, Changes: []model.DramaTimelineChange{}, InvalidClipIDs: []string{}, Assets: []model.AssetView{}}
 	if t.row != nil {
 		v.Revision = t.row.Revision
 	}
-	var assetIDs []uint64
-	for _, c := range t.clips {
-		v.Clips = append(v.Clips, model.DramaTimelineClip{ID: c.ID, Kind: c.Kind, SegmentID: idcodec.ID(c.SegmentID), TaskID: idcodec.ID(c.TaskID), Pinned: c.Pinned, AssetID: idcodec.ID(c.AssetID), Media: c.Media, InMS: c.InMS, OutMS: c.OutMS, Muted: c.Muted})
-		if c.Kind == drama.ClipAsset {
-			assetIDs = append(assetIDs, c.AssetID)
-		}
+	for _, tr := range t.tracks {
+		v.Tracks = append(v.Tracks, trackView(tr))
 	}
+	assetIDs := trackAssetIDs(t.tracks)
 	for _, id := range t.removed {
 		v.RemovedSegmentIDs = append(v.RemovedSegmentIDs, idcodec.ID(id))
 	}
@@ -336,4 +347,19 @@ func (s *DramaSegmentService) timelineView(ctx context.Context, userID uint64, t
 		}
 	}
 	return v
+}
+
+// trackView 领域轨道 → 对外轨道。
+func trackView(tr drama.Track) model.DramaTimelineTrack {
+	out := model.DramaTimelineTrack{ID: tr.ID, Kind: tr.Kind, Role: tr.Role, Name: tr.Name, Muted: tr.Muted, Hidden: tr.Hidden, Locked: tr.Locked, Clips: make([]model.DramaTimelineClip, 0, len(tr.Clips))}
+	for _, c := range tr.Clips {
+		out.Clips = append(out.Clips, model.DramaTimelineClip{
+			ID: c.ID, Kind: c.Kind, SegmentID: idcodec.ID(c.SegmentID), TaskID: idcodec.ID(c.TaskID), Pinned: c.Pinned,
+			AssetID: idcodec.ID(c.AssetID), Media: c.Media, InMS: c.InMS, OutMS: c.OutMS, StartMS: c.StartMS, Muted: c.Muted,
+			Volume: c.Volume, FadeInMS: c.FadeInMS, FadeOutMS: c.FadeOutMS,
+			X: c.X, Y: c.Y, Scale: c.Scale, Opacity: c.Opacity,
+			Text: c.Text, Style: c.Style, Pos: c.Pos, Size: c.Size,
+		})
+	}
+	return out
 }

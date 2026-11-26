@@ -1,4 +1,4 @@
--- 成片粗剪：每集一份剪辑清单；不存在时由片段现算默认时间线。
+-- 成片粗剪：每集一份多轨剪辑清单（tracks）；不存在时由片段现算默认时间线。
 CREATE TABLE drama_episode_timelines (
     id bigserial PRIMARY KEY,
     created_at timestamptz,
@@ -6,8 +6,7 @@ CREATE TABLE drama_episode_timelines (
     deleted_at timestamptz,
     user_id bigint NOT NULL,
     episode_id bigint NOT NULL,
-    clips jsonb NOT NULL DEFAULT '[]'::jsonb,
-    muted boolean NOT NULL DEFAULT false,
+    tracks jsonb NOT NULL DEFAULT '[]'::jsonb,
     removed_segment_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
     imports jsonb NOT NULL DEFAULT '[]'::jsonb,
     revision bigint NOT NULL DEFAULT 1

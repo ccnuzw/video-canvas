@@ -3,6 +3,7 @@ package repository_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"video-canvas/internal/model"
@@ -26,17 +27,17 @@ func TestDramaTimelineRepository_RevisionVersionAndAssets(t *testing.T) {
 		t.Fatalf("未保存：%v", err)
 	}
 	// 2. 第一次保存：版本 1，集的片段版本自增
-	row := &model.DramaEpisodeTimeline{UserID: 1, EpisodeID: ep.ID, Clips: []byte(`[{"id":"a"}]`), RemovedSegmentIDs: []byte(`[]`), Imports: []byte(`[]`)}
+	row := &model.DramaEpisodeTimeline{UserID: 1, EpisodeID: ep.ID, Tracks: []byte(`[{"id":"main","kind":"main","name":"主轨","clips":[]}]`), RemovedSegmentIDs: []byte(`[]`), Imports: []byte(`[]`)}
 	if err := r.SaveTimeline(ctx, row, 0); err != nil || row.Revision != 1 {
 		t.Fatalf("首次保存：rev=%d %v", row.Revision, err)
 	}
 	// 3. 并发的另一次首次保存：唯一约束冲突按版本冲突处理
-	dup := &model.DramaEpisodeTimeline{UserID: 1, EpisodeID: ep.ID, Clips: []byte(`[]`), RemovedSegmentIDs: []byte(`[]`), Imports: []byte(`[]`)}
+	dup := &model.DramaEpisodeTimeline{UserID: 1, EpisodeID: ep.ID, Tracks: []byte(`[]`), RemovedSegmentIDs: []byte(`[]`), Imports: []byte(`[]`)}
 	if err := r.SaveTimeline(ctx, dup, 0); !errors.Is(err, repository.ErrStateConflict) {
 		t.Fatalf("重复首次保存：%v", err)
 	}
 	// 4. 按版本更新；旧版本冲突；他人读不到
-	row.Muted = true
+	row.Tracks = []byte(`[{"id":"main","kind":"main","name":"主轨","muted":true,"clips":[]}]`)
 	if err := r.SaveTimeline(ctx, row, 1); err != nil || row.Revision != 2 {
 		t.Fatalf("更新：rev=%d %v", row.Revision, err)
 	}
@@ -44,7 +45,7 @@ func TestDramaTimelineRepository_RevisionVersionAndAssets(t *testing.T) {
 		t.Fatalf("旧版本：%v", err)
 	}
 	got, err := r.Timeline(ctx, 1, ep.ID)
-	if err != nil || !got.Muted || got.Revision != 2 {
+	if err != nil || !strings.Contains(string(got.Tracks), `"muted": true`) || got.Revision != 2 {
 		t.Fatalf("读取：%+v %v", got, err)
 	}
 	if _, err := r.Timeline(ctx, 2, ep.ID); !errors.Is(err, repository.ErrNotFound) {

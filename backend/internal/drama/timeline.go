@@ -1,8 +1,6 @@
 package drama
 
 import (
-	"errors"
-	"fmt"
 	"slices"
 )
 
@@ -10,8 +8,10 @@ import (
 const (
 	ClipSegment = "segment"
 	ClipAsset   = "asset"
+	ClipText    = "text" // 字幕轨上的文字段
 	MediaVideo  = "video"
 	MediaImage  = "image"
+	MediaAudio  = "audio"
 
 	ChangeRemoved   = "removed"
 	ChangeUnadopted = "unadopted"
@@ -43,6 +43,22 @@ type TimelineClip struct {
 	InMS    int64  `json:"in_ms"`
 	OutMS   int64  `json:"out_ms"`
 	Muted   bool   `json:"muted,omitempty"`
+	// StartMS 在时间线上的起点；只有附属轨用，主轨按顺序首尾相接不存
+	StartMS int64 `json:"start_ms,omitempty"`
+	// Volume 音量百分比 0–200，0 即静音，所以始终序列化
+	Volume    int   `json:"volume"`
+	FadeInMS  int64 `json:"fade_in_ms,omitempty"`
+	FadeOutMS int64 `json:"fade_out_ms,omitempty"`
+	// X/Y/Scale/Opacity 叠加画面的位置（中心点百分比）、占画面宽度的百分比和不透明度；只有叠加轨用
+	X       int `json:"x,omitempty"`
+	Y       int `json:"y,omitempty"`
+	Scale   int `json:"scale,omitempty"`
+	Opacity int `json:"opacity,omitempty"`
+	// Text/Style/Pos/Size 只用于 kind=text
+	Text  string `json:"text,omitempty"`
+	Style string `json:"style,omitempty"`
+	Pos   string `json:"pos,omitempty"`
+	Size  int    `json:"size,omitempty"`
 }
 
 // TimelineSegment 对账需要的片段信息。
@@ -86,7 +102,7 @@ func (s TimelineSegment) chosenOK() bool {
 
 // newSegmentClip 片段的全长跟随段；没有采用就是按片段秒数占位的段。
 func newSegmentClip(id string, s TimelineSegment) TimelineClip {
-	c := TimelineClip{ID: id, Kind: ClipSegment, SegmentID: s.ID}
+	c := TimelineClip{ID: id, Kind: ClipSegment, SegmentID: s.ID, Volume: defaultVolume}
 	if s.chosenOK() {
 		c.TaskID, c.OutMS = s.Chosen, s.takeDuration(s.Chosen)
 	} else {
@@ -95,8 +111,8 @@ func newSegmentClip(id string, s TimelineSegment) TimelineClip {
 	return c
 }
 
-// DefaultTimeline 从没剪过的集：全部片段按序号排、全长、跟随采用，合成结果与按片段拼接一致。
-func DefaultTimeline(segs []TimelineSegment, newID func() string) []TimelineClip {
+// defaultMainClips 从没剪过的集的主轨：全部片段按序号排、全长、跟随采用，合成结果与按片段拼接一致。
+func defaultMainClips(segs []TimelineSegment, newID func() string) []TimelineClip {
 	sorted := slices.Clone(segs)
 	slices.SortStableFunc(sorted, func(a, b TimelineSegment) int { return a.Seq - b.Seq })
 	out := make([]TimelineClip, 0, len(sorted))
@@ -106,9 +122,9 @@ func DefaultTimeline(segs []TimelineSegment, newID func() string) []TimelineClip
 	return out
 }
 
-// ReconcileTimeline 让时间线跟上片场：删掉的片段移除、跟随段换成新的采用、新片段插进去；
+// ReconcileClips 让主轨跟上片场：删掉的片段移除、跟随段换成新的采用、新片段插进去；
 // 固定版本的段和用户删过的片段不动。不修改传入的切片。
-func ReconcileTimeline(clips []TimelineClip, removed []uint64, segs []TimelineSegment, newID func() string) ([]TimelineClip, []uint64, []TimelineChange) {
+func ReconcileClips(clips []TimelineClip, removed []uint64, segs []TimelineSegment, newID func() string) ([]TimelineClip, []uint64, []TimelineChange) {
 	byID := make(map[uint64]TimelineSegment, len(segs))
 	for _, s := range segs {
 		byID[s.ID] = s
@@ -226,12 +242,8 @@ func insertNewSegments(out []TimelineClip, removed []uint64, segs []TimelineSegm
 	return out, changes
 }
 
-// BrokenClips 返回素材已不可用的段：固定的版本不再成功、素材被删或种类不符。待采用占位不算。
-func BrokenClips(clips []TimelineClip, segs []TimelineSegment, assets map[uint64]TimelineAsset) []string {
-	byID := make(map[uint64]TimelineSegment, len(segs))
-	for _, s := range segs {
-		byID[s.ID] = s
-	}
+// brokenClips 返回一条轨上素材已不可用的段：固定的版本不再成功、素材被删或种类不符。待采用占位不算。
+func brokenClips(clips []TimelineClip, byID map[uint64]TimelineSegment, assets map[uint64]TimelineAsset) []string {
 	var out []string
 	for _, c := range clips {
 		switch c.Kind {
@@ -249,68 +261,4 @@ func BrokenClips(clips []TimelineClip, segs []TimelineSegment, assets map[uint64
 		}
 	}
 	return out
-}
-
-// ValidateTimeline 校验用户提交的时间线：段 ID、类型、长度、片段与版本归属、素材归属与种类、总长。
-// 返回的错误文案直接给用户看（「第 N 段：原因」）。
-func ValidateTimeline(clips []TimelineClip, segs []TimelineSegment, assets map[uint64]TimelineAsset) error {
-	byID := make(map[uint64]TimelineSegment, len(segs))
-	for _, s := range segs {
-		byID[s.ID] = s
-	}
-	seen := make(map[string]bool, len(clips))
-	var total int64
-	for i, c := range clips {
-		if reason := clipProblem(c, seen, byID, assets); reason != "" {
-			return fmt.Errorf("第 %d 段：%s", i+1, reason)
-		}
-		seen[c.ID] = true
-		total += c.OutMS - c.InMS
-	}
-	if total > MaxTimelineMS {
-		return errors.New("时间线总长不能超过 30 分钟")
-	}
-	return nil
-}
-
-// clipProblem 返回一段的问题，没有问题返回空串。
-func clipProblem(c TimelineClip, seen map[string]bool, segs map[uint64]TimelineSegment, assets map[uint64]TimelineAsset) string {
-	switch {
-	case c.ID == "" || len(c.ID) > 32:
-		return "段 ID 不合法"
-	case seen[c.ID]:
-		return "段 ID 重复"
-	case c.Kind != ClipSegment && c.Kind != ClipAsset:
-		return "不支持的段类型"
-	case c.InMS < 0 || c.OutMS-c.InMS < MinClipMS:
-		return "每段至少 0.5 秒"
-	}
-	if c.Kind == ClipSegment {
-		s, ok := segs[c.SegmentID]
-		if !ok {
-			return "片段不存在"
-		}
-		if c.TaskID == 0 {
-			return ""
-		}
-		if _, ok := s.Takes[c.TaskID]; !ok {
-			return "这个版本不可用"
-		}
-		if c.OutMS > s.takeDuration(c.TaskID)+durationSlackMS {
-			return "超出素材长度"
-		}
-		return ""
-	}
-	a, ok := assets[c.AssetID]
-	switch {
-	case !ok:
-		return "素材不存在"
-	case c.Media != a.Media:
-		return "素材类型不符"
-	case c.Media == MediaImage && (c.InMS != 0 || c.OutMS > MaxImageMS):
-		return "图片时长要在 0.5–30 秒"
-	case c.Media == MediaVideo && a.DurationMS > 0 && c.OutMS > a.DurationMS+durationSlackMS:
-		return "超出素材长度"
-	}
-	return ""
 }

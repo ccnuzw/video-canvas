@@ -31,7 +31,7 @@ func (r *DramaRepository) SaveTimeline(ctx context.Context, row *model.DramaEpis
 	}
 	now := time.Now()
 	res := r.db.WithContext(ctx).Model(&model.DramaEpisodeTimeline{}).Where("user_id = ? AND id = ? AND revision = ?", row.UserID, row.ID, revision).Updates(map[string]any{
-		"clips": row.Clips, "muted": row.Muted, "removed_segment_ids": row.RemovedSegmentIDs, "imports": row.Imports,
+		"tracks": row.Tracks, "removed_segment_ids": row.RemovedSegmentIDs, "imports": row.Imports,
 		"revision": gorm.Expr("revision + 1"), "updated_at": now,
 	})
 	if res.Error != nil {

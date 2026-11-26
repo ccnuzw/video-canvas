@@ -354,14 +354,20 @@ func (r *composeMemory) SegmentEpisode(_ context.Context, user, id uint64) (*mod
 	return nil, repository.ErrNotFound
 }
 
-// composeTimeline 给集3保存一条时间线。
+// composeTimeline 给集3保存一条时间线：主轨放 clips，extra 是附属轨。
 func composeTimeline(t *testing.T, r *composeMemory, muted bool, clips ...drama.TimelineClip) {
 	t.Helper()
-	raw, err := json.Marshal(clips)
+	composeTracks(t, r, muted, nil, clips...)
+}
+
+func composeTracks(t *testing.T, r *composeMemory, muted bool, extra []drama.Track, clips ...drama.TimelineClip) {
+	t.Helper()
+	tracks := append([]drama.Track{{ID: "main", Kind: drama.TrackMain, Name: "主轨", Muted: muted, Clips: clips}}, extra...)
+	raw, err := json.Marshal(tracks)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.timeline = &model.DramaEpisodeTimeline{BaseModel: model.BaseModel{ID: 1}, UserID: 7, EpisodeID: 3, Clips: raw, Muted: muted, RemovedSegmentIDs: []byte(`[]`), Imports: []byte(`[]`), Revision: 1}
+	r.timeline = &model.DramaEpisodeTimeline{BaseModel: model.BaseModel{ID: 1}, UserID: 7, EpisodeID: 3, Tracks: raw, RemovedSegmentIDs: []byte(`[]`), Imports: []byte(`[]`), Revision: 1}
 }
 
 func TestDramaCompose_UsesTimeline(t *testing.T) {
@@ -403,6 +409,36 @@ func TestDramaCompose_BrokenTimelineRejected(t *testing.T) {
 	composeTimeline(t, r, false, drama.TimelineClip{ID: "a", Kind: drama.ClipSegment, SegmentID: 5, TaskID: 999, Pinned: true, OutMS: 4000})
 	s := composeService(r, &composeFiles{r: r}, &composeProcessor{})
 	_, err := s.CreateJob(context.Background(), 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}})
+	dramaCheckCode(t, err, errcode.ErrDramaTimelineBroken.Code)
+}
+
+// 附属轨合成下一步做：本轮只合成主轨，叠加、配音、字幕不影响冻结的剪辑清单；但附属轨上有失效素材照样拒绝。
+func TestDramaCompose_AttachedTracksIgnoredButBrokenRejected(t *testing.T) {
+	main := drama.TimelineClip{ID: "a", Kind: drama.ClipSegment, SegmentID: 5, TaskID: 20, InMS: 1000, OutMS: 4000, Volume: 100}
+	text := drama.Track{ID: "t1", Kind: drama.TrackText, Name: "字幕", Clips: []drama.TimelineClip{{ID: "s", Kind: drama.ClipText, Text: "你好", Style: drama.TextSubtitle, Pos: drama.PosBottom, Size: 100, OutMS: 2000, Volume: 100}}}
+	audio := func(asset uint64) drama.Track {
+		return drama.Track{ID: "a1", Kind: drama.TrackAudio, Role: drama.RoleVoice, Name: "配音", Clips: []drama.TimelineClip{{ID: "v", Kind: drama.ClipAsset, AssetID: asset, Media: drama.MediaAudio, OutMS: 2000, Volume: 100}}}
+	}
+	r := newComposeMemory()
+	r.library = append(r.library, model.Asset{ID: 50, UserID: 7, Kind: "audio", DurationMs: 3000})
+	composeTracks(t, r, false, []drama.Track{text, audio(50)}, main)
+	p := &composeProcessor{}
+	s := composeService(r, &composeFiles{r: r}, p)
+	ctx := context.Background()
+	job, err := s.CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.HandleDrama(ctx, 7, 1, uint64(job.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.clips) != 1 || p.clips[0].InMS != 1000 || p.clips[0].OutMS != 4000 {
+		t.Fatalf("只应合成主轨：%+v", p.clips)
+	}
+	// 配音用的素材 99 不存在：附属轨失效，整体拒绝
+	broken := newComposeMemory()
+	composeTracks(t, broken, false, []drama.Track{audio(99)}, main)
+	_, err = composeService(broken, &composeFiles{r: broken}, &composeProcessor{}).CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}})
 	dramaCheckCode(t, err, errcode.ErrDramaTimelineBroken.Code)
 }
 
