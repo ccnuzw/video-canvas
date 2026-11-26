@@ -18,8 +18,14 @@ import (
 func (s *DramaService) runScripts(ctx context.Context, p *model.DramaProject, j *model.DramaJob, snap *provider.Snapshot, all, selected []model.DramaEpisode) (any, int, error) {
 	cost := 0
 	outputs := []map[string]any{}
+	// 人物设定以人物表为准：写之前确保研读传记已导入，再由人物表拼出 characters_md。
+	characters, _, err := s.scriptSettings(ctx, p.UserID, p.ID)
+	if err != nil {
+		return nil, 0, err
+	}
 	for i, ep := range selected {
 		vars := s.dramaVariables(p)
+		vars["characters_md"] = characters
 		vars["episode"] = episodeView(ep).DramaEpisodeSummary
 		previous := ""
 		for _, candidate := range all {
@@ -73,7 +79,8 @@ func (s *DramaService) runScripts(ctx context.Context, p *model.DramaProject, j 
 func (s *DramaService) saveDramaScript(ctx context.Context, j *model.DramaJob, no int, text, status string) error {
 	// 1. 状态与正文原子保存，失败时不通知前端。
 	err := s.repo.WithTx(ctx, func(tx repository.DramaTx) error {
-		if _, e := tx.Project(ctx, j.UserID, j.DramaID, true); e != nil {
+		p, e := tx.Project(ctx, j.UserID, j.DramaID, true)
+		if e != nil {
 			return e
 		}
 		active, e := tx.Job(ctx, j.UserID, j.DramaID, j.ID, true)
@@ -82,6 +89,10 @@ func (s *DramaService) saveDramaScript(ctx context.Context, j *model.DramaJob, n
 		}
 		if !dramaActive(active.Status) {
 			return errcode.ErrTaskNotCancelable
+		}
+		// 先把整部剧转成结构再读集（转换会归一未锁定集的 script_md）。
+		if e = s.ensureScriptStructured(ctx, tx, p); e != nil {
+			return e
 		}
 		eps, e := tx.Episodes(ctx, j.UserID, j.DramaID)
 		if e != nil {
@@ -97,7 +108,10 @@ func (s *DramaService) saveDramaScript(ctx context.Context, j *model.DramaJob, n
 			revision := ep.Revision
 			ep.ScriptStatus = status
 			if status == "ready" {
-				ep.ScriptMD = text
+				// 模型输出解析后与旧结构合并，渲染结果才是这一集的 script_md
+				if _, _, e = s.applyScriptText(ctx, tx, p, &ep, text); e != nil {
+					return e
+				}
 			}
 			return tx.SaveEpisode(ctx, &ep, revision)
 		}

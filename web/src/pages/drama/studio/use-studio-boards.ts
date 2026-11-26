@@ -69,6 +69,7 @@ export function useStudioBoards(args: {
     [drama.imageModels.board, drama.imageModels.scene, remote.models],
   );
   const template = drama.promptSettings.board.bodies?.board ?? "";
+  const corruptPreset = drama.promptSettings.board.source === "preset" && !template.trim();
   const credits = lowestUnit(model?.pricing);
   const [submitting, setSubmitting] = useState<ReadonlySet<string>>(new Set());
 
@@ -92,15 +93,17 @@ export function useStudioBoards(args: {
     [segments, sourceOf, statusOf],
   );
   const ready = segments.filter((segment) => statusOf(segment) === "ready").length;
-  const blocked = !model
-    ? remote.status === "ready"
-      ? "没有可用的图片模型"
-      : "正在加载图片模型"
-    : null;
+  const blocked = corruptPreset
+    ? "故事板提示词快照不完整，请在项目设置重新选择"
+    : !model
+      ? remote.status === "ready"
+        ? "没有可用的图片模型"
+        : "正在加载图片模型"
+      : null;
 
   const generate = useCallback(
     async (list: Segment[]) => {
-      if (!model || list.length === 0) return;
+      if (!model || corruptPreset || list.length === 0) return;
       const ids = list.map((segment) => segment.id);
       setSubmitting((prev) => new Set([...prev, ...ids]));
       try {
@@ -146,7 +149,7 @@ export function useStudioBoards(args: {
         setSubmitting((prev) => new Set([...prev].filter((id) => !ids.includes(id))));
       }
     },
-    [flushEditors, freshAssets, hashOf, latestOf, model, no, template],
+    [corruptPreset, flushEditors, freshAssets, hashOf, latestOf, model, no, template],
   );
 
   const fill = useCallback(async () => {

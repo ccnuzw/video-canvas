@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAssetFolders } from "@/hooks/use-asset-folders";
 import { cn } from "@/lib/utils";
-import { FOLDER_NAME_MAX, validateFolderName } from "@/utils/assets/folder-name";
+import { FOLDER_NAME_MAX, validateAssetName, validateFolderName } from "@/utils/assets/folder-name";
 
 /** 文件夹选择器的参数 */
 export type FolderPickerProps = {
@@ -31,8 +31,10 @@ export type FolderPickerProps = {
   initialFolderId?: string | null;
   /** 当前所在的文件夹：标「当前位置」，选它时不能确认（移动场景）；根目录用 null，不传表示没有当前位置 */
   currentFolderId?: string | null;
+  /** 入库时提供默认文件名作为名称占位提示；未传则只选位置。 */
+  assetName?: string;
   /** 确认：拿到选中的位置（null 是根目录）；失败抛错，弹窗保持打开 */
-  onConfirm: (folderId: string | null) => Promise<unknown>;
+  onConfirm: (folderId: string | null, name?: string) => Promise<unknown>;
 };
 
 /**
@@ -94,16 +96,20 @@ function PickerBody({
   confirmLabel = "确定",
   initialFolderId = null,
   currentFolderId,
+  assetName,
   onConfirm,
 }: FolderPickerProps) {
   const { folders, loading, error, reload, create } = useAssetFolders(true);
   const [selected, setSelected] = useState<string | null>(initialFolderId);
+  const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   /** 就地新建：null 没展开，字符串是输入框里的内容 */
   const [draft, setDraft] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [draftError, setDraftError] = useState("");
 
+  const enteredName = name.trim();
+  const nameResult = enteredName ? validateAssetName(enteredName) : null;
   const isCurrent = currentFolderId !== undefined && selected === currentFolderId;
 
   const handleCreate = async (event: FormEvent) => {
@@ -128,10 +134,10 @@ function PickerBody({
   };
 
   const handleConfirm = async () => {
-    if (saving || isCurrent) return;
+    if (saving || isCurrent || nameResult?.ok === false) return;
     setSaving(true);
     try {
-      await onConfirm(selected);
+      await onConfirm(selected, enteredName || undefined);
       onOpenChange(false);
     } catch {
       // 提示由请求层统一弹，弹窗保持打开
@@ -146,6 +152,25 @@ function PickerBody({
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>选择一个位置，文件夹只有一层。</DialogDescription>
       </DialogHeader>
+
+      {assetName !== undefined && (
+        <label className="grid gap-1.5">
+          素材名称（可选）
+          <Input
+            value={name}
+            autoComplete="off"
+            placeholder={assetName || "默认文件名"}
+            disabled={saving}
+            aria-invalid={nameResult?.ok === false}
+            onChange={(event) => setName(event.target.value)}
+          />
+          {nameResult?.ok === false && (
+            <span role="alert" className="text-destructive text-xs">
+              {nameResult.message}
+            </span>
+          )}
+        </label>
+      )}
 
       <div
         role="radiogroup"
@@ -241,7 +266,11 @@ function PickerBody({
         >
           取消
         </Button>
-        <Button type="button" onClick={handleConfirm} disabled={saving || isCurrent}>
+        <Button
+          type="button"
+          onClick={handleConfirm}
+          disabled={saving || isCurrent || nameResult?.ok === false}
+        >
           {saving && <Loader2 className="animate-spin" />}
           {confirmLabel}
         </Button>

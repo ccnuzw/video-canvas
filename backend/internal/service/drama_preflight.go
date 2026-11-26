@@ -133,11 +133,28 @@ func (s *DramaService) EstimateSource(ctx context.Context, userID uint64, token 
 		return nil, err
 	}
 	p := drama.Preflight(draft.Text, req.SourceKind)
-	return s.estimateSource(ctx, p, *req, true)
+	setting, err := s.estimatePlanPrompt(ctx, userID, *req)
+	if err != nil {
+		return nil, err
+	}
+	return s.estimateSource(ctx, p, *req, true, setting)
+}
+
+// estimatePlanPrompt 估算沿用建剧的同一版本校验；剧本型没有规划。
+func (s *DramaService) estimatePlanPrompt(ctx context.Context, userID uint64, req model.DramaSourceEstimateReq) (model.DramaPromptSetting, error) {
+	if req.SourceKind == "script" || (req.PlanPrompt == nil && s.presets == nil) {
+		return model.DramaPromptSetting{}, nil
+	}
+	choices := map[string]model.DramaPromptChoice{"plan": {Source: "builtin"}}
+	if req.PlanPrompt != nil {
+		choices["plan"] = *req.PlanPrompt
+	}
+	settings, err := s.snapshotPrompts(ctx, userID, req.SourceKind, choices, false)
+	return settings["plan"], err
 }
 
 // estimateSource 采用设计的初始系数，规划报价按实际完整批次计算。
-func (s *DramaService) estimateSource(ctx context.Context, p drama.PreflightResult, req model.DramaSourceEstimateReq, includeAnalyze bool) (*model.DramaSourceEstimate, error) {
+func (s *DramaService) estimateSource(ctx context.Context, p drama.PreflightResult, req model.DramaSourceEstimateReq, includeAnalyze bool, setting ...model.DramaPromptSetting) (*model.DramaSourceEstimate, error) {
 	kind, end, seconds, key := req.SourceKind, req.RangeEnd, req.EpisodeSeconds, req.TextModel
 	if end == 0 {
 		end = len(p.Units)
@@ -155,7 +172,7 @@ func (s *DramaService) estimateSource(ctx context.Context, p drama.PreflightResu
 	if err != nil {
 		return nil, err
 	}
-	if err = checkUnitsFit(snap, p.Units[:end]); err != nil {
+	if err = checkUnitsFit(snap, p.Units[:end], setting...); err != nil {
 		return nil, err
 	}
 	chars := 0
@@ -178,16 +195,12 @@ func (s *DramaService) estimateSource(ctx context.Context, p drama.PreflightResu
 		requests = 1
 	}
 	if kind != "script" {
-		for cursor := 0; cursor < end; {
-			batch, e := drama.NextBatch(p.Units, cursor, end, dramaBatchBudget(snap))
-			if e != nil {
-				return nil, errcode.ErrDramaContext
-			}
-			project.SourceChars = utf8.RuneCountInString(drama.UnitSource(batch))
-			out.Credits += dramaQuote(project, "plan", nil, snap)
-			requests++
-			cursor = batch[len(batch)-1].No
+		credits, batches, batchErr := quotePlanningBatches(p.Units, end, snap, setting...)
+		if batchErr != nil {
+			return nil, batchErr
 		}
+		out.Credits += credits
+		requests += batches
 	}
 	analyzeSeconds := 0
 	if includeAnalyze {
@@ -205,17 +218,38 @@ func (s *DramaService) estimateSource(ctx context.Context, p drama.PreflightResu
 	return out, nil
 }
 
+// quotePlanningBatches 按原文的完整单元和实际正文预算估算调用次数与积分。
+func quotePlanningBatches(units []drama.Unit, end int, snap *provider.Snapshot, setting ...model.DramaPromptSetting) (credits, batches int, err error) {
+	budget := dramaBatchBudget(snap, setting...)
+	for cursor := 0; cursor < end; {
+		batch, batchErr := drama.NextBatch(units, cursor, end, budget)
+		if batchErr != nil {
+			return 0, 0, errcode.ErrDramaContext
+		}
+		project := &model.DramaProject{SourceChars: utf8.RuneCountInString(drama.UnitSource(batch))}
+		credits += dramaQuote(project, "plan", nil, snap)
+		batches++
+		cursor = batch[len(batch)-1].No
+	}
+	return credits, batches, nil
+}
+
 // dramaPromptReserve 分批时给提示词（模板、已知角色、上一集结尾等）预留的字数；调用前还会按真实提示词再查一遍。
 const dramaPromptReserve = 8192
 
 // dramaBatchBudget 一批原文 / 剧本最多放多少字：上下文额度（窗口的 60%）扣掉提示词预留，最多三万字。
-func dramaBatchBudget(snap *provider.Snapshot) int {
-	return min(30000, dramaContextLimit(snap)-dramaPromptReserve)
+func dramaBatchBudget(snap *provider.Snapshot, choices ...model.DramaPromptSetting) int {
+	reserve := dramaPromptReserve
+	if len(choices) > 0 && choices[0].Source == "preset" {
+		growth := utf8.RuneCountInString(choices[0].Bodies["plan"]) - utf8.RuneCountInString(drama.PromptBody("plan"))
+		reserve += max(0, growth)
+	}
+	return min(30000, dramaContextLimit(snap)-reserve)
 }
 
 // checkUnitsFit 建剧、修改模型与估价时检查每个单元都能整个放进一批（单元不拆开），放不下时点名最长的那个。
-func checkUnitsFit(snap *provider.Snapshot, units []drama.Unit) error {
-	budget := dramaBatchBudget(snap)
+func checkUnitsFit(snap *provider.Snapshot, units []drama.Unit, choices ...model.DramaPromptSetting) error {
+	budget := dramaBatchBudget(snap, choices...)
 	if budget <= 0 {
 		return errcode.ErrDramaContext.WithMsg("这个模型的上下文太小，放不下提示词，请换上下文更大的模型")
 	}

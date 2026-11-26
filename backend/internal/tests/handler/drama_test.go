@@ -18,17 +18,37 @@ import (
 	"video-canvas/internal/pkg/idcodec"
 	"video-canvas/internal/repository"
 	"video-canvas/internal/service"
+	"video-canvas/internal/tests/dramafake"
 )
 
 // httpDramaRepo 只提供 HTTP 场景需要的读取原语，其他调用会暴露为测试失败。
 type httpDramaRepo struct {
-	repository.DramaTx
+	dramafake.ScriptTx
 	project *model.DramaProject
 	episode *model.DramaEpisode
 	jobs    []model.DramaJob
 	credit  model.UserCredit
 }
 
+// SetEpisodeScriptMD 只改 script_md，不动 revision。
+func (r *httpDramaRepo) SetEpisodeScriptMD(_ context.Context, _, _, _ uint64, md string) error {
+	if r.episode != nil {
+		r.episode.ScriptMD = md
+	}
+	return nil
+}
+
+// MarkScriptStructured 标记整部剧已转成结构。
+func (r *httpDramaRepo) MarkScriptStructured(context.Context, uint64, uint64) error {
+	r.project.ScriptStructured = true
+	return nil
+}
+
+// MarkScriptBiosImported 标记人物传记已导入人物表。
+func (r *httpDramaRepo) MarkScriptBiosImported(context.Context, uint64, uint64) error {
+	r.project.ScriptBiosImported = true
+	return nil
+}
 func (r *httpDramaRepo) WithTx(_ context.Context, fn func(repository.DramaTx) error) error {
 	return fn(r)
 }
@@ -76,6 +96,13 @@ func httpDramaRouter() *gin.Engine {
 	r.GET("/dramas/:id/episodes/:no", h.GetEpisode)
 	r.POST("/dramas/:id/episodes", h.CreateEpisode)
 	r.PATCH("/dramas/:id/episodes/:no", h.UpdateEpisode)
+	r.GET("/dramas/:id/episodes/:no/script", h.GetScript)
+	r.PUT("/dramas/:id/episodes/:no/script", h.PutScript)
+	r.POST("/dramas/:id/script/parse", h.ParseScript)
+	r.GET("/dramas/:id/script-characters", h.ListScriptEntities("character"))
+	r.POST("/dramas/:id/script-characters", h.CreateScriptEntity("character"))
+	r.PATCH("/dramas/:id/script-characters/:eid", h.UpdateScriptEntity("character"))
+	r.DELETE("/dramas/:id/script-characters/:eid", h.DeleteScriptEntity("character"))
 	r.POST("/dramas/:id/estimate", h.Estimate)
 	r.POST("/dramas/:id/jobs", h.CreateJob)
 	r.GET("/dramas/:id/jobs", h.ListJobs)
@@ -143,8 +170,17 @@ func TestDramaHandler_Validation(t *testing.T) {
 func TestDramaHandler_Styles(t *testing.T) {
 	status, body := characterCall(t, httpDramaRouter(), "GET", "/drama-styles", "")
 	data := responseData(t, body)
-	if status != 200 || len(data["genres"].([]any)) != 12 || len(data["styles"].([]any)) != 11 {
+	if status != 200 || len(data["genres"].([]any)) != 12 || len(data["styles"].([]any)) != 12 {
 		t.Fatalf("风格契约：%+v", body)
+	}
+	// 每条画风都要带 preview_url：前端按它渲染缩略图，不再按 key 拼路径（见 docs/design/短剧预设后台 §5.1）。
+	// 这里没有注入数据库目录，走的是内置兜底，所以地址应是前端静态相对路径。
+	for _, raw := range data["styles"].([]any) {
+		style := raw.(map[string]any)
+		want := "/drama-styles/" + style["key"].(string) + ".webp"
+		if style["preview_url"] != want {
+			t.Fatalf("画风 %v 的 preview_url 应为 %s，实际 %v", style["key"], want, style["preview_url"])
+		}
 	}
 }
 

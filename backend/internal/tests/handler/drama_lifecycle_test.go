@@ -137,7 +137,8 @@ func TestDramaHandler_EditJobsAndDelete(t *testing.T) {
 	}{
 		{"PATCH", base, `{"revision":99,"title":"冲突"}`, 409, 30002},
 		{"PATCH", base, `{"revision":1,"title":"新剧名"}`, 200, 0},
-		{"PATCH", base + "/episodes/1", `{"revision":1,"script_md":"新的完整剧本"}`, 200, 0},
+		{"PATCH", base + "/episodes/1", `{"revision":1,"script_md":"新的完整剧本"}`, 400, 10001}, // 剧本只能走 PUT …/script
+		{"PATCH", base + "/episodes/1", `{"revision":1,"title":"新标题"}`, 200, 0},
 		{"PATCH", base + "/episodes/1", `{"revision":1,"title":"过期版本"}`, 409, 30002},
 		{"POST", base + "/estimate", `{"step":"breakdown","episodes":[1]}`, 200, 0},
 		{"POST", base + "/jobs", `{"step":"breakdown","episodes":[1]}`, 202, 0},

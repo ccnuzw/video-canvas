@@ -22,6 +22,7 @@ func (AssetFolder) TableName() string { return "asset_folders" }
 // AssetLibraryItem 个人资产库的一条归属：同一条素材（assets）在该用户的库里最多一条，不复制文件。
 // 不使用外键：删除文件夹时由服务在同一事务里先删归属行再删文件夹。
 type AssetLibraryItem struct {
+	Name      string    `gorm:"size:255;not null;default:''" json:"name"`                                                                                  // 库内名称，空串沿用原始文件名
 	ID        uint64    `gorm:"primaryKey;index:idx_asset_library_user_folder,priority:4,sort:desc" json:"id"`                                             // 归属 ID
 	UserID    uint64    `gorm:"not null;uniqueIndex:uk_asset_library_user_asset,priority:1;index:idx_asset_library_user_folder,priority:1" json:"user_id"` // 所属用户
 	AssetID   uint64    `gorm:"not null;uniqueIndex:uk_asset_library_user_asset,priority:2" json:"asset_id"`                                               // 素材 ID（assets.id）
@@ -34,6 +35,7 @@ func (AssetLibraryItem) TableName() string { return "asset_library_items" }
 
 // 个人资产库的上限与长度规则。
 const (
+	MaxLibraryItemNameLen = 255 // 素材名称最多的字符数
 	MaxAssetFolders       = 100 // 每个用户最多的文件夹数
 	MaxAssetFolderNameLen = 30  // 文件夹名最多多少个字
 )
@@ -64,6 +66,7 @@ type AssetFolderRemovedView struct {
 
 // AssetLibraryItemView 返回给前端的库条目。
 type AssetLibraryItemView struct {
+	Name      string     `json:"name"`       // 自定义名称，空串时沿用原始文件名
 	ID        idcodec.ID `json:"id"`         // 归属 ID（十六进制串）
 	Asset     *AssetView `json:"asset"`      // 素材
 	FolderID  idcodec.ID `json:"folder_id"`  // 所在文件夹；根目录为 null
@@ -127,8 +130,14 @@ type RenameAssetFolderReq struct {
 
 // AddAssetLibraryItemReq 把素材加入资产库；FolderID 不传或为 null 表示根目录。
 type AddAssetLibraryItemReq struct {
+	Name     string     `json:"name"`                                         // 可选的库内名称
 	AssetID  uint64     `json:"asset_id" binding:"required,min=1" label:"素材"` // 素材 ID
 	FolderID idcodec.ID `json:"folder_id" label:"文件夹"`                        // 目标文件夹（十六进制串）
+}
+
+// RenameAssetLibraryItemReq 重命名库条目。
+type RenameAssetLibraryItemReq struct {
+	Name string `json:"name" binding:"required" label:"素材名称"` // 新名称
 }
 
 // MoveAssetLibraryItemReq 移动库条目；FolderID 为 null 表示移到根目录。
@@ -140,7 +149,7 @@ type MoveAssetLibraryItemReq struct {
 type ListAssetLibraryItemsReq struct {
 	FolderID string `form:"folder_id" binding:"max=64" label:"文件夹"`                        // root（默认）/ 十六进制 id / all
 	Kind     string `form:"kind" binding:"omitempty,oneof=image video audio" label:"素材类型"` // 不传不过滤
-	Q        string `form:"q" binding:"max=100" label:"搜索词"`                               // 文件名包含匹配
+	Q        string `form:"q" binding:"max=255" label:"搜索词"`                               // 文件名包含匹配
 	Cursor   string `form:"cursor" binding:"max=128" label:"游标"`                           // 上一页返回的 next_cursor
 	Limit    int    `form:"limit" binding:"omitempty,min=1,max=100" label:"每页条数"`          // 默认 40，最大 100
 }

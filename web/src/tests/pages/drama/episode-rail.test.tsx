@@ -48,11 +48,12 @@ describe("EpisodeRail：各工序共用同一条栏，切工序时不跳", () =>
     [...html.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((m) => m[1]);
   const stages: WorkspaceStage[] = ["script", "assets", "studio", "final"];
 
-  test("每个工序顶部都是 大纲、人物、全集，再接各集，位置完全一致", () => {
+  test("每个工序顶部都是 大纲、人物、地点、全集，再接各集，位置完全一致", () => {
     for (const stage of stages) {
-      expect(labels(rail(episodes, stage, 1)).slice(0, 5)).toEqual([
+      expect(labels(rail(episodes, stage, 1)).slice(0, 6)).toEqual([
         "故事大纲",
-        "人物传记",
+        "人物",
+        "地点",
         "全集",
         "第 1 集 · 初见",
         "第 2 集 · 重逢",

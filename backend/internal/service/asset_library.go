@@ -60,6 +60,8 @@ type AssetLibraryItemRepo interface {
 	ListByAssetIDs(ctx context.Context, userID uint64, assetIDs []uint64) ([]model.AssetLibraryItem, error)
 	// SetFolder 移动归属，folderID 为 nil 表示根目录；不存在返回 repository.ErrNotFound。
 	SetFolder(ctx context.Context, userID, id uint64, folderID *uint64) error
+	// SetName 更新归属名称，不存在返回 repository.ErrNotFound。
+	SetName(ctx context.Context, userID, id uint64, name string) error
 	// Delete 移出资产库，不存在返回 repository.ErrNotFound。
 	Delete(ctx context.Context, userID, id uint64) error
 	// List 按加入时间倒序返回库条目，最多 f.Limit 条。
@@ -290,9 +292,17 @@ func (s *AssetLibraryService) ListItems(ctx context.Context, userID uint64, in L
 	return out, nil
 }
 
-// AddItem 把素材加入资产库，返回归属与是否新建。素材已在库里是幂等的：返回现有归属（created=false，不改它的文件夹）。
+// AddItem 把素材加入资产库，返回归属与是否新建。素材已在库里是幂等的：返回现有归属（created=false，保留原文件夹和名称）。
 // 素材不存在或不属于当前用户、文件夹不存在或不属于当前用户都返回 404。folderID 为 0 表示根目录。
-func (s *AssetLibraryService) AddItem(ctx context.Context, userID, assetID, folderID uint64) (*model.AssetLibraryItemView, bool, error) {
+func (s *AssetLibraryService) AddItem(ctx context.Context, userID, assetID, folderID uint64, name string) (*model.AssetLibraryItemView, bool, error) {
+	// 0. 可选名称为空时沿用素材文件名。
+	name = strings.TrimSpace(name)
+	if name != "" {
+		if err := validateLibraryItemName(name); err != nil {
+			return nil, false, err
+		}
+	}
+
 	// 1. 素材必须是自己的（别人的素材与不存在统一 404，避免暴露素材是否存在）
 	asset, err := s.assets.GetByID(ctx, userID, assetID)
 	if err != nil {
@@ -318,7 +328,7 @@ func (s *AssetLibraryService) AddItem(ctx context.Context, userID, assetID, fold
 	}
 
 	// 4. 新建归属；并发下另一个请求先插入时撞唯一索引，同样按幂等返回已存在的那条
-	it := &model.AssetLibraryItem{UserID: userID, AssetID: assetID, FolderID: folderPtr(folderID)}
+	it := &model.AssetLibraryItem{UserID: userID, AssetID: assetID, FolderID: folderPtr(folderID), Name: name}
 	if err := s.items.Create(ctx, it); err != nil {
 		if !errors.Is(err, repository.ErrDuplicate) {
 			return nil, false, err
@@ -332,6 +342,24 @@ func (s *AssetLibraryService) AddItem(ctx context.Context, userID, assetID, fold
 	}
 	v, err := s.itemView(ctx, it, asset)
 	return v, true, err
+}
+
+// RenameItem 更新当前用户的库条目名称，并返回去掉首尾空白后的名称。
+func (s *AssetLibraryService) RenameItem(ctx context.Context, userID, id uint64, name string) (string, error) {
+	// 1. 去掉首尾空白，确保名称可显示和落库。
+	name = strings.TrimSpace(name)
+	if err := validateLibraryItemName(name); err != nil {
+		return "", err
+	}
+
+	// 2. 按用户和条目 ID 更新，避免修改其他用户的条目。
+	if err := s.items.SetName(ctx, userID, id, name); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return "", errcode.ErrLibraryItemNotFound
+		}
+		return "", err
+	}
+	return name, nil
 }
 
 // MoveItem 把库条目移到另一个文件夹（folderID 为 0 表示根目录）并返回它。条目或文件夹不存在、不属于当前用户都返回 404。
@@ -517,7 +545,7 @@ func (s *AssetLibraryService) itemView(ctx context.Context, it *model.AssetLibra
 	if err != nil {
 		return nil, err
 	}
-	v := &model.AssetLibraryItemView{ID: idcodec.ID(it.ID), Asset: av, CreatedAt: it.CreatedAt}
+	v := &model.AssetLibraryItemView{ID: idcodec.ID(it.ID), Asset: av, Name: it.Name, CreatedAt: it.CreatedAt}
 	if it.FolderID != nil {
 		v.FolderID = idcodec.ID(*it.FolderID)
 	}
@@ -556,6 +584,20 @@ func (s *AssetLibraryService) checkFolderNameFree(ctx context.Context, userID ui
 	}
 	if exists {
 		return errcode.ErrAssetFolderDup
+	}
+	return nil
+}
+
+// validateLibraryItemName 校验去首尾空白后的名称是否可显示和落库。
+func validateLibraryItemName(name string) error {
+	if name == "" {
+		return errcode.ErrInvalidParams.WithMsg("素材名称不能为空")
+	}
+	if strings.ContainsRune(name, 0) {
+		return errcode.ErrInvalidParams.WithMsg("素材名称包含无效字符")
+	}
+	if utf8.RuneCountInString(name) > model.MaxLibraryItemNameLen {
+		return errcode.ErrInvalidParams.WithMsg(fmt.Sprintf("素材名称最多 %d 个字", model.MaxLibraryItemNameLen))
 	}
 	return nil
 }

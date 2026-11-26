@@ -1,3 +1,5 @@
+import { openDialog } from "@/store/dialog";
+import { DramaShareDialog } from "@/pages/drama/share-dialog";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
@@ -55,7 +57,15 @@ const COVER_TRANSITION = {
 };
 
 /** 卡片右上角的「⋯」：目前只有删除，删除不能撤销，所以要先确认 */
-function CardActions({ title, onDelete }: { title: string; onDelete: () => void }) {
+function CardActions({
+  title,
+  onDelete,
+  onShare,
+}: {
+  title: string;
+  onDelete: () => void;
+  onShare?: () => void;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -73,6 +83,7 @@ function CardActions({ title, onDelete }: { title: string; onDelete: () => void 
           <MoreHorizontal />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" sideOffset={6} className="w-36">
+          {onShare && <DropdownMenuItem onClick={onShare}>共享画布</DropdownMenuItem>}
           <DropdownMenuItem variant="destructive" onClick={() => setConfirmOpen(true)}>
             <Trash2 />
             删除
@@ -111,6 +122,7 @@ export function CanvasCard({
   canvas,
   variant,
   deleting,
+  onTransferred,
   shared,
   onDelete,
 }: {
@@ -118,6 +130,7 @@ export function CanvasCard({
   variant: CanvasCardVariant;
   /** 删除请求进行中：半透明、不可点 */
   deleting?: boolean;
+  onTransferred?: () => void;
   /** 首页最近画布里也有这张卡：从首页点「更多」进来时它是转场的共享元素 */
   shared?: boolean;
   onDelete: () => void;
@@ -182,7 +195,20 @@ export function CanvasCard({
         )}
       </Link>
       <div className={cn(variant === "panel" && "absolute inset-x-0 top-0")}>
-        <CardActions title={canvas.title} onDelete={onDelete} />
+        <CardActions
+          onShare={
+            onTransferred &&
+            (() =>
+              openDialog(DramaShareDialog, {
+                id: canvas.id,
+                title: canvas.title,
+                revision: canvas.revision,
+                transferred: onTransferred,
+              }))
+          }
+          title={canvas.title}
+          onDelete={onDelete}
+        />
       </div>
     </motion.div>
   );

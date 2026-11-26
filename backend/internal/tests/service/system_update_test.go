@@ -70,6 +70,9 @@ func TestSystemUpdateService_CheckUpdate(t *testing.T) {
 			{"0.3.2", "0.10.0", true},
 			{"0.10.0", "0.9.9", false},
 			{"0.4.0", "0.4.0", false},
+			{"0.7.3-beta.1", "0.7.3", true},
+			{"0.7.3", "0.7.3-beta.1", false},
+			{"0.7.4-beta.1", "0.7.3", false},
 			{"1.0.0", "0.9.0", false},
 			{"v0.3.2", "0.3.3", true}, // 带 v 前缀的构建也能比较
 		}

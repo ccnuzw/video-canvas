@@ -8,18 +8,19 @@ import { cn } from "@/lib/utils";
 /**
  * 后台的「清透」面板外观（web/docs/coding-standards.md 6.1，与前台画布的胶囊同一套 token）：
  * 盖在 Card 等面板的 className 上，把实心卡片换成半透明 + 背景模糊 + 大圆角，底下透出后台外壳的彩色光晕。
- * 弹窗、下拉这类浮层不用它，仍是实色。
+ * 弹窗面板使用实色背景。
  */
 export const GLASS_PANEL =
   "bg-chrome ring-chrome-border rounded-3xl shadow-lg ring-1 backdrop-blur-xl backdrop-saturate-150";
 
-/**
- * 后台弹层（弹窗、确认框、抽屉）的清透外观：比面板更模糊、投影更深，压在遮罩上仍读得清。
- */
+/** 后台弹窗、确认框和抽屉共用的实色面板。 */
+export const ADMIN_POPUP = "bg-popover ring-chrome-border shadow-2xl ring-1";
+
+/** 前台共用弹窗组件时可选择清透面板。 */
 export const GLASS_POPUP =
   "bg-chrome ring-chrome-border shadow-2xl ring-1 backdrop-blur-2xl backdrop-saturate-150";
 
-/** 弹层遮罩：压暗一点并轻微模糊，让清透弹层和底下的页面拉开层次 */
+/** 弹层遮罩用于压暗并模糊背景页面。 */
 export const GLASS_OVERLAY = "bg-black/25 supports-backdrop-filter:backdrop-blur-sm";
 
 /**

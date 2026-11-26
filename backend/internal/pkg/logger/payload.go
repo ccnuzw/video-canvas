@@ -103,7 +103,7 @@ func Payload(ctx context.Context, rec PayloadRecord) {
 // sensitiveHeaders 是整个值都要遮掉的请求头（小写）。
 var sensitiveHeaders = map[string]bool{
 	"authorization": true, "proxy-authorization": true, "x-api-key": true, "api-key": true, "x-goog-api-key": true,
-	"cookie": true, "set-cookie": true,
+	"cookie": true, "set-cookie": true, "x-agent-service-token": true,
 }
 
 // RedactHeaders 返回遮掉鉴权头后的副本；其余请求头原样保留。

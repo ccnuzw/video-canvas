@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { DRAMA_ERR, isDramaError } from "@/api/drama/errors";
 
 import type {
   DramaImageModels,
@@ -31,8 +32,8 @@ import { useDramaStyles } from "@/hooks/use-drama-styles";
 import { useModelSwitchStore } from "@/store/drama-model-switch";
 import { pickBoardModel } from "@/utils/drama/board-input";
 import { CUSTOM_STYLE_KEY } from "@/utils/drama/options";
-import { PROMPT_STEPS, sameChoice } from "@/utils/drama/prompts";
-import { promptsToChoices, secondsLock, type StartPrompts } from "@/utils/drama/start-settings";
+import { isCurrentPreset, PROMPT_STEPS, sameChoice } from "@/utils/drama/prompts";
+import { secondsLock, type StartPrompts } from "@/utils/drama/start-settings";
 
 import { useWorkspace } from "./context";
 
@@ -40,15 +41,21 @@ import { useWorkspace } from "./context";
 export function settingsToPrompts(settings: PromptSettings): StartPrompts {
   const out = {} as StartPrompts;
   for (const { key } of PROMPT_STEPS) {
-    const { source, id, skill } = settings[key];
-    out[key] = { source, ...(id ? { id } : {}), ...(skill ? { skill } : {}) };
+    const { source, id, skill, version } = settings[key];
+    out[key] = {
+      source,
+      ...(id ? { id } : {}),
+      ...(skill ? { skill } : {}),
+      ...(source === "preset" ? { revision: version } : {}),
+    };
   }
   return out;
 }
 
 /** 有哪些环节的选择和已保存的不一样 */
 export function changedSteps(settings: PromptSettings, value: StartPrompts): PromptStep[] {
-  return PROMPT_STEPS.filter(({ key }) => !sameChoice(settings[key], value[key])).map(
+  const stored = settingsToPrompts(settings);
+  return PROMPT_STEPS.filter(({ key }) => !sameChoice(stored[key], value[key])).map(
     ({ key }) => key,
   );
 }
@@ -136,11 +143,25 @@ export function ProjectSettingsBody({
   const [editor, setEditor] = useState<{ step: PromptStep; item: MyPrompt | null } | null>(null);
   const [saving, setSaving] = useState(false);
   const changed = changedSteps(drama.promptSettings, value);
+  const stale = PROMPT_STEPS.find(
+    ({ key }) =>
+      changed.includes(key) &&
+      value[key].source === "preset" &&
+      (library.presetStatus !== "ready" || !isCurrentPreset(value[key], library.presets[key])),
+  );
+  const promptNotice =
+    stale &&
+    (library.presetStatus === "loading"
+      ? "正在刷新内置提示词目录…"
+      : library.presetStatus === "error"
+        ? "内置提示词目录加载失败，请重试或保留已保存的提示词"
+        : `${stale.name}的内置提示词已变更，请重新选择`);
   const changedModels = changedImageModels(drama.imageModels, imageModels);
   const boardChanged = imageModels.board !== drama.imageModels.board;
   const textChanged = textModel !== drama.textModel;
 
   const done = async () => {
+    if (saving || stale) return;
     if (changed.length === 0 && changedModels.length === 0 && !boardChanged && !textChanged) {
       onClose();
       return;
@@ -148,7 +169,9 @@ export function ProjectSettingsBody({
     setSaving(true);
     try {
       await patch({
-        ...(changed.length > 0 ? { prompts: promptsToChoices(value) } : {}),
+        ...(changed.length > 0
+          ? { prompts: Object.fromEntries(changed.map((step) => [step, value[step]])) }
+          : {}),
         ...(changedModels.length > 0 || boardChanged ? { imageModels } : {}),
         ...(textChanged ? { textModel } : {}),
       });
@@ -162,7 +185,8 @@ export function ProjectSettingsBody({
       }
       toast.success("已保存，之后的任务使用新设置");
       onClose();
-    } catch {
+    } catch (error) {
+      if (isDramaError(error, DRAMA_ERR.presetChanged)) library.refreshPresets();
       /** 失败提示已由 patch 弹出，留在弹窗里方便改 */
       setSaving(false);
     }
@@ -249,11 +273,20 @@ export function ProjectSettingsBody({
           />
         </Section>
       </div>
+      {promptNotice && (
+        <p role="status" className="text-muted-foreground px-5 text-sm">
+          {promptNotice}
+        </p>
+      )}
       <DialogFooter className="m-0 border-0 bg-transparent px-5 pb-5">
         <Button variant="ghost" className="rounded-full" onClick={onClose}>
           取消
         </Button>
-        <Button className="rounded-full px-6" disabled={saving} onClick={() => void done()}>
+        <Button
+          className="rounded-full px-6"
+          disabled={saving || !!stale}
+          onClick={() => void done()}
+        >
           {saving && <Loader2 className="animate-spin" />}
           完成
         </Button>

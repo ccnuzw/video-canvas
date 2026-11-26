@@ -209,8 +209,9 @@ docker compose logs agent plugin-runner | grep '<编号>'
 | GET                 | /api/v1/assets/generated                              | 生成历史：`?kind=image|video|audio`（必填）`&source=all|conversation|canvas&canvas_id=&created_from=RFC3339&order=desc|asc&q=&cursor=&limit=`（默认 40，最大 100）；只含 `source=generated` 且非试跑任务的素材，每项带 `prompt`、`model_label`、`canvas`（`null`=首页对话；画布已删为 `deleted:true`）、`library_item_id`；返回 `{items,next_cursor}` |
 | GET/POST            | /api/v1/asset-folders                                 | 资产库文件夹列表 `{items:[{id,name,item_count,created_at}]}`（不分页）/ 新建 `{name}`，返回 **201**；名称去首尾空白后 1–30 字（64001），同名忽略大小写（64002），每人最多 100 个（64003）；id 是十六进制串 |
 | PATCH/DELETE        | /api/v1/asset-folders/:id                             | 重命名 `{name}` / 删除文件夹并同一事务移出其中的素材，返回 `{removed}`，不动素材与存储文件；不存在或不属于自己 64004 |
-| GET                 | /api/v1/asset-library/items                           | 资产库条目：`?folder_id=root|<id>|all&kind=&q=&cursor=&limit=`，加入时间倒序，返回 `{items:[{id,asset,folder_id,created_at}],next_cursor}`；文件夹不存在 64004 |
-| POST                | /api/v1/asset-library/items                           | 加入资产库 `{asset_id, folder_id?}`：新增 **201**，素材已在库里 **200** 并返回现有归属；素材不属于自己 40007，文件夹不存在 64004 |
+| GET                 | /api/v1/asset-library/items                           | 资产库条目：`?folder_id=root|<id>|all&kind=&q=&cursor=&limit=`，加入时间倒序，返回 `{items:[{id,name,asset,folder_id,created_at}],next_cursor}`；文件夹不存在 64004 |
+| POST                | /api/v1/asset-library/items                           | 加入资产库 `{asset_id, folder_id?, name?}`：新增 **201**，素材已在库里 **200** 并返回现有归属；素材不属于自己 40007，文件夹不存在 64004 |
+| PATCH               | /api/v1/asset-library/items/:id/name                  | 重命名 `{name}`，返回 `{name}`。库内名称去首尾空白后 1–255 字，可用于搜索。条目不存在或不属于自己时返回 64005 |
 | PATCH/DELETE        | /api/v1/asset-library/items/:id                       | 移动 `{folder_id: id|null}`（返回条目）/ 移出资产库（不动素材）；不存在或不属于自己 64005 |
 | GET                 | /api/v1/virtual-humans                                | 真人库列表 `{items:[{id,name,status,images:[{id,asset,status,error}],created_at}],filing_ready}`（不分页）；`?refresh=1` 先向方舟刷新审核中的图片（同一用户 3 秒一次）；status 为 pending / active / failed |
 | POST                | /api/v1/virtual-humans                                | 用一张图片新建真人并提交方舟备案 `{name, asset_id}`，返回 **201**；名称 1–30 字（69003），只能是自己在对象存储里的图片（69003 / 69010），已在真人库里 69004，未配置虚拟人像库 69007，每人最多 200 个（69012） |
@@ -220,7 +221,7 @@ docker compose logs agent plugin-runner | grep '<编号>'
 | PUT                 | /api/v1/virtual-humans/:id/cover                      | 设封面 `{image_id}`（排到第一张）；图片不属于该真人 69002 |
 | POST                | /api/v1/virtual-human-images/:id/retry                | 重新提交备案失败的图片；不是失败状态 69011 |
 | DELETE              | /api/v1/virtual-human-images/:id                      | 移除一张图片并删除方舟侧素材；被角色卡使用 69006，真人只剩这一张 69009，方舟删除失败 69008 |
-| GET                 | /api/v1/drama-styles                                  | 内置题材与画风目录 `{genres:[{key,name}](12), styles:[{key,name,prompt}](11)}` |
+| GET                 | /api/v1/drama-styles                                  | 内置题材与画风目录 `{genres:[{key,name}](12), styles:[{key,name,prompt}](12)}` |
 | GET/POST | /api/v1/dramas | 用户短剧列表 / JSON 建剧 `{source_token,source_kind,range_end?,ratio,genre?,style_key,style_custom?,episode_seconds?,text_model?,prompts?}`；原文先预检，返回 201；自动研读并按批规划，剧本型直接按原文切集。模型上下文须至少 128k。 |
 | GET/PATCH/DELETE    | /api/v1/dramas/:id                                    | 详情（含 `episodes`、`active_jobs`、`phase/plan_cursor/range_end/pause_code` 和不含正文的 `prompt_settings`）/ 改 `{revision, title?, genre?, style_key?, style_custom?, ratio?, text_model?, outline_md?, characters_md?, prompts?}`（revision 冲突 409 / 30002）/ 软删，连带短剧画布（角色数据内嵌在画布里，随画布一起软删），返回 **204**；不存在或不属于自己 67001 |
 | GET/PATCH           | /api/v1/dramas/:id/episodes/:no                       | 单集（含 `script_md` 及 `storyboard_status/segment_count/segment_seconds/done_segment_count`，项目详情集概要同样返回这四项）/ 改 `{revision, title?, synopsis?, script_md?,hook?,cliffhanger?}`：已拆解（锁定）的集改 `script_md` / `synopsis` 返回 409 / 67005（改 `title` 允许）；集用集号 `no` 定位 |
@@ -234,7 +235,7 @@ docker compose logs agent plugin-runner | grep '<编号>'
 | GET/POST            | /api/v1/dramas/:id/episodes/:no/segments               | 按 `seq` 列表 `{items: SegmentView[]}` / 新增 `{prompt?, seconds?, after_seq?}`，未传插入位置则追加，返回 **201**；列表中的 `takes/status` 从真实生成任务推导并对账 |
 | PATCH/DELETE        | /api/v1/drama-segments/:sid                           | 部分更新 `{revision, prompt?, seconds?, chosen_task_id?}` / 删除返回 **204**，保留生成任务与素材；不存在或不属于自己 67009，revision 冲突 409 / 30002，采用结果必须是本段成功视频 take（67011） |
 | PUT                 | /api/v1/dramas/:id/episodes/:no/segments/order         | `{ids:[片段id...]}` 必须恰好包含该集全部片段且无重复（67012），返回排序后的 `{items}`；增删及重排后序号连续 |
-| GET/PUT             | /api/v1/dramas/:id/episodes/:no/timeline               | 成片粗剪时间线。GET 返回对账后的 `{clips, muted, removed_segment_ids, imports, revision, changes, invalid_clip_ids, assets}`，`revision=0` 为按片段现算的默认时间线；PUT `{revision, clips, muted, removed_segment_ids, imports}` 带乐观锁整份保存（冲突 67034、内容不合法 67035），成功后成片显示过期。「合成整集」按时间线裁剪拼接，有失效段拒绝（67036） |
+| GET/PUT             | /api/v1/dramas/:id/episodes/:no/timeline               | 成片粗剪时间线。GET 返回对账后的 `{clips, muted, removed_segment_ids, imports, revision, changes, invalid_clip_ids, assets}`，`revision=0` 为按片段现算的默认时间线；PUT `{revision, clips, muted, removed_segment_ids, imports}` 带乐观锁整份保存（冲突 67046、内容不合法 67047），成功后成片显示过期。「合成整集」按时间线裁剪拼接，有失效段拒绝（67048） |
 | POST                | /api/v1/drama-segments/:sid/generate                   | `{model_id,input}` → **202** `{task: TaskView}`；复用生成任务模型校验、积分与 `Idempotency-Key`，固定 `kind=video`、`canvas_id=短剧画布`、`node_id=seg:{十六进制片段id}`；首条成功结果自动采用，最新 take 优先推导 `running/error/done/idle`；编辑与 take 状态变更推 `drama.segment` `{drama_id,episode_no,segment}`，生成任务原有 `task.updated` 继续推送 |
 | GET                 | /files/*                                              | 素材稳定地址，不鉴权（靠 key 不可猜测）：素材在本地存储则直接返回文件（支持 Range），在对象存储则现签名并 302 跳转                                                                                                                                                                                                                                                                 |
 | GET                 | /files/*?v=thumb\|poster                              | 素材缩略图 / 视频封面：素材所在存储有已发布的图片处理服务时 302 到厂商的处理地址；没有时缩略图回退原图、封面 404；种类不匹配（图片请求 poster、视频请求 thumb、音频）404                                                                                                                                                                                                           |
@@ -316,6 +317,23 @@ docker compose logs agent plugin-runner | grep '<编号>'
 ```
 
 `code` 为 0 表示成功，错误码定义在 `internal/pkg/errcode`。
+
+### 短剧预设接口（admin / super_admin）
+
+维护开拍设置里的题材与画风目录（`drama_presets`，`kind` 为 `genre` / `style`）。写操作会立刻失效进程内目录缓存，
+开拍设置马上生效；多副本下其它实例最迟 60 秒跟上。删除只有 `super_admin` 能调，界面上没有入口 —— 预设是给创作端用的
+目录，`drama_projects` / `drama_scripts` 存的是 `style_key` 字符串、没有外键，下架走停用。
+
+| 方法 | 路径 | 角色 | 说明 |
+|---|---|---|---|
+| GET | /api/v1/admin/drama-presets?kind= | admin | 列表（含 `project_count` 引用数、`preview_url`、`enabled`、`sort_order`） |
+| POST | /api/v1/admin/drama-presets | admin | 新建 `{kind, key, name, prompt?, preview_url?, enabled?}`；key 只允许小写字母数字下划线、≤32 位、不能是保留值 `custom`（67038）；题材不许带描述与预览图（67038） |
+| PUT | /api/v1/admin/drama-presets/:id | admin | 改 `{name?, prompt?, preview_url?, enabled?}`，key 不可改；手填 `preview_url` 会同时清掉预览图定位列 |
+| PUT | /api/v1/admin/drama-presets/:id/enabled | admin | 启停 `{enabled}` |
+| PUT | /api/v1/admin/drama-presets/order | admin | 整组排序 `{kind, ids[]}`，须覆盖该种类的全部条目（67040） |
+| POST | /api/v1/admin/drama-presets/:id/preview | admin | 上传画风预览图（multipart，WebP / PNG / JPEG，≤2MB；67041 / 67042），返回新的 `preview_url` |
+| DELETE | /api/v1/admin/drama-presets/:id | **super_admin** | 删除（67037）；有短剧在用返回 67039 并带条数，只能停用 |
+| GET | /api/v1/drama-presets/previews/*filepath | 公开 | 预览图直出（本地存储）或 302 到现签名地址（对象存储）；不存在的 key 404 |
 
 ### 后台小镜的运营与系统管理工具
 

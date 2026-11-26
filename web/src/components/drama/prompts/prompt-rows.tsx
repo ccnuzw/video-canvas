@@ -4,7 +4,13 @@ import { toast } from "sonner";
 import type { MyPrompt, PromptChoice, PromptSettings, PromptStep } from "@/api/drama/type";
 import { ChipPopover } from "@/components/drama/pickers";
 import { cn } from "@/lib/utils";
-import { PROMPT_STEPS, promptRowState, sameChoice } from "@/utils/drama/prompts";
+import {
+  defaultPromptChoice,
+  pickPreset,
+  PROMPT_STEPS,
+  promptRowState,
+  sameChoice,
+} from "@/utils/drama/prompts";
 
 import type { PromptLibrary } from "./use-prompt-library";
 
@@ -80,7 +86,7 @@ export function PromptRows({
   const removeMine = async (step: PromptStep, item: MyPrompt) => {
     await library.remove(item);
     if (sameChoice(value[step], { source: "mine", id: item.id })) {
-      onChange(step, { source: "builtin" });
+      onChange(step, defaultPromptChoice(library.presets[step]));
     }
     toast.success("已删除，已建的短剧不受影响");
   };
@@ -90,39 +96,129 @@ export function PromptRows({
       {PROMPT_STEPS.map(({ key, name }) => {
         const mine = library.mine[key];
         const skills = library.skills[key];
-        const computed = promptRowState(key, kind, value[key], mine, skills);
-        const keep = saved && sameChoice(value[key], saved[key]) ? saved[key] : null;
-        const row =
-          keep && !computed.disabledReason ? { ...computed, label: keep.label } : computed;
-        const flagged = keep ? !!keep.missing : row.missing;
+        const picked = value[key];
+        const group = library.presets[key];
+        const candidate = group?.items.find((item) => item.id === picked.id);
+        const computed = promptRowState(key, kind, picked, mine, skills);
+        const previous = saved?.[key];
+        const savedChoice = previous && {
+          source: previous.source,
+          id: previous.id,
+          skill: previous.skill,
+          revision: previous.version,
+        };
+        const keep = savedChoice && sameChoice(picked, savedChoice) ? previous : null;
+        const preset = picked.source === "preset";
+        const ready = library.presetStatus === "ready";
+        const catalogEnabled = ready && !!group?.default_id;
+        const missing = preset && (catalogEnabled ? !candidate : !!keep?.missing);
+        const update =
+          preset && catalogEnabled && candidate && candidate.revision !== picked.revision;
+        const isDefault = preset && catalogEnabled && !update && picked.id === group?.default_id;
+        const presetLabel = keep?.label ?? candidate?.name ?? "内置提示词";
+        const suffix = missing
+          ? keep
+            ? " · 已下架 · 仍沿用"
+            : " · 请重新选择"
+          : isDefault
+            ? " · 默认"
+            : "";
+        const label = computed.disabledReason
+          ? computed.label
+          : preset
+            ? presetLabel + suffix
+            : !saved && !ready && picked.source === "builtin"
+              ? library.presetStatus === "error"
+                ? "加载失败"
+                : "加载中…"
+              : (keep?.label ?? computed.label);
+        const flagged = preset ? missing || !!update : keep ? !!keep.missing : computed.missing;
         return (
           <div key={key} className="flex min-h-12 items-center gap-3 px-3">
             <span className="text-muted-foreground w-24 shrink-0 text-sm">{name}</span>
             <ChipPopover
               variant="field"
-              label={row.label}
+              label={label}
               tone={flagged ? "warn" : undefined}
-              disabled={!!row.disabledReason}
+              disabled={!!computed.disabledReason}
               title={
-                row.disabledReason ??
-                (flagged ? "来源已被删除或停用，已建的任务照常使用快照" : undefined)
+                computed.disabledReason ??
+                (update
+                  ? keep
+                    ? "已有新版本，项目仍沿用保存的正文"
+                    : "模板已有新版本，请重新选择"
+                  : flagged
+                    ? "来源已被删除或停用，已建的任务照常使用快照"
+                    : undefined)
               }
               width="w-80"
             >
               {(close) => (
-                <div className="grid gap-0.5">
-                  <Pick
-                    active={value[key].source === "builtin"}
-                    onClick={() => {
-                      onChange(key, { source: "builtin" });
-                      close();
-                    }}
-                  >
-                    内置
-                    <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-[10px] leading-4">
-                      推荐
-                    </span>
-                  </Pick>
+                <div className="grid max-h-[min(55svh,400px)] gap-0.5 overflow-y-auto">
+                  {savedChoice && !keep && (
+                    <Pick
+                      onClick={() => {
+                        onChange(key, savedChoice);
+                        close();
+                      }}
+                    >
+                      保留已保存的提示词
+                    </Pick>
+                  )}
+                  {ready && group?.items.length ? (
+                    <>
+                      <GroupLabel>内置提示词</GroupLabel>
+                      {group.items.map((item) => (
+                        <Pick
+                          key={item.id}
+                          active={sameChoice(picked, pickPreset(item))}
+                          onClick={() => {
+                            onChange(key, pickPreset(item));
+                            close();
+                          }}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate">
+                              {item.name}
+                              {item.id === group.default_id ? " · 默认" : ""}
+                            </span>
+                            {item.description && (
+                              <span className="text-muted-foreground block truncate text-xs font-normal">
+                                {item.description}
+                              </span>
+                            )}
+                            {update && item.id === picked.id && (
+                              <span className="text-muted-foreground block text-xs">
+                                更新至当前版本
+                              </span>
+                            )}
+                          </span>
+                        </Pick>
+                      ))}
+                    </>
+                  ) : ready ? (
+                    <Pick
+                      active={value[key].source === "builtin"}
+                      onClick={() => {
+                        onChange(key, { source: "builtin" });
+                        close();
+                      }}
+                    >
+                      内置
+                      <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-[10px] leading-4">
+                        推荐
+                      </span>
+                    </Pick>
+                  ) : (
+                    <Pick
+                      disabled={library.presetStatus === "loading"}
+                      onClick={library.refreshPresets}
+                    >
+                      {library.presetStatus === "loading"
+                        ? "正在加载内置提示词…"
+                        : "内置提示词加载失败 · 重试"}
+                    </Pick>
+                  )}
                   <GroupLabel>我的提示词</GroupLabel>
                   {mine.map((item) => (
                     <div key={item.id} className="flex items-center gap-0.5">
@@ -159,38 +255,53 @@ export function PromptRows({
                       </button>
                     </div>
                   ))}
-                  <Pick
-                    onClick={() => {
-                      close();
-                      onEdit(key, null);
-                    }}
-                  >
-                    <Plus className="size-4" />
-                    新建
-                  </Pick>
-                  <GroupLabel>技能</GroupLabel>
-                  {skills.length === 0 ? (
-                    <Pick disabled title="后台还没有给技能标这个环节">
-                      暂无适用技能
+                  {library.templateStatus === "ready" ? (
+                    <Pick
+                      onClick={() => {
+                        close();
+                        onEdit(key, null);
+                      }}
+                    >
+                      <Plus className="size-4" />
+                      新建
                     </Pick>
                   ) : (
-                    skills.map((skill) => (
-                      <Pick
-                        key={skill.name}
-                        active={sameChoice(value[key], { source: "skill", skill: skill.name })}
-                        onClick={() => {
-                          onChange(key, { source: "skill", skill: skill.name });
-                          close();
-                        }}
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate">{skill.title}</span>
-                          <span className="text-muted-foreground block truncate text-xs font-normal">
-                            {skill.description}
-                          </span>
-                        </span>
-                      </Pick>
-                    ))
+                    <Pick
+                      disabled={library.templateStatus === "loading"}
+                      onClick={library.refreshPresets}
+                    >
+                      {library.templateStatus === "loading"
+                        ? "正在加载默认正文…"
+                        : "默认正文加载失败 · 重试"}
+                    </Pick>
+                  )}
+                  {key !== "board" && (
+                    <>
+                      <GroupLabel>技能</GroupLabel>
+                      {skills.length === 0 ? (
+                        <Pick disabled title="后台还没有给技能标这个环节">
+                          暂无适用技能
+                        </Pick>
+                      ) : (
+                        skills.map((skill) => (
+                          <Pick
+                            key={skill.name}
+                            active={sameChoice(value[key], { source: "skill", skill: skill.name })}
+                            onClick={() => {
+                              onChange(key, { source: "skill", skill: skill.name });
+                              close();
+                            }}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate">{skill.title}</span>
+                              <span className="text-muted-foreground block truncate text-xs font-normal">
+                                {skill.description}
+                              </span>
+                            </span>
+                          </Pick>
+                        ))
+                      )}
+                    </>
                   )}
                 </div>
               )}

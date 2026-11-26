@@ -60,7 +60,7 @@ func gtiTestDB(t *testing.T) *gorm.DB {
 			_ = a.Close()
 		}
 	})
-	if err := db.AutoMigrate(&model.GenerationTask{}, &model.GenerationTaskEvent{}, &model.UserCredit{}, &model.CreditLedger{}); err != nil {
+	if err := db.AutoMigrate(&model.CanvasProject{}, &model.GenerationTask{}, &model.GenerationTaskEvent{}, &model.UserCredit{}, &model.CreditLedger{}); err != nil {
 		t.Fatalf("迁移失败：%v", err)
 	}
 	return db
@@ -83,7 +83,11 @@ func newGTIEnv(t *testing.T, limits TaskLimits) *gtiEnv {
 	env.svc = NewGenerationTaskService(GenerationTaskDeps{
 		Repo: real, Registry: env.registry, Executor: env.exec, Assets: env.assets, Broadcaster: env.bc, Limits: limits,
 	})
-	return &gtiEnv{taskSvcEnv: env, store: real, db: db, user: uint64(time.Now().UnixNano()/1000)*100 + gtiUserSeq.Add(1)%100}
+	user := uint64(time.Now().UnixNano()/1000)*100 + gtiUserSeq.Add(1)%100
+	if err := db.Create(&model.CanvasProject{BaseModel: model.BaseModel{ID: uint64(validCreateReq().CanvasID)}, UserID: user, PayloadJSON: []byte(`{}`)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	return &gtiEnv{taskSvcEnv: env, store: real, db: db, user: user}
 }
 
 func (e *gtiEnv) create(key string) (*model.GenerationTaskView, error) {

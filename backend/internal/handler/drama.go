@@ -5,6 +5,7 @@ import (
 
 	"video-canvas/internal/drama"
 	"video-canvas/internal/model"
+	"video-canvas/internal/pkg/errcode"
 	"video-canvas/internal/pkg/response"
 	"video-canvas/internal/service"
 	"video-canvas/pkg/pagination"
@@ -139,6 +140,11 @@ func (h *DramaHandler) UpdateEpisode(c *gin.Context) {
 	}
 	var req model.UpdateDramaEpisodeReq
 	if !BindJSON(c, &req) {
+		return
+	}
+	// 剧本正文改成结构化存储后只能走 PUT …/script，这里再收 script_md 会绕过场内顺序校验
+	if req.ScriptMD != nil {
+		response.Fail(c, errcode.ErrInvalidParams.WithMsg("剧本请用 PUT /dramas/:id/episodes/:no/script 保存"))
 		return
 	}
 	v, err := h.svc.UpdateEpisode(c.Request.Context(), currentUserID(c), id, no, &req)

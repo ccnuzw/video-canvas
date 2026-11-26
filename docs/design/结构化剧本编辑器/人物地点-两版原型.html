@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>人物地点两版</title>
+<style>
+:root {
+  --bg: oklch(0.145 0.002 286);
+  --paper: oklch(0.19 0.004 286);
+  --card: oklch(0.175 0.003 286);
+  --fg: oklch(0.925 0.01 85);
+  --muted: oklch(0.68 0.01 286);
+  --dim: oklch(0.52 0.01 286);
+  --line: oklch(1 0 0 / 0.08);
+  --line-2: oklch(1 0 0 / 0.14);
+  --hover: oklch(1 0 0 / 0.06);
+  --chrome: oklch(0.145 0.002 286 / 0.72);
+  --amber: oklch(0.81 0.15 82);
+  --amber-ink: oklch(0.2 0.03 80);
+  --amber-soft: oklch(0.81 0.15 82 / 0.14);
+  --info: oklch(0.76 0.12 265);
+  --info-soft: oklch(0.76 0.12 265 / 0.15);
+  --red: oklch(0.7 0.18 25);
+  --sans: "Geist Variable", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --serif: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "STSong", serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+[contenteditable] { outline: none; border-radius: 8px; transition: background-color 150ms ease-out; }
+[contenteditable]:hover { background: oklch(1 0 0 / 0.03); }
+[contenteditable]:focus { background: var(--hover); }
+[contenteditable]:empty::before { content: attr(data-ph); color: var(--dim); }
+
+/* ---------- 工作台外壳：顶栏 + 左侧分集栏 ---------- */
+.app { display: grid; grid-template-columns: 76px 1fr; grid-template-rows: 52px 1fr; min-height: 100vh; }
+.topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 18px; border-bottom: 1px solid var(--line); }
+.topbar .t { font-size: 14px; }
+.topbar .saved { color: var(--muted); font-size: 12.5px; }
+.tabs { margin: 0 auto; display: flex; gap: 2px; padding: 4px; border-radius: 999px; box-shadow: 0 0 0 1px var(--line); }
+.tabs span { padding: 6px 14px; border-radius: 999px; color: var(--muted); font-size: 13px; }
+.tabs span.on { background: var(--hover); color: var(--fg); }
+.side { border-right: 1px solid var(--line); padding: 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.side .h { font-size: 11px; color: var(--dim); margin-bottom: 6px; letter-spacing: 0.1em; }
+.side button { width: 60px; padding: 8px 0 6px; border-radius: 14px; display: grid; justify-items: center; gap: 3px; font-size: 11.5px; color: var(--muted); transition: background-color 150ms ease-out, color 150ms ease-out; }
+.side button:hover { background: var(--hover); color: var(--fg); }
+.side button[aria-current="true"] { background: oklch(1 0 0 / 0.09); color: var(--fg); }
+.side svg { width: 18px; height: 18px; }
+.side .sep { width: 44px; height: 1px; background: var(--line); margin: 8px 0; }
+.side .ep { font: 600 15px var(--mono); color: var(--muted); padding: 10px 0; }
+.content { min-width: 0; }
+
+/* 演示开关（不属于产品界面） */
+.demo { position: fixed; top: 64px; right: 20px; z-index: 60; display: inline-flex; align-items: center; gap: 10px; height: 34px; padding: 0 6px 0 14px; border-radius: 999px; background: oklch(0.3 0.06 300 / 0.55); box-shadow: 0 0 0 1px oklch(0.75 0.1 300 / 0.35); font-size: 12.5px; color: oklch(0.88 0.06 300); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.sw { width: 36px; height: 22px; border-radius: 999px; background: oklch(1 0 0 / 0.15); position: relative; transition: background-color 200ms var(--ease); }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 200ms var(--ease); }
+.sw[aria-checked="true"] { background: var(--amber); }
+.sw[aria-checked="true"]::after { transform: translateX(14px); }
+
+/* ---------- 图位：没生成时是首字占位，生成后换成资产图 ---------- */
+.slot { position: relative; overflow: hidden; background: oklch(0.21 0.008 var(--h)); display: grid; place-items: center; isolation: isolate; }
+.slot .ini { font-family: var(--serif); font-weight: 900; color: oklch(0.45 0.03 var(--h)); line-height: 1; user-select: none; transition: opacity 260ms var(--ease); }
+.slot .art { position: absolute; inset: 0; opacity: 0; transform: scale(1.04); transition: opacity 420ms var(--ease), transform 600ms var(--ease); }
+.slot.has .art { opacity: 1; transform: none; }
+.slot.has .ini { opacity: 0; }
+.slot .pend { position: absolute; left: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11px; color: var(--muted); background: oklch(0 0 0 / 0.3); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); transition: opacity 200ms ease-out; }
+.slot .pend i { width: 5px; height: 5px; border-radius: 50%; background: var(--dim); }
+.slot.has .pend { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .slot .art, .slot .ini { transition: none; } }
+
+/* 通用小件 */
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 10px; border-radius: 999px; background: var(--hover); font-size: 12px; color: var(--muted); }
+.chip button { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; opacity: 0.6; }
+.chip button:hover { opacity: 1; background: var(--hover); }
+.chip-add { height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); }
+.chip-add:hover { color: var(--fg); }
+.alias-in { height: 24px; width: 96px; padding: 0 10px; border-radius: 999px; border: 0; outline: none; background: var(--hover); box-shadow: inset 0 0 0 1px var(--line-2); font-size: 12px; }
+.tag-pend { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; background: var(--info-soft); color: var(--info); }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 999px; font-size: 13px; background: var(--hover); box-shadow: 0 0 0 1px var(--line); transition: background-color 150ms ease-out; }
+.btn:hover { background: oklch(1 0 0 / 0.1); }
+.btn:active { transform: scale(0.97); }
+.btn.pri { background: var(--fg); color: var(--bg); box-shadow: none; }
+.btn.sm { height: 26px; padding: 0 10px; font-size: 12px; }
+.icon-btn { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; color: var(--dim); transition: background-color 150ms ease-out, color 150ms ease-out; }
+.icon-btn:hover { background: var(--hover); color: var(--fg); }
+.icon-btn.danger:hover { color: var(--red); }
+.icon-btn svg, .btn svg { width: 15px; height: 15px; }
+.search { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 999px; background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); color: var(--dim); }
+.search input { border: 0; outline: none; background: none; width: 140px; font-size: 13px; }
+.search svg { width: 14px; height: 14px; }
+.meta { font-size: 12px; color: var(--dim); }
+.meta b { color: var(--muted); font-weight: 500; }
+
+/* ============ 1 卡片墙 ============ */
+.v1 { max-width: 1180px; margin: 0 auto; padding: 36px 32px 120px; }
+.v1-head { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
+.v1-head h1 { margin: 0; font: 900 24px var(--serif); letter-spacing: 0.06em; }
+.v1-head .n { color: var(--dim); font-size: 13px; }
+.v1-head .sp { flex: 1; }
+.v1-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.v1-grid.loc { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.v1-card { position: relative; display: flex; flex-direction: column; border-radius: 22px; background: var(--card); box-shadow: 0 0 0 1px var(--line); overflow: hidden; transition: box-shadow 200ms ease-out, transform 200ms var(--ease); }
+.v1-card:hover { box-shadow: 0 0 0 1px var(--line-2), 0 20px 40px -24px oklch(0 0 0 / 0.7); }
+.v1-card .slot { aspect-ratio: 4 / 5; }
+.v1-grid.loc .v1-card .slot { aspect-ratio: 16 / 9; }
+.v1-card .slot .ini { font-size: 88px; }
+.v1-grid.loc .slot .ini { font-size: 64px; }
+.v1-card .tools { position: absolute; top: 10px; right: 10px; display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: oklch(0 0 0 / 0.35); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); opacity: 0; transition: opacity 150ms ease-out; z-index: 2; }
+.v1-card:hover .tools, .v1-card:focus-within .tools { opacity: 1; }
+.v1-card .tools .icon-btn { width: 26px; height: 26px; color: oklch(1 0 0 / 0.75); }
+.v1-body { padding: 16px 18px 18px; display: grid; gap: 10px; }
+.v1-name { display: flex; align-items: center; gap: 8px; }
+.v1-name [data-field="name"] { font: 700 19px var(--serif); letter-spacing: 0.04em; padding: 0 4px; margin-left: -4px; }
+.v1-aliases { display: flex; flex-wrap: wrap; gap: 6px; }
+.v1-bio { font-size: 13.5px; line-height: 1.8; color: oklch(0.82 0.01 85); padding: 2px 6px; margin: 0 -6px; min-height: 2em; }
+.v1-foot { display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.v1-foot .sp { flex: 1; }
+.v1-new { display: grid; place-items: center; gap: 10px; min-height: 260px; border-radius: 22px; box-shadow: inset 0 0 0 1px var(--line); border: 1px dashed var(--line-2); color: var(--dim); font-size: 13px; transition: color 150ms ease-out, background-color 150ms ease-out; }
+.v1-new:hover { color: var(--fg); background: oklch(1 0 0 / 0.02); }
+.v1-new svg { width: 22px; height: 22px; }
+
+/* ============ 2 名册 ============ */
+.v2 { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 52px); }
+.v2-list { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.v2-list .top { padding: 22px 16px 12px; display: grid; gap: 12px; }
+.v2-list h1 { margin: 0; display: flex; align-items: baseline; gap: 8px; font: 900 22px var(--serif); letter-spacing: 0.06em; }
+.v2-list h1 span { font: 400 12.5px var(--sans); color: var(--dim); letter-spacing: 0; }
+.v2-list .search { width: 100%; }
+.v2-list .search input { width: 100%; }
+.v2-rows { flex: 1; overflow-y: auto; padding: 4px 8px 16px; scrollbar-width: none; }
+.v2-rows::-webkit-scrollbar { display: none; }
+.v2-row { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 10px; border-radius: 16px; text-align: left; transition: background-color 150ms ease-out; }
+.v2-row:hover { background: var(--hover); }
+.v2-row[aria-current="true"] { background: oklch(1 0 0 / 0.09); }
+.v2-row .slot { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+.v2-row.loc .slot { width: 56px; height: 38px; border-radius: 10px; }
+.v2-row .slot .ini { font-size: 17px; }
+.v2-row .nm { font-size: 14px; font-weight: 600; }
+.v2-row .sub { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2-row .tx { flex: 1; min-width: 0; }
+.v2-row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--info); flex: none; }
+.v2-add { margin: 0 16px 16px; }
+.v2-detail { overflow-y: auto; padding: 40px 48px 120px; }
+.v2-hero { display: grid; grid-template-columns: 220px 1fr; gap: 32px; align-items: start; max-width: 860px; }
+.v2-hero.loc { grid-template-columns: 1fr; }
+.v2-hero .slot { aspect-ratio: 4 / 5; border-radius: 22px; box-shadow: 0 0 0 1px var(--line); }
+.v2-hero.loc .slot { aspect-ratio: 21 / 9; }
+.v2-hero .slot .ini { font-size: 96px; }
+.v2-fields { display: grid; gap: 18px; padding-top: 4px; }
+.v2-fields [data-field="name"] { font: 900 32px var(--serif); letter-spacing: 0.05em; padding: 0 6px; margin-left: -6px; }
+.v2-kv { display: grid; grid-template-columns: 64px 1fr; gap: 12px 16px; align-items: center; font-size: 13px; }
+.v2-kv .k { color: var(--dim); font-size: 12.5px; }
+.v2-kv .v { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ep-chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font: 12px var(--mono); background: var(--hover); color: var(--muted); }
+.asset-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--dim); }
+.asset-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
+.asset-state.ok { color: oklch(0.8 0.15 160); }
+.asset-state.ok i { background: oklch(0.8 0.15 160); }
+.v2-bio { max-width: 860px; margin-top: 34px; padding: 28px 36px; border-radius: 20px; background: var(--paper); box-shadow: 0 0 0 1px var(--line); }
+.v2-bio .lbl { font-size: 12px; color: var(--dim); letter-spacing: 0.12em; margin-bottom: 10px; }
+.v2-bio [data-field="bio"] { font: 16px/2 var(--serif); padding: 4px 8px; margin: 0 -8px; min-height: 4em; }
+.v2-danger { max-width: 860px; margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px; }
+.v2-empty { display: grid; place-items: center; height: 60vh; color: var(--dim); }
+
+/* ---------- 切换器（原型外壳，照规范原样） ---------- */
+.proto-picker { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 2147483647; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(10, 10, 10, 0.82); -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset, 0 8px 24px rgba(0, 0, 0, 0.24), 0 2px 6px rgba(0, 0, 0, 0.12); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; line-height: 1; -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none; }
+.proto-picker-highlight { position: absolute; top: 4px; left: 0; height: 28px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); will-change: transform; }
+.proto-picker[data-ready] .proto-picker-highlight { transition: transform 250ms cubic-bezier(0.23, 1, 0.32, 1), width 250ms cubic-bezier(0.23, 1, 0.32, 1); }
+@media (prefers-reduced-motion: reduce) { .proto-picker[data-ready] .proto-picker-highlight { transition: none; } }
+.proto-picker-item { position: relative; display: flex; align-items: center; height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: rgba(255, 255, 255, 0.55); font: inherit; cursor: pointer; transition: color 150ms ease-out; }
+.proto-picker-item:hover { color: rgba(255, 255, 255, 0.85); }
+.proto-picker-item:active { transform: scale(0.97); }
+.proto-picker-item:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.4); outline-offset: 2px; }
+.proto-picker-item[data-active] { color: #fff; }
+.proto-picker-divider { width: 1px; height: 16px; margin: 0 4px; background: rgba(255, 255, 255, 0.12); }
+.proto-picker-replay { padding: 0 10px; font-size: 14px; }
+.proto-picker[data-position="top"] { bottom: auto; top: 24px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <span>←</span><span class="t">消失的情人 - 六六六儿_副本</span><span class="saved">已保存</span>
+    <nav class="tabs"><span>总览</span><span class="on">剧本</span><span>资产管理</span><span>片场</span><span>成片</span></nav>
+  </header>
+  <aside class="side" id="side"></aside>
+  <main class="content" id="stage"></main>
+</div>
+<div class="demo">演示：资产已生成 <button class="sw" id="assets" role="switch" aria-checked="false" aria-label="演示：资产已生成"></button></div>
+
+<nav class="proto-picker" aria-label="Prototype variants">
+  <span class="proto-picker-highlight" aria-hidden="true"></span>
+  <button class="proto-picker-item" data-active aria-current="true">卡片墙</button>
+  <button class="proto-picker-item">名册</button>
+</nav>
+
+<script>
+/* ================= 数据（两版共用，改了切换后还在） ================= */
+let uid = 100;
+const S = {
+  page: "character", // character | location
+  assets: false,     // 演示：资产是否已生成
+  sel: { character: "c1", location: "l1" },
+  aliasOpen: null,   // 正在加别名的条目 id
+  character: [
+    { id: "c1", name: "迅哥儿", aliases: ["少年“我”"], bio: "十一二岁的周家少爷；向往高墙外的世界，盼着结识闰土，并珍惜这段友谊。是母亲的儿子、闰土的朋友。", eps: [1], lines: 12, confirmed: true, h: 50, art: true },
+    { id: "c2", name: "成年“我”", aliases: [], bio: "四十余岁的画外音叙述者，即长大后的迅哥儿；以追忆的口吻讲述与闰土的相识和离别，并非另一人物。", eps: [1], lines: 4, confirmed: true, h: 250, art: true },
+    { id: "c3", name: "闰土", aliases: ["少年闰土"], bio: "十一二岁，忙月的儿子，来自海边沙地；起初在周家见到生人会害羞，熟悉后乐于向迅哥儿讲述家乡见闻。是迅哥儿的朋友。", eps: [1], lines: 15, confirmed: true, h: 30, art: true },
+    { id: "c4", name: "母亲", aliases: [], bio: "迅哥儿的母亲、周家主母；告诉儿子闰土已经到来，离别时轻轻拦住想追出去的迅哥儿。", eps: [1], lines: 2, confirmed: true, h: 340, art: true },
+    { id: "c5", name: "闰土父亲", aliases: ["忙月"], bio: "闰土的父亲，替周家做事；因祭祀期间人手不足带闰土来帮忙，正月结束后带他返乡。", eps: [1], lines: 2, confirmed: true, h: 70, art: true },
+    { id: "c6", name: "迅哥儿的父亲", aliases: [], bio: "周家长辈；仅由成年“我”提及当年仍在世，未在已提供情节中直接出场。", eps: [], lines: 0, confirmed: false, h: 200, art: false },
+  ],
+  location: [
+    { id: "l1", name: "海边沙地", aliases: ["西瓜地"], bio: "月夜下一望无际、碧绿油亮的西瓜地，远处是海，潮声隐约。高饱和的深蓝、金黄与碧绿。", eps: [1], scenes: ["1-2"], confirmed: true, h: 240, art: true, night: true },
+    { id: "l2", name: "周家大院·祠堂与内院", aliases: [], bio: "青砖黛瓦、马头墙把天空切成局促的四方形；正月大祭祀，张灯结彩，香烟缭绕。", eps: [1], scenes: ["1-3"], confirmed: true, h: 260, art: true },
+    { id: "l3", name: "周家厨房", aliases: [], bio: "热气腾腾，灶火通红；暖光映在闰土紫色的圆脸上。", eps: [1], scenes: ["1-4"], confirmed: true, h: 40, art: true },
+    { id: "l4", name: "周家后院", aliases: ["天井"], bio: "光秃秃的青石板地，天气阴冷，屋檐下有麻雀。", eps: [1], scenes: ["1-5"], confirmed: true, h: 220, art: true },
+    { id: "l5", name: "周家厨房与大门口", aliases: [], bio: "", eps: [1], scenes: ["1-6"], confirmed: false, h: 60, art: false },
+    { id: "l6", name: "周家书房", aliases: [], bio: "阳光透过雕花窗棂照在书桌上。", eps: [1], scenes: ["1-7"], confirmed: true, h: 90, art: true },
+  ],
+};
+const NOUN = { character: "人物", location: "地点" };
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const list = () => S[S.page];
+const find = (id) => S.character.find((x) => x.id === id) || S.location.find((x) => x.id === id);
+const initial = (n) => (n || "?").replace(/[“”"「」]/g, "").slice(0, 1);
+
+const I = {
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  x: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m5 12 5 5 9-10"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  outline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3h11v15a3 3 0 0 1-3 3H6a2 2 0 0 1-2-2v-2h11v2"/><path d="M8 7h7M8 11h7"/></svg>',
+  people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg>',
+  place: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+};
+
+/* 资产图示意：人物是一幅半身剪影，地点是一幅分层的风景；都按色相变化（真实产品里换成资产节点的图片） */
+function portrait(e) {
+  const h = e.h;
+  return `<svg class="art" viewBox="0 0 200 250" preserveAspectRatio="xMidYMid slice">
+    <defs><radialGradient id="g${e.id}" cx="50%" cy="30%" r="80%"><stop offset="0" stop-color="oklch(0.62 0.09 ${h})"/><stop offset="1" stop-color="oklch(0.26 0.05 ${h + 20})"/></radialGradient>
+    <linearGradient id="b${e.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="oklch(0.34 0.05 ${h + 40})"/><stop offset="1" stop-color="oklch(0.18 0.03 ${h + 40})"/></linearGradient></defs>
+    <rect width="200" height="250" fill="url(#g${e.id})"/>
+    <circle cx="100" cy="96" r="38" fill="oklch(0.72 0.05 60)"/>
+    <path d="M62 84c4-30 72-34 78 0-10-12-22-16-39-16S68 72 62 84z" fill="oklch(0.22 0.02 60)"/>
+    <path d="M30 250c4-58 34-92 70-92s66 34 70 92z" fill="url(#b${e.id})"/>
+    <rect width="200" height="250" fill="url(#g${e.id})" opacity=".12"/>
+  </svg>`;
+}
+function landscape(e) {
+  const h = e.h, night = e.night;
+  const sky = night ? `oklch(0.3 0.09 260)` : `oklch(0.7 0.06 ${h})`;
+  const sky2 = night ? `oklch(0.18 0.06 265)` : `oklch(0.5 0.05 ${h + 20})`;
+  return `<svg class="art" viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice">
+    <defs><linearGradient id="s${e.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky2}"/><stop offset="1" stop-color="${sky}"/></linearGradient></defs>
+    <rect width="320" height="180" fill="url(#s${e.id})"/>
+    ${night ? `<circle cx="236" cy="48" r="20" fill="oklch(0.9 0.12 90)"/><circle cx="236" cy="48" r="34" fill="oklch(0.9 0.12 90)" opacity=".12"/>` : ""}
+    <path d="M0 112 L60 70 L104 96 L150 58 L208 100 L260 76 L320 104 V180 H0z" fill="oklch(${night ? 0.24 : 0.42} 0.04 ${h + 30})"/>
+    <path d="M0 128 Q80 112 160 126 T320 122 V180 H0z" fill="oklch(${night ? 0.34 : 0.36} ${night ? 0.11 : 0.05} ${night ? 150 : h + 60})"/>
+    <path d="M0 150 Q100 138 200 150 T320 146 V180 H0z" fill="oklch(${night ? 0.26 : 0.28} ${night ? 0.09 : 0.04} ${night ? 150 : h + 70})"/>
+  </svg>`;
+}
+/** 图位：没生成只显示首字；生成后叠上资产图并淡入（演示开关控制） */
+function slot(e, cls = "") {
+  const has = S.assets && e.art;
+  const art = S.page === "character" ? portrait(e) : landscape(e);
+  return `<div class="slot ${has ? "has" : ""} ${cls}" style="--h:${e.h}"><span class="ini">${esc(initial(e.name))}</span>${art}${cls.includes("big") || cls.includes("card") ? `<span class="pend"><i></i>${S.page === "character" ? "角色图待生成" : "场景图待生成"}</span>` : ""}</div>`;
+}
+function aliases(e) {
+  const chips = e.aliases.map((a, k) => `<span class="chip">${esc(a)}<button data-act="rm-alias" data-id="${e.id}" data-k="${k}" title="移除别名">${I.x}</button></span>`).join("");
+  const add = S.aliasOpen === e.id
+    ? `<input class="alias-in" data-alias="${e.id}" placeholder="别名" maxlength="16" />`
+    : `<button class="chip-add" data-act="add-alias" data-id="${e.id}">＋ 别名</button>`;
+  return chips + add;
+}
+const appear = (e) => S.page === "character"
+  ? (e.eps.length ? `<b>第 ${e.eps.join("、")} 集</b> · ${e.lines} 句台词` : "暂未出场")
+  : (e.scenes.length ? `出现在 <b>${e.scenes.join("、")}</b>` : "暂未出现");
+
+/* ================= 1 卡片墙 ================= */
+function v1() {
+  const isLoc = S.page === "location";
+  const cards = list().map((e) => `
+    <article class="v1-card" data-id="${e.id}">
+      ${slot(e, "card")}
+      <div class="tools">${!e.confirmed ? `<button class="icon-btn" data-act="confirm" data-id="${e.id}" title="确认">${I.check}</button>` : ""}<button class="icon-btn danger" data-act="delete" data-id="${e.id}" title="删除">${I.trash}</button></div>
+      <div class="v1-body">
+        <div class="v1-name"><span data-field="name" data-id="${e.id}" contenteditable="plaintext-only" spellcheck="false" data-ph="名字">${esc(e.name)}</span>${!e.confirmed ? `<span class="tag-pend">待确认</span>` : ""}</div>
+        <div class="v1-aliases">${aliases(e)}</div>
+        <div class="v1-bio" data-field="bio" data-id="${e.id}" contenteditable="plaintext-only" spellcheck="false" data-ph="${isLoc ? "这个地方的样子、光线、气氛" : "人物小传：年龄、身份、性格、和谁是什么关系"}">${esc(e.bio)}</div>
+        <div class="v1-foot"><span class="meta">${appear(e)}</span></div>
+      </div>
+    </article>`).join("");
+  return `<div class="v1">
+    <div class="v1-head"><h1>${NOUN[S.page]}</h1><span class="n">${list().length} 个</span><span class="sp"></span>
+      <label class="search">${I.search}<input data-filter placeholder="搜索${NOUN[S.page]}或别名" /></label>
+      <button class="btn pri" data-act="new">${I.plus}新增${NOUN[S.page]}</button></div>
+    <div class="v1-grid ${isLoc ? "loc" : ""}">${cards}<button class="v1-new" data-act="new">${I.plus}新增${NOUN[S.page]}</button></div>
+  </div>`;
+}
+
+/* ================= 2 名册 ================= */
+function v2() {
+  const isLoc = S.page === "location";
+  const sel = find(S.sel[S.page]) && list().includes(find(S.sel[S.page])) ? find(S.sel[S.page]) : list()[0];
+  const rows = list().map((e) => `
+    <button class="v2-row ${isLoc ? "loc" : ""}" data-act="select" data-id="${e.id}" aria-current="${sel && sel.id === e.id}">
+      ${slot(e)}
+      <span class="tx"><div class="nm">${esc(e.name || "未命名")}</div><div class="sub">${e.aliases.length ? esc(e.aliases.join("、")) : appear(e).replace(/<[^>]+>/g, "")}</div></span>
+      ${!e.confirmed ? `<span class="dot" title="待确认"></span>` : ""}
+    </button>`).join("");
+  const detail = !sel ? `<div class="v2-empty">还没有${NOUN[S.page]}</div>` : `
+    <div class="v2-hero ${isLoc ? "loc" : ""}">
+      ${slot(sel, "big")}
+      <div class="v2-fields">
+        <div style="display:flex;align-items:center;gap:10px"><span data-field="name" data-id="${sel.id}" contenteditable="plaintext-only" spellcheck="false" data-ph="名字">${esc(sel.name)}</span>${!sel.confirmed ? `<span class="tag-pend">待确认</span><button class="btn sm" data-act="confirm" data-id="${sel.id}">${I.check}确认</button>` : ""}</div>
+        <div class="v2-kv">
+          <span class="k">别名</span><span class="v">${aliases(sel)}</span>
+          <span class="k">${isLoc ? "出现" : "出场"}</span><span class="v">${isLoc ? (sel.scenes.length ? sel.scenes.map((s) => `<span class="ep-chip">${s}</span>`).join("") : `<span class="meta">暂未出现</span>`) : (sel.eps.length ? sel.eps.map((n) => `<span class="ep-chip">第 ${n} 集</span>`).join("") + `<span class="meta">${sel.lines} 句台词</span>` : `<span class="meta">暂未出场</span>`)}</span>
+          <span class="k">${isLoc ? "场景图" : "角色图"}</span><span class="v">${S.assets && sel.art ? `<span class="asset-state ok"><i></i>已生成，来自资产管理</span>` : `<span class="asset-state"><i></i>资产拆解后生成</span>`}</span>
+        </div>
+      </div>
+    </div>
+    <div class="v2-bio"><div class="lbl">${isLoc ? "描述" : "人物小传"}</div><div data-field="bio" data-id="${sel.id}" contenteditable="plaintext-only" spellcheck="false" data-ph="${isLoc ? "这个地方的样子、光线、气氛" : "年龄、身份、性格、和谁是什么关系"}">${esc(sel.bio)}</div></div>
+    <div class="v2-danger"><button class="btn sm" data-act="delete" data-id="${sel.id}">${I.trash}删除${NOUN[S.page]}</button></div>`;
+  return `<div class="v2">
+    <div class="v2-list"><div class="top"><h1>${NOUN[S.page]}<span>${list().length} 个</span></h1><label class="search">${I.search}<input data-filter placeholder="搜索${NOUN[S.page]}或别名" /></label></div>
+      <div class="v2-rows">${rows}</div><button class="btn v2-add" data-act="new">${I.plus}新增${NOUN[S.page]}</button></div>
+    <div class="v2-detail">${detail}</div>
+  </div>`;
+}
+
+/* ================= 渲染与事件 ================= */
+const side = document.getElementById("side");
+const stage = document.getElementById("stage");
+const VARIANTS = [v1, v2];
+let current = 0;
+let pendingFocus = null;
+
+function renderSide() {
+  side.innerHTML = `<div class="h">分集</div>
+    <button>${I.outline}大纲</button>
+    <button data-page="character" aria-current="${S.page === "character"}">${I.people}人物</button>
+    <button data-page="location" aria-current="${S.page === "location"}">${I.place}地点</button>
+    <div class="sep"></div><div class="h">全集</div><div class="ep">01</div>`;
+}
+function render() {
+  renderSide();
+  stage.innerHTML = VARIANTS[current]();
+  if (pendingFocus) {
+    const el = stage.querySelector(pendingFocus);
+    pendingFocus = null;
+    if (el) {
+      el.focus();
+      if (el.isContentEditable) { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    }
+  }
+}
+
+side.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-page]");
+  if (!b) return;
+  S.page = b.dataset.page;
+  S.aliasOpen = null;
+  render();
+});
+document.getElementById("assets").addEventListener("click", (e) => {
+  S.assets = !S.assets;
+  e.currentTarget.setAttribute("aria-checked", String(S.assets));
+  // 只切图位的类名，让资产图淡入而不是整页重绘
+  stage.querySelectorAll(".slot").forEach((el) => {
+    const card = el.closest("[data-id]");
+    const id = card?.dataset.id || stage.querySelector('.v2-row[aria-current="true"]')?.dataset.id;
+    const ent = find(id);
+    if (ent) el.classList.toggle("has", S.assets && ent.art);
+  });
+  if (current === 1) render();
+});
+stage.addEventListener("input", (e) => {
+  const f = e.target.closest("[data-field]");
+  if (f) {
+    const ent = find(f.dataset.id);
+    ent[f.dataset.field] = f.textContent;
+    if (f.dataset.field === "name") stage.querySelectorAll(`[data-id="${ent.id}"] .ini, .v2-row[data-id="${ent.id}"] .nm`).forEach((n) => { n.textContent = n.classList.contains("ini") ? initial(ent.name) : ent.name || "未命名"; });
+    return;
+  }
+  if (e.target.matches("[data-filter]")) {
+    const q = e.target.value.trim();
+    stage.querySelectorAll(".v1-card, .v2-row").forEach((el) => {
+      const ent = find(el.dataset.id);
+      el.style.display = !q || ent.name.includes(q) || ent.aliases.some((a) => a.includes(q)) ? "" : "none";
+    });
+  }
+});
+stage.addEventListener("keydown", (e) => {
+  if (e.isComposing) return;
+  if (e.target.matches("[data-field='name']") && e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+  if (e.target.matches("[data-alias]")) {
+    if (e.key === "Enter") {
+      const v = e.target.value.trim(), ent = find(e.target.dataset.alias);
+      if (v && !ent.aliases.includes(v)) ent.aliases.push(v);
+      S.aliasOpen = null; render();
+    } else if (e.key === "Escape") { S.aliasOpen = null; render(); }
+  }
+});
+stage.addEventListener("focusout", (e) => {
+  if (e.target.matches("[data-alias]")) setTimeout(() => { if (S.aliasOpen) { S.aliasOpen = null; render(); } }, 120);
+});
+stage.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]");
+  if (!b) return;
+  const act = b.dataset.act, ent = b.dataset.id ? find(b.dataset.id) : null;
+  if (act === "select") { S.sel[S.page] = ent.id; S.aliasOpen = null; render(); }
+  else if (act === "confirm") { ent.confirmed = true; render(); }
+  else if (act === "delete") {
+    const arr = list(), k = arr.indexOf(ent);
+    if (S.page === "character" ? ent.lines > 0 : ent.scenes.length > 0) {
+      b.title = "剧本里还在用，不能删";
+      b.animate([{ transform: "translateX(0)" }, { transform: "translateX(-3px)" }, { transform: "translateX(3px)" }, { transform: "translateX(0)" }], { duration: 220, easing: "ease-out" });
+      return;
+    }
+    arr.splice(k, 1);
+    S.sel[S.page] = arr[Math.max(0, k - 1)]?.id;
+    render();
+  }
+  else if (act === "add-alias") { S.aliasOpen = ent.id; pendingFocus = `[data-alias="${ent.id}"]`; render(); }
+  else if (act === "rm-alias") { ent.aliases.splice(+b.dataset.k, 1); render(); }
+  else if (act === "new") {
+    const id = "n" + ++uid;
+    const base = { id, name: "", aliases: [], bio: "", eps: [], lines: 0, scenes: [], confirmed: true, h: (uid * 47) % 360, art: false };
+    list().push(base);
+    S.sel[S.page] = id;
+    pendingFocus = `[data-field="name"][data-id="${id}"]`;
+    render();
+    stage.querySelector(`[data-id="${id}"]`)?.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
+});
+
+/* ---------------- 切换器（照规范） ---------------- */
+const picker = document.querySelector(".proto-picker");
+const highlight = picker.querySelector(".proto-picker-highlight");
+const items = [...picker.querySelectorAll(".proto-picker-item:not(.proto-picker-replay)")];
+function moveHighlight() {
+  const el = items[current];
+  highlight.style.width = el.offsetWidth + "px";
+  highlight.style.transform = `translateX(${el.offsetLeft}px)`;
+}
+function mount() { stage.innerHTML = ""; requestAnimationFrame(render); }
+function setActive(i) {
+  if (i < 0 || i >= VARIANTS.length) return;
+  current = i;
+  items.forEach((el, j) => {
+    el.toggleAttribute("data-active", j === i);
+    if (j === i) el.setAttribute("aria-current", "true");
+    else el.removeAttribute("aria-current");
+  });
+  moveHighlight();
+  const url = new URL(location);
+  url.searchParams.set("v", i + 1);
+  history.replaceState(null, "", url);
+  mount();
+}
+items.forEach((el, i) => el.addEventListener("click", () => setActive(i)));
+window.addEventListener("resize", moveHighlight);
+document.addEventListener("keydown", (e) => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const num = parseInt(e.key, 10);
+  if (num >= 1 && num <= VARIANTS.length) setActive(num - 1);
+  else if (e.key === "ArrowRight") setActive((current + 1) % VARIANTS.length);
+  else if (e.key === "ArrowLeft") setActive((current - 1 + VARIANTS.length) % VARIANTS.length);
+});
+setActive((parseInt(new URLSearchParams(location.search).get("v"), 10) || 1) - 1);
+requestAnimationFrame(() => requestAnimationFrame(() => picker.setAttribute("data-ready", "")));
+</script>
+</body>
+</html>

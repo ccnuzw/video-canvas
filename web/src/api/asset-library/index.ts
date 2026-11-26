@@ -24,6 +24,7 @@ const mapFolder = (raw: BackendFolderDto): FolderDto => ({
 });
 
 const mapLibraryItem = (raw: BackendLibraryItemDto): LibraryItemDto => ({
+  name: raw.name,
   id: raw.id,
   asset: mapAsset(raw.asset),
   folderId: raw.folder_id ?? null,
@@ -106,18 +107,30 @@ export const listLibraryItems = async (
  * 把素材加入资产库；已经在库里时后端幂等返回现有归属
  * @param assetId 素材 ID
  * @param folderId 目标文件夹，null 是根目录
+ * @param name 可选的库内名称
  * @returns 资产库条目
  */
 export const addToLibrary = async (
   assetId: string,
   folderId: string | null,
+  name?: string,
 ): Promise<LibraryItemDto> =>
   mapLibraryItem(
     await service.post<BackendLibraryItemDto>("/asset-library/items", {
       asset_id: Number(assetId),
+      name,
       folder_id: folderId,
     }),
   );
+
+/**
+ * 修改一条库条目的显示名称。
+ * @param id 资产库条目 ID
+ * @param name 新名称
+ * @returns 保存后的名称
+ */
+export const renameLibraryItem = async (id: string, name: string): Promise<string> =>
+  (await service.patch<{ name: string }>(`/asset-library/items/${id}/name`, { name })).name;
 
 /**
  * 把资产库里的素材移到另一个文件夹

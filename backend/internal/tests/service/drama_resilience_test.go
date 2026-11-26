@@ -27,7 +27,7 @@ func TestDramaRetriesRetryableUpstreamError(t *testing.T) {
 	if err := s.HandleDrama(context.Background(), 7, 1, uint64(j.ID)); err != nil {
 		t.Fatal(err)
 	}
-	if got := r.jobs[0]; got.Status != "succeeded" || e.calls != 2 || r.episodes[0].ScriptMD != "△ 剧本正文" {
+	if got := r.jobs[0]; got.Status != "succeeded" || e.calls != 2 || !strings.Contains(r.episodes[0].ScriptMD, "△ 剧本正文") {
 		t.Fatalf("限流后应重试成功：status=%s calls=%d err=%q", got.Status, e.calls, got.ErrorMessage)
 	}
 }

@@ -88,8 +88,8 @@ export function HistoryView() {
   );
 
   /** 加入资产库；失败（请求层已弹提示）抛出，让选择器保持打开 */
-  const add = async (item: GeneratedItemDto, folderId: string | null) => {
-    const result = await addGeneratedToLibrary(list, item, folderId, LIBRARY_API);
+  const add = async (item: GeneratedItemDto, folderId: string | null, name?: string) => {
+    const result = await addGeneratedToLibrary(list, item, folderId, LIBRARY_API, name);
     if (!result) throw new Error("add to library failed");
     toast.success("已加入资产库");
   };
@@ -191,7 +191,8 @@ export function HistoryView() {
         onOpenChange={(open) => !open && setAdding(null)}
         title="加入资产库"
         confirmLabel="加入"
-        onConfirm={(folderId) => (adding ? add(adding, folderId) : Promise.resolve())}
+        assetName={adding?.asset.fileName ?? ""}
+        onConfirm={(folderId, name) => (adding ? add(adding, folderId, name) : Promise.resolve())}
       />
 
       <AssetPreview

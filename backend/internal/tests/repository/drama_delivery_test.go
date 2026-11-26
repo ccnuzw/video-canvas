@@ -70,7 +70,7 @@ func (a *deliveryAssets) FileURL(key string) string { return "/files/" + key }
 
 func shareSeed(t *testing.T) (*gorm.DB, *service.DramaShareService, *deliveryAssets) {
 	t.Helper()
-	db := isolatedDB(t, &model.User{}, &model.DramaProject{}, &model.CanvasProject{}, &model.DramaEpisode{}, &model.DramaUnit{}, &model.DramaSegment{}, &model.GenerationTask{}, &model.StoryboardSplitJob{}, &model.DramaJob{}, &model.DramaViewer{}, &model.DramaDelivery{}, &model.Asset{})
+	db := isolatedDB(t, &model.User{}, &model.DramaProject{}, &model.CanvasProject{}, &model.DramaEpisode{}, &model.DramaUnit{}, &model.DramaSegment{}, &model.GenerationTask{}, &model.StoryboardSplitJob{}, &model.DramaJob{}, &model.DramaViewer{}, &model.DramaDelivery{}, &model.Asset{}, &model.DramaScriptCharacter{}, &model.DramaScriptLocation{}, &model.DramaScene{}, &model.DramaScriptElement{})
 	user := uint64(42)
 	id := uint64(8)
 	canvas := uint64(9)
@@ -78,7 +78,16 @@ func shareSeed(t *testing.T) (*gorm.DB, *service.DramaShareService, *deliveryAss
 	chosen := uint64(21)
 	seg := uint64(70)
 	graph := fmt.Sprintf(`{"nodes":[{"id":"board","type":"canvas","data":{"assetId":"10","src":"/files/old","drama":{"board":{"segmentId":"%s"}}}}],"edges":[]}`, idcodec.Encode(seg))
-	rows := []any{&model.User{Username: "viewer", Email: "viewer@example.test"}, &model.DramaProject{BaseModel: model.BaseModel{ID: id}, UserID: user, CanvasID: canvas, Title: "剧"}, &model.CanvasProject{BaseModel: model.BaseModel{ID: canvas}, DramaID: &id, UserID: user, PayloadJSON: []byte(graph)}, &model.DramaEpisode{BaseModel: model.BaseModel{ID: 60}, UserID: user, DramaID: id, No: 1, ScriptMD: "正文", FinalAssetID: &final}, &model.DramaSegment{BaseModel: model.BaseModel{ID: seg}, UserID: user, EpisodeID: 60, ChosenTaskID: &chosen}}
+	rows := []any{&model.User{Username: "viewer", Email: "viewer@example.test"}, &model.DramaProject{BaseModel: model.BaseModel{ID: id}, UserID: user, CanvasID: canvas, Title: "剧", ScriptStructured: true, ScriptBiosImported: true}, &model.CanvasProject{BaseModel: model.BaseModel{ID: canvas}, DramaID: &id, UserID: user, PayloadJSON: []byte(graph)}, &model.DramaEpisode{BaseModel: model.BaseModel{ID: 60}, UserID: user, DramaID: id, No: 1, ScriptMD: "正文", FinalAssetID: &final}, &model.DramaSegment{BaseModel: model.BaseModel{ID: seg}, UserID: user, EpisodeID: 60, ChosenTaskID: &chosen}}
+	// 结构化剧本：一个人物、一个地点、一场（有地点、额外出场人物），三行元素（角色、对白、备注）
+	rows = append(rows,
+		&model.DramaScriptCharacter{ID: 500, UserID: user, DramaID: id, Name: "闰土", Aliases: []string{"少年闰土"}, Note: "忙月的儿子", Confirmed: true, Position: 1},
+		&model.DramaScriptLocation{ID: 600, UserID: user, DramaID: id, Name: "厨房", Note: "热气腾腾", Confirmed: true, Position: 1},
+		&model.DramaScene{ID: 700, UserID: user, DramaID: id, EpisodeID: 60, Position: 1, IntExt: "interior", TimeLabel: "日", LocationID: 600, Title: "初见", Emotions: []string{"紧张"}, ExtraCharacterIDs: []uint64{500}, Props: []string{}},
+		&model.DramaScriptElement{ID: 800, UserID: user, DramaID: id, EpisodeID: 60, SceneID: 700, Position: 1, Type: "character", CharacterID: 500, Extension: "VO"},
+		&model.DramaScriptElement{ID: 801, UserID: user, DramaID: id, EpisodeID: 60, SceneID: 700, Position: 2, Type: "dialogue", Text: "你好"},
+		&model.DramaScriptElement{ID: 802, UserID: user, DramaID: id, EpisodeID: 60, SceneID: 700, Position: 3, Type: "note", Text: "备注"},
+	)
 	for index := range 2 {
 		rows = append(rows, &model.GenerationTask{ID: uint64(20 + index), UserID: user, CanvasProjectID: &canvas, NodeID: "seg:" + idcodec.Encode(seg), Kind: "video", Status: "succeeded", InputJSON: []byte(`{}`), ConfigSnapshot: []byte(`{}`), OutputJSON: []byte(fmt.Sprintf(`[{"asset_id":%d,"media_type":"video"}]`, 10+index))})
 	}
@@ -122,6 +131,7 @@ func TestDramaSharingDelivery(t *testing.T) {
 			if len(snapshot.Tasks) != 2 || len(snapshot.Segments) != 1 || snapshot.Segments[0].ChosenTaskID == nil || *snapshot.Segments[0].ChosenTaskID != snapshot.Tasks[1].ID || *snapshot.Episodes[0].FinalAssetID == 11 {
 				t.Fatalf("副本未保留独立版本: %+v", snapshot)
 			}
+			assertStructuredScriptCopied(t, db, projects[0], snapshot.Episodes[0].ID)
 			_, err = svc.Read(ctx, 1, 8)
 			if (mode == "transfer") != (err != nil) {
 				t.Fatalf("原授权: %v", err)
@@ -182,5 +192,50 @@ func TestSharedWorkspaceGrant(t *testing.T) {
 	}
 	if _, err := svc.Workspace(ctx, 1, 8); err == nil {
 		t.Fatal("撤销后仍有访问权")
+	}
+}
+
+// 复制或转移要把结构化剧本一起带走：人物表、地点表、场次和元素都在新剧名下，
+// 里面的集、人物、地点、场次引用全部指向新剧自己的行；否则收到的人打开剧本是空的。
+func assertStructuredScriptCopied(t *testing.T, db *gorm.DB, project model.DramaProject, episodeID uint64) {
+	t.Helper()
+	if !project.ScriptStructured || !project.ScriptBiosImported {
+		t.Fatalf("副本应保留结构化标记：%+v", project)
+	}
+	var characters []model.DramaScriptCharacter
+	var locations []model.DramaScriptLocation
+	var scenes []model.DramaScene
+	var elements []model.DramaScriptElement
+	for _, load := range []error{
+		db.Where("user_id = 1").Find(&characters).Error,
+		db.Where("user_id = 1").Find(&locations).Error,
+		db.Where("user_id = 1").Find(&scenes).Error,
+		db.Where("user_id = 1").Order("position").Find(&elements).Error,
+	} {
+		if load != nil {
+			t.Fatal(load)
+		}
+	}
+	if len(characters) != 1 || len(locations) != 1 || len(scenes) != 1 || len(elements) != 3 {
+		t.Fatalf("结构化剧本没复制全：人物 %d 地点 %d 场次 %d 元素 %d", len(characters), len(locations), len(scenes), len(elements))
+	}
+	person, place, scene := characters[0], locations[0], scenes[0]
+	if person.DramaID != project.ID || person.ID == 500 || person.Name != "闰土" || person.Note != "忙月的儿子" || len(person.Aliases) != 1 || !person.Confirmed {
+		t.Fatalf("人物没带全：%+v", person)
+	}
+	if place.DramaID != project.ID || place.ID == 600 || place.Note != "热气腾腾" {
+		t.Fatalf("地点没带全：%+v", place)
+	}
+	if scene.DramaID != project.ID || scene.EpisodeID != episodeID || scene.LocationID != place.ID || scene.Title != "初见" ||
+		len(scene.ExtraCharacterIDs) != 1 || scene.ExtraCharacterIDs[0] != person.ID || len(scene.Emotions) != 1 {
+		t.Fatalf("场次的引用应指向新剧自己的行：%+v 地点 %d 人物 %d 集 %d", scene, place.ID, person.ID, episodeID)
+	}
+	for _, e := range elements {
+		if e.DramaID != project.ID || e.EpisodeID != episodeID || e.SceneID != scene.ID {
+			t.Fatalf("元素的归属应指向新剧：%+v", e)
+		}
+	}
+	if elements[0].Type != "character" || elements[0].CharacterID != person.ID || elements[0].Extension != "VO" || elements[1].Text != "你好" || elements[2].Type != "note" || elements[2].Text != "备注" {
+		t.Fatalf("元素内容或顺序不对：%+v", elements)
 	}
 }

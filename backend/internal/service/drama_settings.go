@@ -195,17 +195,31 @@ func promptError(err error) error {
 
 // snapshotPrompts 在事务外解析各环节来源并复制正文，避免入队后读到来源的新版本。
 // 剧本型输入不跑分集规划和分集剧本，这两个环节强制内置。
-func (s *DramaService) snapshotPrompts(ctx context.Context, userID uint64, kind string, choices map[string]model.DramaPromptChoice) (map[string]model.DramaPromptSetting, error) {
+func (s *DramaService) snapshotPrompts(ctx context.Context, userID uint64, kind string, choices map[string]model.DramaPromptChoice, full bool) (map[string]model.DramaPromptSetting, error) {
 	for key := range choices {
 		if DramaPromptPages(key) == nil {
 			return nil, errcode.ErrInvalidParams
 		}
 	}
+	defaults, err := s.requestedPresetDefaults(ctx, kind, choices, full)
+	if err != nil {
+		return nil, err
+	}
 	out := map[string]model.DramaPromptSetting{}
 	for _, step := range DramaPromptSteps {
-		choice := choices[step]
-		if kind == "script" && (step == "plan" || step == "scripts") {
-			choice = model.DramaPromptChoice{Source: "builtin"}
+		choice, present := choices[step]
+		if !full && !present {
+			continue
+		}
+		if promptStepUnused(kind, step) {
+			if full {
+				out[step] = legacyDramaPrompt(step)
+			}
+			continue
+		}
+		if preset, ok := defaults[step]; ok && (choice.Source == "" || choice.Source == "builtin") {
+			out[step] = presetSetting(preset)
+			continue
 		}
 		setting, err := s.snapshotPrompt(ctx, userID, step, choice)
 		if err != nil {
@@ -216,17 +230,33 @@ func (s *DramaService) snapshotPrompts(ctx context.Context, userID uint64, kind 
 	return out, nil
 }
 
+// promptStepUnused 剧本型直接导入分集，不运行规划或改写剧本。
+func promptStepUnused(kind, step string) bool {
+	return kind == "script" && (step == "plan" || step == "scripts")
+}
+
+// requestedPresetDefaults 仅在提交真的需要默认项时查询目录。
+func (s *DramaService) requestedPresetDefaults(ctx context.Context, kind string, choices map[string]model.DramaPromptChoice, full bool) (map[string]model.DramaPromptPreset, error) {
+	if s.presets == nil {
+		return nil, nil
+	}
+	for _, step := range DramaPromptSteps {
+		choice, present := choices[step]
+		if (full || present) && !promptStepUnused(kind, step) && (choice.Source == "" || choice.Source == "builtin") {
+			return s.presetDefaults(ctx)
+		}
+	}
+	return nil, nil
+}
+
 // snapshotPrompt 对照归属、技能启停和环节生成不可变正文。
 func (s *DramaService) snapshotPrompt(ctx context.Context, userID uint64, step string, choice model.DramaPromptChoice) (*model.DramaPromptSetting, error) {
-	setting := &model.DramaPromptSetting{Source: choice.Source, ID: choice.ID, Skill: choice.Skill, Label: "内置", Bodies: map[string]string{}}
-	for _, page := range DramaPromptPages(step) {
-		setting.Bodies[page] = drama.PromptBody(page)
-	}
+	legacy := legacyDramaPrompt(step)
+	setting := &legacy
 	switch choice.Source {
 	case "", "builtin":
-		setting.Source = "builtin"
-		setting.ID = 0
-		setting.Skill = ""
+	case "preset":
+		return s.snapshotPreset(ctx, step, choice)
 	case "mine":
 		if s.settings == nil {
 			return nil, errcode.ErrDramaPromptNotFound
@@ -241,6 +271,7 @@ func (s *DramaService) snapshotPrompt(ctx context.Context, userID uint64, step s
 		for page, body := range promptView(*row).Bodies {
 			setting.Bodies[page] = body
 		}
+		setting.Source, setting.ID = "mine", choice.ID
 		setting.Label = "我的 · " + row.Name
 	case "skill":
 		// 故事板是前端拼图片提示词的模板，没有「技能」这种来源
@@ -255,6 +286,37 @@ func (s *DramaService) snapshotPrompt(ctx context.Context, userID uint64, step s
 		return nil, errcode.ErrInvalidParams
 	}
 	return setting, nil
+}
+
+// legacyDramaPrompt 保留升级前的恢复方案，不经过运营目录。
+func legacyDramaPrompt(step string) model.DramaPromptSetting {
+	setting := model.DramaPromptSetting{Source: "builtin", Label: "内置", Bodies: map[string]string{}}
+	for _, page := range DramaPromptPages(step) {
+		setting.Bodies[page] = drama.PromptBody(page)
+	}
+	return setting
+}
+
+// presetSetting 复制选中版本的创作正文，不接收客户端正文。
+func presetSetting(row model.DramaPromptPreset) model.DramaPromptSetting {
+	return model.DramaPromptSetting{Source: "preset", ID: idcodec.ID(row.ID), Label: row.Name, Version: row.Revision,
+		Bodies: map[string]string{DramaPromptPages(row.Step)[0]: row.Body}}
+}
+
+// snapshotPreset 校验分类、可选状态和修订号，过期时绝不替换用户的选择。
+func (s *DramaService) snapshotPreset(ctx context.Context, step string, choice model.DramaPromptChoice) (*model.DramaPromptSetting, error) {
+	if s.presets == nil || choice.ID == 0 || choice.Revision < 1 {
+		return nil, errcode.ErrDramaPresetChanged.WithMsg(DramaPromptStepLabel(step) + "：提示词已移除或更新，请刷新后重新选择")
+	}
+	row, err := s.presets.Preset(ctx, step, uint64(choice.ID))
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+	if err != nil || row.Status != model.DramaPresetEnabled || row.Revision != choice.Revision || strings.TrimSpace(row.Body) == "" {
+		return nil, errcode.ErrDramaPresetChanged.WithMsg(DramaPromptStepLabel(step) + "：提示词已移除或更新，请刷新后重新选择")
+	}
+	setting := presetSetting(*row)
+	return &setting, nil
 }
 
 // dramaStepGroup 将任务步骤映射到用户可配置的提示词环节。
@@ -290,6 +352,7 @@ func promptSettings(p *model.DramaProject) map[string]model.DramaPromptSetting {
 // promptViews 隐去正文并检查来源是否消失，不影响已保存快照的可用性。
 func (s *DramaService) promptViews(ctx context.Context, p *model.DramaProject) (map[string]model.DramaPromptSetting, error) {
 	out := promptSettings(p)
+	available := s.projectPresetAvailability(ctx, out)
 	for _, step := range DramaPromptSteps {
 		setting, ok := out[step]
 		if !ok {
@@ -300,6 +363,14 @@ func (s *DramaService) promptViews(ctx context.Context, p *model.DramaProject) (
 		if step == "board" {
 			setting.Bodies = boardPromptBodies(saved)
 		}
+		if setting.Source == "preset" {
+			if available != nil {
+				version, ok := available[step][uint64(setting.ID)]
+				setting.Missing, setting.UpdateAvailable = !ok, ok && version != setting.Version
+			}
+			out[step] = setting
+			continue
+		}
 		missing, err := s.promptSourceMissing(ctx, p.UserID, step, setting)
 		if err != nil {
 			return nil, err
@@ -308,6 +379,27 @@ func (s *DramaService) promptViews(ctx context.Context, p *model.DramaProject) (
 		out[step] = setting
 	}
 	return out, nil
+}
+
+// projectPresetAvailability 不让目录故障阻断已有项目；未知状态不标记下架。
+func (s *DramaService) projectPresetAvailability(ctx context.Context, settings map[string]model.DramaPromptSetting) map[string]map[uint64]int {
+	if !slices.ContainsFunc(DramaPromptSteps, func(step string) bool { return settings[step].Source == "preset" }) {
+		return nil
+	}
+	rows, err := s.presetRows(ctx, false, false)
+	if err != nil || s.presets == nil {
+		return nil
+	}
+	available := make(map[string]map[uint64]int, len(DramaPromptSteps))
+	for _, step := range DramaPromptSteps {
+		available[step] = map[uint64]int{}
+	}
+	for _, row := range rows {
+		if available[row.Step] != nil && row.Status == model.DramaPresetEnabled {
+			available[row.Step][row.ID] = row.Revision
+		}
+	}
+	return available
 }
 
 // promptSourceMissing 只查来源元信息，不重新读取正文或技能资源包。
@@ -343,6 +435,9 @@ func (s *DramaService) promptSourceMissing(ctx context.Context, userID uint64, s
 // boardPromptBodies 故事板模板的正文：前端拼宫格图提示词要用，所以和其他环节不同，视图里带上。
 // 内置（含老项目没存过的）取当前内置模板；我的提示词取保存时的快照，快照里缺了就退回内置。
 func boardPromptBodies(setting model.DramaPromptSetting) map[string]string {
+	if setting.Source == "preset" {
+		return map[string]string{"board": setting.Bodies["board"]}
+	}
 	body := drama.PromptBody("board")
 	if setting.Source == "mine" && strings.TrimSpace(setting.Bodies["board"]) != "" {
 		body = setting.Bodies["board"]

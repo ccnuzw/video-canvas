@@ -1,3 +1,5 @@
+import { openDialog } from "@/store/dialog";
+import { DramaShareDialog } from "@/pages/drama/share-dialog";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useNavigate } from "react-router";
@@ -168,6 +170,7 @@ export function TopLeftBar({
   onRename,
   saveStatus,
   onSaveNow,
+  getVersion,
   readOnly,
 }: {
   /** 当前画布 ID，导出用 */
@@ -176,6 +179,7 @@ export function TopLeftBar({
   onRename: (title: string) => void;
   saveStatus: SaveStatus;
   /** 立即保存，返回保存后是否已经没有未保存的内容 */
+  getVersion?: () => number;
   onSaveNow: () => Promise<boolean>;
   /** 只读预览：名字不能改，也不摆保存状态（这里没有要保存的东西，「已保存」会让人误以为是这一份） */
   readOnly?: boolean;
@@ -271,6 +275,24 @@ export function TopLeftBar({
             新建画布
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          {!readOnly && getVersion && (
+            <DropdownMenuItem
+              onClick={async () => {
+                if (!(await onSaveNow())) {
+                  toast.error("共享前保存失败，请先处理未保存的改动");
+                  return;
+                }
+                openDialog(DramaShareDialog, {
+                  id: canvasId,
+                  title,
+                  revision: getVersion(),
+                  transferred: () => navigate("/canvases?scope=mine", { replace: true }),
+                });
+              }}
+            >
+              共享画布
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem disabled={exporting} onClick={() => void exportThisCanvas()}>
             <FileDown />
             导出画布

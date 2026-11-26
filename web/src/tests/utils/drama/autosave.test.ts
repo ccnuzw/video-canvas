@@ -165,4 +165,24 @@ describe("带 revision 的自动保存", () => {
     expect(saver.getStatus()).toBe("saved");
     expect(saver.getRevision()).toBe(2);
   });
+
+  test("外面的保存让版本号前进后，用 setRevision 对齐，下次保存带新版本号且不改变脏状态", async () => {
+    const revisions: number[] = [];
+    const saver = new Autosaver({
+      revision: 3,
+      delay: 5,
+      isConflict,
+      save: async (_value, revision) => {
+        revisions.push(revision);
+        return revision + 1;
+      },
+    });
+    saver.reset("a", 3);
+    saver.update("ab");
+    saver.setRevision(7);
+    expect(saver.getStatus()).toBe("dirty");
+    await until(() => saver.getStatus() === "saved");
+    expect(revisions).toEqual([7]);
+    expect(saver.getRevision()).toBe(8);
+  });
 });

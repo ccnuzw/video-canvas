@@ -27,7 +27,7 @@ import { AnnouncementDialog } from "./announcement-dialog";
 import { useAnnouncementsAdmin } from "./use-announcements-admin";
 
 /** 弹窗的状态：关闭、新建（item 为 null）、编辑某一条 */
-type EditorState = { open: false } | { open: true; item: AnnouncementAdminItem | null };
+type EditorState = { open: boolean; item: AnnouncementAdminItem | null };
 
 /**
  * 首页公告（/admin/settings/announcements，设计稿 docs/design/公告/公告.md §6.2）：
@@ -36,7 +36,7 @@ type EditorState = { open: false } | { open: true; item: AnnouncementAdminItem |
  */
 export default function AnnouncementsSettingsPage() {
   const admin = useAnnouncementsAdmin();
-  const [editor, setEditor] = useState<EditorState>({ open: false });
+  const [editor, setEditor] = useState<EditorState>({ open: false, item: null });
   const { items, status } = admin;
 
   const openNew = () => setEditor({ open: true, item: null });
@@ -98,8 +98,8 @@ export default function AnnouncementsSettingsPage() {
 
         <AnnouncementDialog
           open={editor.open}
-          item={editor.open ? editor.item : null}
-          onClose={() => setEditor({ open: false })}
+          item={editor.item}
+          onClose={() => setEditor((prev) => ({ ...prev, open: false }))}
           onSaved={() => void admin.reload()}
         />
       </main>

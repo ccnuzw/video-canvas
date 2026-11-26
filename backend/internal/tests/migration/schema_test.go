@@ -27,6 +27,8 @@ var autoMigrateOnly = map[string]bool{
 	"index idx_task_slot_user":     true,
 	"index idx_task_slot_provider": true,
 	"index idx_task_waiting":       true,
+	// 默认指针跨分类模板表，GORM 自动迁移无法表达此组合外键的同类约束。
+	"constraint drama_prompt_preset_groups.fk_drama_preset_default": true,
 }
 
 // TestMigrationFileNames 检查内嵌迁移文件的命名：符合规则、从 0001 开始连续编号、不重复。

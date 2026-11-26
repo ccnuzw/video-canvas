@@ -1,6 +1,7 @@
 import type {
   CreateDramaInput,
   PromptChoice,
+  PromptPresetGroup,
   PromptStep,
   SourceEstimate,
   SourcePreflight,
@@ -18,7 +19,7 @@ import {
   MAX_EPISODE_SECONDS,
   MIN_EPISODE_SECONDS,
 } from "./options";
-import { PROMPT_STEPS } from "./prompts";
+import { defaultPromptChoice, PROMPT_STEPS } from "./prompts";
 
 /** 开拍设置可选的画幅（宽、高用来画比例示意框） */
 export const START_RATIOS: { key: StartRatio; w: number; h: number }[] = [
@@ -379,7 +380,12 @@ export function saveStartPrefs(form: StartForm): void {
       videoModel: form.videoModel,
       imageModels: form.imageModels,
       imageParams: form.imageParams,
-      prompts: form.prompts,
+      prompts: Object.fromEntries(
+        PROMPT_STEPS.map(({ key }) => [
+          key,
+          form.prompts[key].source === "preset" ? { source: "builtin" } : form.prompts[key],
+        ]),
+      ) as StartPrompts,
     };
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
   } catch {
@@ -397,11 +403,15 @@ export function reconcilePrompts(
   prompts: StartPrompts,
   mine: Record<PromptStep, { id: string }[]>,
   skills: Record<PromptStep, { name: string }[]>,
+  presets: Partial<Record<PromptStep, PromptPresetGroup>> = {},
 ): StartPrompts {
   const next = builtinPrompts();
   for (const { key } of PROMPT_STEPS) {
     const choice = prompts[key];
-    if (choice.source === "mine" && mine[key].some((item) => item.id === choice.id)) {
+    next[key] = defaultPromptChoice(presets[key]);
+    if (choice.source === "preset") {
+      next[key] = choice;
+    } else if (choice.source === "mine" && mine[key].some((item) => item.id === choice.id)) {
       next[key] = choice;
     } else if (
       choice.source === "skill" &&

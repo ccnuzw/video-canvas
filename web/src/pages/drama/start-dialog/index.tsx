@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
 
-import { DRAMA_ERR, dramaErrorMessage } from "@/api/drama/errors";
+import { DRAMA_ERR, dramaErrorMessage, isDramaError } from "@/api/drama/errors";
 import type {
   CreateDramaInput,
   MyPrompt,
@@ -26,6 +26,7 @@ import {
 } from "@/components/drama/prompts/use-prompt-library";
 import { ModelMenu, VideoModelMenu } from "@/components/drama/video-model-menu";
 import { ParamRow } from "@/components/canvas/video-param-panel";
+import { DialogSession } from "@/components/dialog-session";
 import { RatioIcon } from "@/components/ratio-icon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -67,6 +68,7 @@ import {
   type StartKind,
 } from "@/utils/drama/start-settings";
 import { pickVideoModel } from "@/utils/drama/video-models";
+import { isCurrentPreset, PROMPT_STEPS } from "@/utils/drama/prompts";
 
 import { useSourceEstimate } from "./use-source-estimate";
 
@@ -287,6 +289,10 @@ export function StartBody({
   const [editor, setEditor] = useState<{ step: PromptStep; item: MyPrompt | null } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openedPresets, setOpenedPresets] = useState<PromptLibrary["presets"] | null>(null);
+  if (!openedPresets && library.ready && library.presetStatus === "ready") {
+    setOpenedPresets(library.presets);
+  }
   const patch = useCallback((change: Partial<StartForm>) => {
     setForm((prev) => ({ ...prev, ...change }));
   }, []);
@@ -294,8 +300,10 @@ export function StartBody({
   /** 提示词选择：库加载完后，被删的我的提示词 / 停用的技能回落为内置（读取时推导，不回写） */
   const prompts = useMemo(
     () =>
-      library.ready ? reconcilePrompts(form.prompts, library.mine, library.skills) : form.prompts,
-    [form.prompts, library.ready, library.mine, library.skills],
+      openedPresets
+        ? reconcilePrompts(form.prompts, library.mine, library.skills, openedPresets)
+        : form.prompts,
+    [form.prompts, library.mine, library.skills, openedPresets],
   );
 
   const word = unitWord(pre.unitKind);
@@ -344,6 +352,7 @@ export function StartBody({
           rangeEnd: script ? 0 : form.rangeEnd,
           episodeSeconds: form.seconds,
           textModel: form.textModel,
+          ...(!script && prompts.plan.source !== "builtin" ? { planPrompt: prompts.plan } : {}),
         }
       : null,
     {
@@ -357,9 +366,36 @@ export function StartBody({
     },
   );
   const est = estimate.estimate ?? pre.estimate;
+  const plan = prompts.plan;
+  const estimateConflict = estimate.status === "error" && estimate.code === DRAMA_ERR.presetChanged;
+  const rejectedPlan = useRef("");
+  const { refreshPresets } = library;
+  useEffect(() => {
+    if (!estimateConflict || plan.source !== "preset") return;
+    const key = `${plan.id}:${plan.revision}`;
+    if (rejectedPlan.current === key) return;
+    rejectedPlan.current = key;
+    refreshPresets();
+  }, [estimateConflict, plan, refreshPresets]);
   /** 所选模型装不下原文里最长的一章：后端估价按实际原文判断（67022），原因写在模型下面 */
   const modelBlocked = estimate.status === "error" && estimate.code === DRAMA_ERR.contextTooSmall;
-  const block = startBlockReason({ kind: form.kind, styleKey, modelBlocked });
+  const stale = PROMPT_STEPS.find(({ key }) => {
+    if (script && (key === "plan" || key === "scripts")) return false;
+    const choice = prompts[key];
+    return choice.source === "preset" && !isCurrentPreset(choice, library.presets[key]);
+  });
+  const promptBlock = stale || estimateConflict;
+  const block =
+    library.presetStatus === "error"
+      ? "内置提示词加载失败"
+      : library.presetStatus !== "ready" || !library.ready
+        ? "请等待提示词目录加载完成"
+        : stale
+          ? `${stale.name}的内置提示词已变更，请重新选择`
+          : estimateConflict
+            ? "分集规划的内置提示词已变更，请重新选择"
+            : startBlockReason({ kind: form.kind, styleKey, modelBlocked });
+  const alert = library.presetStatus === "error" ? block : (error ?? (promptBlock ? block : null));
 
   const submit = async () => {
     if (block || submitting) return;
@@ -370,6 +406,9 @@ export function StartBody({
       await onSubmit(buildCreateInput(pre, next, imageParams));
       saveStartPrefs(next);
     } catch (e) {
+      if (isDramaError(e, DRAMA_ERR.presetChanged)) {
+        refreshPresets();
+      }
       setError(dramaErrorMessage(e, "创建失败，请稍后重试"));
       setSubmitting(false);
     }
@@ -635,20 +674,26 @@ export function StartBody({
               kind={form.kind}
               value={prompts}
               library={library}
-              onChange={(step: PromptStep, choice: PromptChoice) =>
-                patch({ prompts: { ...prompts, [step]: choice } })
-              }
+              onChange={(step: PromptStep, choice: PromptChoice) => {
+                setError(null);
+                setForm((previous) => ({
+                  ...previous,
+                  prompts: { ...previous.prompts, [step]: choice },
+                }));
+              }}
               onEdit={(step, item) => setEditor({ step, item })}
             />
           </div>
 
-          {error && (
-            <p
-              role="alert"
-              className="bg-destructive/10 text-destructive rounded-xl px-3 py-2 text-[13px]"
-            >
-              {error}
-            </p>
+          {alert && (
+            <div className="bg-destructive/10 text-destructive flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[13px]">
+              <span role="alert">{alert}</span>
+              {library.presetStatus === "error" && (
+                <Button variant="ghost" size="sm" onClick={refreshPresets}>
+                  重试加载
+                </Button>
+              )}
+            </div>
           )}
 
           <div className="flex items-center justify-end gap-2 px-1">
@@ -698,7 +743,12 @@ export function StartBody({
 function EstimateLine({ state }: { state: ReturnType<typeof useSourceEstimate> }) {
   const est = state.estimate;
   /** 模型装不下原文的原因已写在文本模型下面，这里不重复 */
-  if (state.status === "error" && state.code === DRAMA_ERR.contextTooSmall) return null;
+  if (
+    state.status === "error" &&
+    (state.code === DRAMA_ERR.contextTooSmall || state.code === DRAMA_ERR.presetChanged)
+  ) {
+    return null;
+  }
   if (state.status === "error") {
     return (
       <span role="alert" className="text-destructive text-[12.5px]">
@@ -769,14 +819,16 @@ export function StartDialog({
         aria-label="开拍设置"
         className="bg-chrome ring-chrome-border w-160 max-w-[calc(100%-2rem)] gap-0 rounded-3xl p-0 shadow-lg ring-1 backdrop-blur-xl backdrop-saturate-150 sm:max-w-160"
       >
-        {shown && (
-          <StartDialogBody
-            key={shown.sourceToken}
-            pre={shown}
-            onCancel={() => onOpenChange(false)}
-            onSubmit={onSubmit}
-          />
-        )}
+        <DialogSession open={open}>
+          {shown && (
+            <StartDialogBody
+              key={shown.sourceToken}
+              pre={shown}
+              onCancel={() => onOpenChange(false)}
+              onSubmit={onSubmit}
+            />
+          )}
+        </DialogSession>
       </DialogContent>
     </Dialog>
   );

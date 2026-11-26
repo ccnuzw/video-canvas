@@ -207,8 +207,8 @@ export function NodeOverlays({
       fillActions && canReplaceImage(data) ? () => fillActions.pickReplace(id) : undefined,
   };
   /** 选好文件夹后加入资产库；失败（请求层已弹提示）抛出，让选择器保持打开 */
-  const confirmAddToLibrary = async (folderId: string | null) => {
-    await addNodeToLibrary(data, folderId, { addToLibrary });
+  const confirmAddToLibrary = async (folderId: string | null, name?: string) => {
+    await addNodeToLibrary(data, folderId, { addToLibrary }, name);
     toast.success("已加入资产库");
   };
 
@@ -270,6 +270,7 @@ export function NodeOverlays({
         onOpenChange={setPickingFolder}
         title="加入资产库"
         confirmLabel="加入"
+        assetName={data.fileName ?? ""}
         onConfirm={confirmAddToLibrary}
       />
       {/* 扩图出来的节点提示词是固定的，参考图只有合成图，没有可调的东西，不摆生成面板 */}

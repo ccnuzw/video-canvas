@@ -161,6 +161,32 @@ export function createApiApp(o: ApiOptions): FastifyInstance {
       return ok(reply, await service.observeRuns(after, limit));
     });
     // 门铃：Go 在生成任务进入终态的同一个事务里入队，由 River 调到这里；没有用户，只认服务令牌
+    app.post("/internal/v1/canvas-delivery", async (req, reply) => {
+      const body = validateBody(req.body ?? {}, [
+        { key: "canvas", kind: "string", label: "画布", required: true },
+        { key: "owner", kind: "string", label: "所有者", required: true },
+        { key: "nonce", kind: "string", label: "租约", required: true, max: 64 },
+        {
+          key: "action",
+          kind: "string",
+          label: "操作",
+          required: true,
+          oneof: ["acquire", "release"],
+        },
+      ]);
+      if (!DECIMAL_ID.test(body.canvas) || !DECIMAL_ID.test(body.owner))
+        throw Err.invalidParams("画布或用户编号无效");
+      if (
+        !(await service.canvasDelivery(
+          body.owner,
+          body.canvas,
+          body.nonce,
+          body.action === "acquire",
+        ))
+      )
+        throw Err.runActive();
+      return ok(reply, {});
+    });
     app.post("/internal/v1/watches/task-settled", async (req, reply) => {
       const b = validateBody(req.body ?? {}, TASK_SETTLED);
       if (!DECIMAL_ID.test(b.task_id) || !DECIMAL_ID.test(b.run_id))

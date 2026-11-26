@@ -12,9 +12,10 @@ import (
 )
 
 type sharedAsset struct {
-	original uint64
-	asset    *model.Asset
-	url      string
+	original  uint64
+	asset     *model.Asset
+	url       string
+	coverOnly bool
 }
 type shareGraph struct {
 	assets   map[uint64]*sharedAsset
@@ -99,8 +100,17 @@ func (g *shareGraph) rewriteParams(obj map[string]any) {
 	mapped := map[string]any{}
 	for key, value := range entries {
 		ref := g.ref(key)
+		named := ref == nil
+		if named {
+			ref = g.ref(params[key])
+		}
 		if ref != nil && ref.asset != nil {
-			key = strconv.FormatUint(ref.asset.ID, 10)
+			next := strconv.FormatUint(ref.asset.ID, 10)
+			if named {
+				params[key] = next
+			} else {
+				key = next
+			}
 			if meta, ok := value.(map[string]any); ok {
 				meta["url"] = ref.url
 			}

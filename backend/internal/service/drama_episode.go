@@ -60,11 +60,17 @@ func (s *DramaService) CreateEpisode(ctx context.Context, userID, id uint64, req
 }
 
 // UpdateEpisode 乐观锁更新单集；拆解后正文与梗概锁定，标题、钩子和悬念仍可编辑。
+// 请求里的 script_md 只有内部调用（Agent 审批）会带，HTTP 入口不接受，用户改剧本走 PutScript。
 func (s *DramaService) UpdateEpisode(ctx context.Context, userID, id uint64, no int, req *model.UpdateDramaEpisodeReq) (*model.DramaEpisodeView, error) {
 	// 1. 项目行锁与画布拆解锁集采用同一顺序，避免绕过锁定。
 	var result model.DramaEpisode
 	err := s.repo.WithTx(ctx, func(tx repository.DramaTx) error {
-		if _, e := tx.Project(ctx, userID, id, true); e != nil {
+		p, e := tx.Project(ctx, userID, id, true)
+		if e != nil {
+			return e
+		}
+		// 先把整部剧转成结构再读集：转换会归一未锁定集的 script_md，读在转换之后才拿得到最新文本。
+		if e = s.ensureScriptStructured(ctx, tx, p); e != nil {
 			return e
 		}
 		eps, e := tx.Episodes(ctx, userID, id)
@@ -77,6 +83,16 @@ func (s *DramaService) UpdateEpisode(ctx context.Context, userID, id uint64, no 
 			}
 			if e := applyDramaEpisodePatch(&ep, req); e != nil {
 				return e
+			}
+			// script_md 只有内部调用（Agent 审批）会带：解析后与旧结构合并，保留场次信息和备注
+			if req.ScriptMD != nil {
+				if _, _, e := s.applyScriptText(ctx, tx, p, &ep, *req.ScriptMD); e != nil {
+					return e
+				}
+				ep.ScriptStatus = "empty"
+				if strings.TrimSpace(ep.ScriptMD) != "" {
+					ep.ScriptStatus = "ready"
+				}
 			}
 			if e := tx.SaveEpisode(ctx, &ep, req.Revision); e != nil {
 				return e
@@ -124,13 +140,6 @@ func applyDramaEpisodePatch(ep *model.DramaEpisode, req *model.UpdateDramaEpisod
 	}
 	if req.Synopsis != nil {
 		ep.Synopsis = *req.Synopsis
-	}
-	if req.ScriptMD != nil {
-		ep.ScriptMD = *req.ScriptMD
-		ep.ScriptStatus = "empty"
-		if strings.TrimSpace(ep.ScriptMD) != "" {
-			ep.ScriptStatus = "ready"
-		}
 	}
 	return nil
 }

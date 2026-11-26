@@ -57,6 +57,19 @@ const newRun = (
 ) =>
   s.createRun({ sessionId, canvasId: "7", userId: "1", status: "running", mode: "all", ...over });
 
+test(
+  "画布交付和运行互斥，只有原租约能释放",
+  withStore((store) => {
+    const session = newSession(store);
+    assert.equal(store.canvasDelivery("7", "first", true), true);
+    assert.throws(() => newRun(store, session.id));
+    assert.equal(store.canvasDelivery("7", "other", false), false);
+    assert.equal(store.canvasDelivery("7", "first", false), true);
+    newRun(store, session.id);
+    assert.equal(store.canvasDelivery("7", "next", true), false);
+  }),
+);
+
 // ---- 迁移 ----
 
 test("迁移：新库按顺序全部应用，再次打开不重复应用", () => {

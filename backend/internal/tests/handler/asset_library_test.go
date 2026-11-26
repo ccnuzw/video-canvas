@@ -159,6 +159,15 @@ func (r hLibItems) SetFolder(_ context.Context, u, id uint64, fid *uint64) error
 	it.FolderID = fid
 	return nil
 }
+func (r hLibItems) SetName(_ context.Context, u, id uint64, name string) error {
+	it, ok := r.l.items[id]
+	if !ok || it.UserID != u {
+		return repository.ErrNotFound
+	}
+	it.Name = name
+	return nil
+}
+
 func (r hLibItems) Delete(_ context.Context, u, id uint64) error {
 	it, ok := r.l.items[id]
 	if !ok || it.UserID != u {
@@ -241,6 +250,7 @@ func newLibRouter() (*gin.Engine, *hLib) {
 	r.GET("/asset-library/items", h.ListItems)
 	r.POST("/asset-library/items", h.AddItem)
 	r.PATCH("/asset-library/items/:id", h.MoveItem)
+	r.PATCH("/asset-library/items/:id/name", h.RenameItem)
 	r.DELETE("/asset-library/items/:id", h.RemoveItem)
 	return r, l
 }
@@ -327,6 +337,28 @@ func TestAssetLibraryHandler_Folders(t *testing.T) {
 			t.Fatalf("重复删除应 404：%d", code)
 		}
 	})
+}
+
+func TestAssetLibraryHandler_ItemName(t *testing.T) {
+	r, fixture := newLibRouter()
+	fixture.assets[7] = &model.Asset{ID: 7, UserID: 1, Kind: "image"}
+	status, resp := libCall(t, r, http.MethodPost, "/asset-library/items", `{"asset_id":7,"name":" 草稿 "}`)
+	if status != http.StatusCreated || libData(t, resp)["name"] != "草稿" {
+		t.Fatalf("%d %v", status, resp)
+	}
+	path := "/asset-library/items/" + libData(t, resp)["id"].(string) + "/name"
+	status, resp = libCall(t, r, http.MethodPatch, path, `{"name":"定稿"}`)
+	if status != http.StatusOK || libData(t, resp)["name"] != "定稿" {
+		t.Fatalf("%d %v", status, resp)
+	}
+	status, resp = libCall(t, r, http.MethodPatch, path, `{"name":"  "}`)
+	if status != http.StatusBadRequest || int(resp["code"].(float64)) != errcode.ErrInvalidParams.Code {
+		t.Fatalf("%d %v", status, resp)
+	}
+	status, resp = libCall(t, r, http.MethodPatch, "/asset-library/items/"+idcodec.Encode(999)+"/name", `{"name":"定稿"}`)
+	if status != http.StatusNotFound || int(resp["code"].(float64)) != errcode.ErrLibraryItemNotFound.Code {
+		t.Fatalf("%d %v", status, resp)
+	}
 }
 
 func TestAssetLibraryHandler_Items(t *testing.T) {

@@ -107,6 +107,9 @@ func (r *StoryboardRepository) CreateSplitJob(ctx context.Context, job *model.St
 		job.CreatedAt = now
 	}
 	job.UpdatedAt = now
+	if err := lockTaskCanvas(r.db.WithContext(ctx), job.UserID, job.CanvasID); err != nil {
+		return err
+	}
 	if err := r.db.WithContext(ctx).Create(job).Error; err != nil {
 		if isUniqueViolation(err) {
 			return ErrSplitJobBusy

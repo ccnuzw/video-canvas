@@ -189,3 +189,34 @@ func (s *AssetService) openAssetObject(ctx context.Context, a *model.Asset) (io.
 	}
 	return body, nil
 }
+
+// StageCanvasAsset 先记录目标对象，再将源素材复制到接收方存储。
+func (s *AssetService) StageCanvasAsset(ctx context.Context, src *model.Asset, recipient uint64, record func(uint64, string) error) (*model.Asset, error) {
+	dst, err := s.stores.Default(ctx)
+	if err != nil {
+		return nil, err
+	}
+	key := fmt.Sprintf("u%d/%s/%s%s", recipient, s.now().Format("200601"), newAssetUUID(), assetMimeExt[src.MimeType])
+	if err := record(dst.ID, key); err != nil {
+		return nil, err
+	}
+	if err := s.copyObject(ctx, src, dst, key); errors.Is(err, errCandidateUnreadable) {
+		return nil, ErrAssetUnreadable
+	} else if err != nil {
+		return nil, err
+	}
+	return &model.Asset{UserID: recipient, StorageID: dst.ID, StorageKey: key, Source: model.AssetSourceUpload, FileName: src.FileName, Kind: src.Kind, MimeType: src.MimeType, ByteSize: src.ByteSize, Sha256: src.Sha256, Width: src.Width, Height: src.Height, DurationMs: src.DurationMs}, nil
+}
+
+// DeleteStagedObject 回收失败交付留下的对象。
+func (s *AssetService) DeleteStagedObject(ctx context.Context, id uint64, key string) error {
+	dst, err := s.stores.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	err = dst.Storage.Delete(ctx, key)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil
+	}
+	return err
+}

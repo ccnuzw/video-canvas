@@ -178,6 +178,15 @@ func (b *AgentBridge) toolDramaEpisode(ctx context.Context, tc *toolCall) (*tool
 	if ep.Locked && (a.Synopsis != nil || a.ScriptMD != nil) {
 		return nil, errcode.ErrDramaEpisodeLocked
 	}
+	// 剧本文本落库前会被解析成结构再渲染：审批里存的和给用户看的都是渲染后的文本，批准后保存的和预览一致，
+	// 重放时再解析它得到同样的 script_md，幂等判断（sameDramaText）仍然成立。
+	if a.ScriptMD != nil {
+		md, perr := b.d.Drama.PreviewScript(ctx, tc.run.UserID, uint64(p.ID), a.EpisodeNo, *a.ScriptMD)
+		if perr != nil {
+			return nil, perr
+		}
+		a.ScriptMD = &md
+	}
 	req := model.UpdateDramaEpisodeReq{Revision: ep.Revision, Title: a.Title, Synopsis: a.Synopsis, ScriptMD: a.ScriptMD}
 	args, err := json.Marshal(req)
 	if err != nil {

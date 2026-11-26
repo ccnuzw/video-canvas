@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { dramaSharing } from "@/api/drama/share";
+import { canvasSharing, dramaSharing } from "@/api/drama/share";
 import { ApiError } from "@/utils/requests/request";
 import service from "@/utils/requests/service";
 
@@ -21,6 +21,21 @@ describe("短剧交付重试", () => {
       expect(first.request_key).toMatch(/^[0-9a-f]{32}$/);
       expect(retry.request_key).toBe(first.request_key);
       expect(next.request_key).not.toBe(first.request_key);
+    } finally {
+      post.mockRestore();
+    }
+  });
+
+  test("画布交付绑定已确认版本并与短剧隔离", async () => {
+    const post = spyOn(service, "post").mockResolvedValue(undefined);
+    try {
+      await canvasSharing.submit("c1", "transfer", "v@example.test", 17);
+      expect(post.mock.calls[0]?.[0]).toBe("/canvas/c1/shares");
+      expect(post.mock.calls[0]?.[1]).toMatchObject({
+        mode: "transfer",
+        revision: 17,
+        email: "v@example.test",
+      });
     } finally {
       post.mockRestore();
     }

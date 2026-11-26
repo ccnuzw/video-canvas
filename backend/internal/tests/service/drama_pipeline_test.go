@@ -20,10 +20,11 @@ import (
 	"video-canvas/internal/provider/modelcfg"
 	"video-canvas/internal/repository"
 	"video-canvas/internal/service"
+	"video-canvas/internal/tests/dramafake"
 )
 
 type dramaMemory struct {
-	repository.DramaTx
+	dramafake.ScriptTx
 	drafts     map[string]model.DramaSourceDraft
 	units      []model.DramaUnit
 	prompts    map[uint64]model.DramaPrompt
@@ -68,6 +69,28 @@ func (l lockedDramaMemory) Episodes(ctx context.Context, userID, id uint64) ([]m
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.dramaMemory.Episodes(ctx, userID, id)
+}
+
+// SetEpisodeScriptMD 只改 script_md，不动 revision。
+func (r *dramaMemory) SetEpisodeScriptMD(_ context.Context, _, _, episodeID uint64, md string) error {
+	for i := range r.episodes {
+		if r.episodes[i].ID == episodeID {
+			r.episodes[i].ScriptMD = md
+		}
+	}
+	return nil
+}
+
+// MarkScriptStructured 标记整部剧已转成结构。
+func (r *dramaMemory) MarkScriptStructured(context.Context, uint64, uint64) error {
+	r.project.ScriptStructured = true
+	return nil
+}
+
+// MarkScriptBiosImported 标记人物传记已导入人物表。
+func (r *dramaMemory) MarkScriptBiosImported(context.Context, uint64, uint64) error {
+	r.project.ScriptBiosImported = true
+	return nil
 }
 
 func newDramaMemory() *dramaMemory {
@@ -135,6 +158,8 @@ func (r *dramaMemory) UpdateProject(_ context.Context, userID, id uint64, revisi
 			r.project.SourceSummary = v.(string)
 		case "characters_md":
 			r.project.CharactersMD = v.(string)
+		case "script_bios_imported":
+			r.project.ScriptBiosImported = v.(bool)
 		case "outline_md":
 			r.project.OutlineMD = v.(string)
 		case "status":
@@ -531,11 +556,15 @@ func toJSONList(v any) []any {
 	_ = json.Unmarshal(raw, &out)
 	return out
 }
-func dramaTestService(r *dramaMemory, e *dramaTextStreamer, c *dramaPipelineCanvas) (*service.DramaService, *dramaRegistry) {
+func dramaTestService(r *dramaMemory, e *dramaTextStreamer, c *dramaPipelineCanvas, presets ...service.DramaPromptPresetRepo) (*service.DramaService, *dramaRegistry) {
 	snap := &provider.Snapshot{ModelRevisionID: 9, Channel: provider.ChannelSnapshot{Key: "chan", BaseURL: "https://llm.example"}, Model: provider.ModelSnapshot{Key: "text", Kind: "agent", UpstreamModel: "upstream-chat", APIFormat: "openai", Pricing: modelcfg.Pricing{Billing: modelcfg.BillingPerCall, Unit: 5}, Capabilities: modelcfg.Capabilities{Context: &modelcfg.ContextSpec{Window: 128000, Output: 5000}}}}
 	registry := &dramaRegistry{snap: snap, models: []provider.ModelInfo{{Key: "text", Kind: "agent"}}}
 	secrets := dramaSecrets{model.ChannelSecretName("chan"): "sk-test"}
-	return service.NewDramaService(service.DramaDeps{Repo: lockedDramaMemory{r}, Settings: r, Registry: registry, Streamer: e, Secrets: secrets, Canvas: c, CanvasAssets: r, Segments: r}), registry
+	deps := service.DramaDeps{Repo: lockedDramaMemory{r}, Settings: r, Registry: registry, Streamer: e, Secrets: secrets, Canvas: c, CanvasAssets: r, Segments: r}
+	if len(presets) > 0 {
+		deps.Presets = presets[0]
+	}
+	return service.NewDramaService(deps), registry
 }
 func dramaCheckCode(t *testing.T, err error, code int) {
 	t.Helper()
@@ -583,9 +612,9 @@ func TestDramaPipelineJSONRetryAndNoCharge(t *testing.T) {
 			if tc.calls == 2 && !strings.Contains(e.prompts[1], "validation_error") {
 				t.Fatal("重试缺少校验反馈")
 			}
-			// 不再有格式段改写：保存的剧本就是创作稿原文
-			if tc.status == "succeeded" && r.episodes[0].ScriptMD != tc.outputs[len(tc.outputs)-1] {
-				t.Fatalf("剧本应原样保存创作稿，got %q", r.episodes[0].ScriptMD)
+			// 模型输出解析成结构后再渲染成 script_md：内容不丢，格式统一成标准剧本格式
+			if want := tc.outputs[len(tc.outputs)-1]; tc.status == "succeeded" && (!strings.Contains(r.episodes[0].ScriptMD, want) || !r.project.ScriptStructured) {
+				t.Fatalf("剧本应包含创作稿内容并已转成结构，got %q structured=%v", r.episodes[0].ScriptMD, r.project.ScriptStructured)
 			}
 		})
 	}
@@ -657,7 +686,7 @@ func TestDramaScriptsSerialContinuationAndPartialSuccess(t *testing.T) {
 	if err = s.HandleDrama(context.Background(), 7, 1, uint64(j.ID)); err != nil {
 		t.Fatal(err)
 	}
-	if r.episodes[0].ScriptStatus != "ready" || r.episodes[0].ScriptMD != ending || r.episodes[1].ScriptStatus != "failed" || r.episodes[2].ScriptStatus != "empty" {
+	if r.episodes[0].ScriptStatus != "ready" || !strings.HasSuffix(r.episodes[0].ScriptMD, ending) || r.episodes[1].ScriptStatus != "failed" || r.episodes[2].ScriptStatus != "empty" {
 		t.Fatalf("episodes=%+v", r.episodes)
 	}
 	if !strings.Contains(e.prompts[1], "最后一句") || strings.Contains(e.prompts[1], strings.Repeat("甲", 900)) {

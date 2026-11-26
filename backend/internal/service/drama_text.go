@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -41,6 +42,9 @@ func (s *DramaService) callDrama(ctx context.Context, j *model.DramaJob, snap *p
 		invalid = bad
 	}
 	if setting := jobConfig(j).promptFor(j.Step, step); setting.Source != "" && setting.Source != "builtin" {
+		if setting.Source == "preset" {
+			return nil, 0, errcode.ErrDramaCustomPrompt.WithMsg("所选内置提示词导致输出不合格（" + DramaPromptStepLabel(dramaStepGroup(step)) + "）")
+		}
 		return nil, 0, errcode.ErrDramaCustomPrompt.WithMsg("自定义提示词或技能导致输出不合格（" + dramaStepGroup(step) + "）")
 	}
 	return nil, 0, errcode.ErrDramaOutputInvalid
@@ -56,8 +60,7 @@ func (s *DramaService) dramaAttempt(ctx context.Context, j *model.DramaJob, snap
 	} else {
 		vars["known_cast"] = cfg.KnownCast
 	}
-	template, body := dramaTemplate(step, cfg.promptFor(j.Step, step))
-	prompt, err := drama.PromptWithBody(template, vars, body)
+	prompt, err := renderDramaPrompt(step, vars, cfg.promptFor(j.Step, step))
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -154,7 +157,19 @@ func dramaTemplate(step string, setting model.DramaPromptSetting) (template, bod
 		// 空正文让 PromptWithBody 直接用当前内置模板。
 		return step, ""
 	}
+	if setting.Source == "preset" && !slices.Contains(DramaPromptPages(dramaStepGroup(step)), step) {
+		return step, ""
+	}
 	return step, setting.Bodies[step]
+}
+
+// renderDramaPrompt 拒绝缺损的运营正文快照，而非悄悄换成内置。
+func renderDramaPrompt(step string, vars map[string]any, setting model.DramaPromptSetting) (string, error) {
+	template, body := dramaTemplate(step, setting)
+	if setting.Source == "preset" && slices.Contains(DramaPromptPages(dramaStepGroup(step)), step) && strings.TrimSpace(body) == "" {
+		return "", errcode.ErrDramaCustomPrompt.WithMsg("项目的内置提示词快照已损坏，请在项目设置重新选择")
+	}
+	return drama.PromptWithBody(template, vars, body)
 }
 
 // streamDramaText 经LLM网关向Agent模型的渠道发一次对话请求；请求期间任务被取消会中断上游调用。

@@ -31,9 +31,9 @@ func (s *DramaService) applyDramaOutput(ctx context.Context, tx repository.Drama
 			p.SourceKind = result.SourceKind
 		}
 		p.SourceSummary = result.Summary
-		p.CharactersMD = result.CharactersMD
 		p.OutlineMD = result.OutlineMD
-		fields = map[string]any{"source_kind": p.SourceKind, "source_summary": result.Summary, "characters_md": result.CharactersMD, "outline_md": result.OutlineMD}
+		fields = map[string]any{"source_kind": p.SourceKind, "source_summary": result.Summary, "outline_md": result.OutlineMD}
+		setCharactersMD(p, fields, result.CharactersMD)
 	case drama.PlanOutput:
 		if p.PlanCursor+1 != j.BatchFrom {
 			return nil
@@ -59,17 +59,17 @@ func (s *DramaService) applyDramaOutput(ctx context.Context, tx repository.Drama
 		p.Status = "outlined"
 		fields = map[string]any{"plan_cursor": p.PlanCursor, "status": p.Status}
 	case drama.OutlineOutput:
-		ready, e := saveDramaOutline(ctx, tx, p, result)
+		ready, e := s.saveDramaOutline(ctx, tx, p, result)
 		if e != nil {
 			return e
 		}
 		p.OutlineMD = result.OutlineMD
-		p.CharactersMD = result.CharactersMD
 		p.Status = "outlined"
 		if ready {
 			p.Status = "ready"
 		}
-		fields = map[string]any{"outline_md": result.OutlineMD, "characters_md": result.CharactersMD, "status": p.Status}
+		fields = map[string]any{"outline_md": result.OutlineMD, "status": p.Status}
+		setCharactersMD(p, fields, result.CharactersMD)
 	}
 	if j.Step == "scripts" {
 		p.Status = "ready"
@@ -85,8 +85,19 @@ func (s *DramaService) applyDramaOutput(ctx context.Context, tx repository.Drama
 	return nil
 }
 
+// setCharactersMD 写入新的人物传记；内容变了就把传记标回未导入，下次列人物表或写剧本时补导入
+// （只填空 note、新建新人物）。内容没变不重置，免得把用户在人物表里删掉的人物又建回来。
+func setCharactersMD(p *model.DramaProject, fields map[string]any, md string) {
+	fields["characters_md"] = md
+	if md != p.CharactersMD {
+		p.ScriptBiosImported = false
+		fields["script_bios_imported"] = false
+	}
+	p.CharactersMD = md
+}
+
 // saveDramaOutline 将分集大纲映射到已有集，保留已锁定剧本。
-func saveDramaOutline(ctx context.Context, tx repository.DramaTx, p *model.DramaProject, result drama.OutlineOutput) (bool, error) {
+func (s *DramaService) saveDramaOutline(ctx context.Context, tx repository.DramaTx, p *model.DramaProject, result drama.OutlineOutput) (bool, error) {
 	existing, e := tx.Episodes(ctx, p.UserID, p.ID)
 	if e != nil {
 		return false, e
@@ -115,6 +126,12 @@ func saveDramaOutline(ctx context.Context, tx repository.DramaTx, p *model.Drama
 		}
 		if e := tx.SaveEpisode(ctx, &ep, revision); e != nil {
 			return false, e
+		}
+		// 项目已转成结构时，这份新写进来的剧本文本要同步成结构
+		if want.ScriptMD != "" {
+			if e := s.resyncScript(ctx, tx, p, &ep); e != nil {
+				return false, e
+			}
 		}
 	}
 	return ready, nil

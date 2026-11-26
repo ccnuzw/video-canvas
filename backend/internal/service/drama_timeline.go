@@ -203,7 +203,7 @@ func (s *DramaSegmentService) SaveTimeline(ctx context.Context, userID, dramaID 
 	return s.Timeline(ctx, userID, dramaID, no)
 }
 
-// saveTimelineTx 校验版本和内容后写入；版本不一致返回 67034，内容不合法返回 67035 并写明第几段。
+// saveTimelineTx 校验版本和内容后写入；版本不一致返回 67046，内容不合法返回 67047 并写明第几段。
 func saveTimelineTx(ctx context.Context, tx repository.DramaTx, p *model.DramaProject, ep *model.DramaEpisode, req *model.SaveDramaTimelineReq) error {
 	// 1. 乐观锁：没保存过时版本必须是 0，保存过时必须和库里一致；不一致说明别的标签页改过。
 	row, err := tx.Timeline(ctx, p.UserID, ep.ID)
@@ -243,7 +243,7 @@ func saveTimelineTx(ctx context.Context, tx repository.DramaTx, p *model.DramaPr
 		return err
 	}
 	row.Muted = req.Muted
-	// 4. 写入；并发的首次保存或版本冲突同样按 67034 处理，让前端载入最新版本。
+	// 4. 写入；并发的首次保存或版本冲突同样按 67046 处理，让前端载入最新版本。
 	if err := tx.SaveTimeline(ctx, row, req.Revision); err != nil {
 		if errors.Is(err, repository.ErrStateConflict) {
 			return errcode.ErrDramaTimelineConflict

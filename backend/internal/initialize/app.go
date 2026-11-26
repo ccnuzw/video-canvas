@@ -18,6 +18,7 @@ import (
 	"video-canvas/internal/cache"
 	"video-canvas/internal/canvasdoc"
 	"video-canvas/internal/config"
+	"video-canvas/internal/drama"
 	"video-canvas/internal/handler"
 	agenthandler "video-canvas/internal/handler/agent"
 	"video-canvas/internal/llmgateway"
@@ -196,14 +197,30 @@ func NewApp(cfg *config.Config) (*App, error) {
 	// 短剧流水线的文本步骤用后台的 Agent 模型（经 LLM 网关直接请求渠道）与账户计价；拆解写画布与角色卡由同一事务提交。
 	skillSvc := agentsvc.NewSkillService(repository.NewAgentSkillRepository(db), storeRegistry, auditRepo, agentsvc.SkillOptions{})
 	dramaRepo := repository.NewDramaRepository(db)
+	dramaPresetRepo := repository.NewDramaPresetRepository(db)
+	// 开拍设置的题材 / 画风改由后台维护（drama_presets 表）；目录在 internal/drama 里做 60 秒缓存，
+	// 后台保存后立刻失效。注入失败（表为空、查询报错）时目录自动回落编译期内置 styles.json。
+	drama.SetCatalogSource(func(ctx context.Context) (drama.Catalog, error) {
+		return service.LoadDramaCatalog(ctx, dramaPresetRepo)
+	})
+	// 预设的后台维护：题材与画风同一套增删改 / 启停 / 排序，写操作进审计；
+	// 画风预览图落默认存储，公开地址走 /api/v1/drama-presets/previews/*（本地直出、私有桶现签名）
+	dramaPresetSvc := service.NewDramaPresetService(service.DramaPresetDeps{
+		Repo: dramaPresetRepo, Stores: storeRegistry, Audit: auditRepo,
+	})
 	dramaCanvasRepo := repository.NewDramaCanvasRepository(db)
 	dramaCanvasSvc := service.NewDramaCanvasService(dramaCanvasRepo, hub)
 	// 片段服务也管片场里的故事板：后端写短剧画布上的故事板节点，任务结束后把结果写回
 	dramaSegments := service.NewDramaSegmentService(service.DramaSegmentDeps{Repo: dramaRepo, Tasks: taskSvc, Assets: assetSvc, Broadcaster: hub, Canvas: dramaCanvasRepo})
 	// 短剧和环节协议层共用同一个 LLM 网关实例，渠道限流（RPS / 并发）才是对两者合计生效。
 	textGateway := llmgateway.New(llmgateway.Options{IPAllowed: outboundIPPolicy(cfg), Observer: llmlog.Observer{}})
+	var dramaPresets service.DramaPromptPresetRepo
+	if cfg.Drama.PromptPresetsEnabled {
+		dramaPresets = repository.NewDramaPromptPresetRepository(db)
+	}
 	dramaSvc := service.NewDramaService(service.DramaDeps{
-		Repo: dramaRepo, Settings: dramaRepo, Skills: skillSvc, Registry: aiCfgSvc, Streamer: textGateway, Secrets: aiCfgSvc, Canvas: dramaCanvasSvc, Broadcaster: hub, Credits: settingsSvc,
+		Presets: dramaPresets,
+		Repo:    dramaRepo, Settings: dramaRepo, Skills: skillSvc, Registry: aiCfgSvc, Streamer: textGateway, Secrets: aiCfgSvc, Canvas: dramaCanvasSvc, Broadcaster: hub, Credits: settingsSvc,
 		Segments: dramaSegments, CanvasAssets: canvasProjectRepo,
 		Compose: videoframe.New(videoframe.Options{Timeout: 30 * time.Minute}), Assets: assetSvc, // 实际超时由合成任务按成片时长决定
 		// 列表封面：资产画布里第一张生成成功的图，和画布列表一样取缩略图
@@ -382,6 +399,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 		Me:              handler.NewMeHandler(meSvc),
 		CanvasProject:   handler.NewCanvasProjectHandler(canvasProjectSvc),
 		Drama:           handler.NewDramaHandler(dramaSvc),
+		CanvasShare:     handler.NewCanvasShareHandler(service.NewCanvasShareService(repository.NewCanvasShareRepository(db), assetSvc, service.AgentCanvasDeliveryGuard(cfg.Agent))),
 		DramaShare:      handler.NewDramaShareHandler(service.NewDramaShareService(repository.NewDramaShareRepository(db), assetSvc)),
 		AdminStep:       handler.NewAdminStepHandler(stepSvc),
 		AdminFormatter:  handler.NewAdminFormatterHandler(),
@@ -444,6 +462,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 		AdminSystem:    newAdminSystemHandler(cfg, db, taskRepo, auditRepo),
 		Showcase:       handler.NewShowcaseHandler(showcaseSvc),
 		Announcement:   handler.NewAnnouncementHandler(announcementSvc),
+		DramaPreset:    handler.NewDramaPresetHandler(dramaPresetSvc),
 		Payment:        pay.user,
 		AdminPayment:   pay.admin,
 		AdminRole:      roleLookup,
@@ -733,6 +752,9 @@ func (a *App) cleanupUploads(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if err := repository.NewCanvasShareRepository(a.db).SweepStages(ctx, a.assets.DeleteStagedObject); err != nil {
+				logger.Error("回收过期画布交付对象失败", zap.Error(err))
+			}
 			if n, err := a.assets.CleanupUploads(ctx, 200); err != nil {
 				logger.Error("清理过期直传失败", zap.Error(err))
 			} else if n > 0 {

@@ -70,6 +70,9 @@ func (s *DramaService) importScriptTx(ctx context.Context, tx repository.DramaTx
 			if err := tx.SaveEpisode(ctx, &ep, 0); err != nil {
 				return err
 			}
+			if err := s.resyncScript(ctx, tx, p, &ep); err != nil {
+				return err
+			}
 		}
 	}
 	fields := map[string]any{"phase": "done", "plan_cursor": p.UnitsTotal, "range_end": p.UnitsTotal, "status": "ready", "pause_code": "", "pause_reason": ""}
@@ -169,7 +172,7 @@ func (s *DramaService) EstimatePlanning(ctx context.Context, userID, id uint64, 
 	for i := range units {
 		units[i].No = i + 1
 	}
-	return s.estimateSource(ctx, drama.PreflightResult{Text: drama.UnitSource(units), Units: units}, model.DramaSourceEstimateReq{SourceKind: p.SourceKind, EpisodeSeconds: p.EpisodeSeconds, TextModel: p.TextModel}, p.SourceSummary == "")
+	return s.estimateSource(ctx, drama.PreflightResult{Text: drama.UnitSource(units), Units: units}, model.DramaSourceEstimateReq{SourceKind: p.SourceKind, EpisodeSeconds: p.EpisodeSeconds, TextModel: p.TextModel}, p.SourceSummary == "", promptSettings(p)["plan"])
 }
 
 // publishDrama 提交后通知客户端重新读取阶段和新增分集。
@@ -232,11 +235,7 @@ func (s *DramaService) restorePlanningPrompt(ctx context.Context, tx repository.
 		return errcode.ErrDramaPhase
 	}
 	settings := promptSettings(p)
-	builtin, err := s.snapshotPrompt(ctx, p.UserID, "plan", model.DramaPromptChoice{Source: "builtin"})
-	if err != nil {
-		return err
-	}
-	settings["plan"] = *builtin
+	settings["plan"] = legacyDramaPrompt("plan")
 	raw, _ := json.Marshal(settings)
 	if err := tx.UpdateProject(ctx, p.UserID, p.ID, p.Revision, map[string]any{"prompt_settings": raw}); err != nil {
 		return err

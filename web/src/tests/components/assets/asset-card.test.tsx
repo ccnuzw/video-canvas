@@ -82,6 +82,17 @@ describe("HistoryAssetCard：生成历史卡片", () => {
 });
 
 describe("LibraryAssetCard：个人资产库卡片", () => {
+  test("有库内名称时卡片显示该名称", () => {
+    const item: LibraryItemDto = {
+      id: "saved",
+      name: "雪地定稿",
+      asset: asset(),
+      folderId: null,
+      createdAt: "",
+    };
+    const out = renderToStaticMarkup(<LibraryAssetCard item={item} />);
+    expect(out).toContain('aria-label="雪地定稿"');
+  });
   const item: LibraryItemDto = {
     id: "i1",
     asset: asset({ fileName: "角色正面.png" }),

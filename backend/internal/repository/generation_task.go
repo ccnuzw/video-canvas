@@ -268,6 +268,11 @@ func (r *GenerationTaskRepository) InsertTask(ctx context.Context, t *model.Gene
 	// 任务与 created 事件同事务写入：命中幂等唯一索引（没写入任务）时不产生事件
 	var inserted bool
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if t.CanvasProjectID != nil {
+			if err := lockTaskCanvas(tx, t.UserID, *t.CanvasProjectID); err != nil {
+				return err
+			}
+		}
 		res := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(t)
 		if res.Error != nil {
 			return res.Error

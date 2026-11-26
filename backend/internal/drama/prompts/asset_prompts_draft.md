@@ -2,7 +2,7 @@
 
 ## 输入变量
 
-输入来自开头 JSON 数据块：`assets` 只包含本次拆解新建的画布节点，含真实 `node_id`。资产字段可能直接位于每条对象上，也可能位于 `asset` 子对象中，例如 `{"node_id":"n_1","asset":{"type":"character","name":"林川","look":"童年","description":"短发少年","voice_prompt":"清亮声线","episodes":[1],"aliases":[]}}`。`style` 是项目画风的正向描述，`genre` 是题材；`characters_md` 与 `episodes` 可作为连续性背景。`validation_error` 为上次输出的校验反馈。
+输入来自开头 JSON 数据块：`assets` 只包含本次拆解新建的画布节点，含真实 `node_id`。资产字段可能直接位于每条对象上，也可能位于 `asset` 子对象中，例如 `{"node_id":"n_1","asset":{"type":"character","name":"林川","look":"童年","description":"短发少年","voice_prompt":"清亮声线","episodes":[1],"aliases":[]}}`。`style` 是项目画风的正向描述，`genre` 是题材；`characters_md`（人物设定）、`locations_md`（用户写的地点描述，场景图的画面依据，没有描述的地点不列）与 `episodes` 可作为连续性背景。`validation_error` 为上次输出的校验反馈。
 
 ## 本步职责
 

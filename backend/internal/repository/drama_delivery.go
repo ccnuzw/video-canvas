@@ -19,6 +19,11 @@ type DramaSnapshot struct {
 	Segments []model.DramaSegment
 	Tasks    []model.GenerationTask
 	Jobs     []model.DramaJob
+	// 结构化剧本（仅交付时读取）：复制或转移要把人物表、地点表、场次和元素一起带走
+	Characters []model.DramaScriptCharacter
+	Locations  []model.DramaScriptLocation
+	Scenes     []model.DramaScene
+	Elements   []model.DramaScriptElement
 }
 
 // LockSnapshot locks drama-owned rows so delivery cannot race concurrent edits.
@@ -78,8 +83,15 @@ func (r *DramaShareRepository) Snapshot(ctx context.Context, user, id uint64, de
 	} else if err := belongs.Session(&gorm.Session{}).Where("status IN ?", []string{"queued", "running"}).Find(&snapshot.Jobs).Error; err != nil {
 		return nil, err
 	}
-	err := tasks.Order("created_at,id").Find(&snapshot.Tasks).Error
-	return &snapshot, err
+	if err := tasks.Order("created_at,id").Find(&snapshot.Tasks).Error; err != nil {
+		return nil, err
+	}
+	if delivery {
+		if err := r.loadScript(ctx, user, id, &snapshot); err != nil {
+			return nil, err
+		}
+	}
+	return &snapshot, nil
 }
 
 func (r *DramaShareRepository) deliveryReady(ctx context.Context, p *model.DramaProject) error {
@@ -177,4 +189,19 @@ func (r *DramaShareRepository) Retire(ctx context.Context, user, id uint64) erro
 		return err
 	}
 	return NewDramaRepository(r.db).DeleteProject(ctx, user, id)
+}
+
+// loadScript 读这部短剧的结构化剧本：人物表、地点表、场次和元素，按各自的顺序。
+func (r *DramaShareRepository) loadScript(ctx context.Context, user, id uint64, snapshot *DramaSnapshot) error {
+	belongs := r.db.WithContext(ctx).Where("user_id = ? AND drama_id = ?", user, id)
+	if err := belongs.Session(&gorm.Session{}).Order("position,id").Find(&snapshot.Characters).Error; err != nil {
+		return err
+	}
+	if err := belongs.Session(&gorm.Session{}).Order("position,id").Find(&snapshot.Locations).Error; err != nil {
+		return err
+	}
+	if err := belongs.Session(&gorm.Session{}).Order("episode_id,position,id").Find(&snapshot.Scenes).Error; err != nil {
+		return err
+	}
+	return belongs.Session(&gorm.Session{}).Order("scene_id,position,id").Find(&snapshot.Elements).Error
 }

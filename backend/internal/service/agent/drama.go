@@ -19,6 +19,8 @@ type AgentDramaService interface {
 	GetEpisode(context.Context, uint64, uint64, int) (*model.DramaEpisodeView, error)
 	// UpdateEpisode 沿用分集锁定和revision校验。
 	UpdateEpisode(context.Context, uint64, uint64, int, *model.UpdateDramaEpisodeReq) (*model.DramaEpisodeView, error)
+	// PreviewScript 预览一段文本写进某集后的 script_md（解析并渲染，不写库）。
+	PreviewScript(context.Context, uint64, uint64, int, string) (string, error)
 	// Estimate 复用提交任务的预检和积分估价。
 	Estimate(context.Context, uint64, uint64, *model.DramaJobReq) (int, error)
 	// CreateAgentJob 以用户与审批ID持久去重，原子提交任务和冻结积分。

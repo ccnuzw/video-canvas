@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 
-	"video-canvas/internal/drama"
 	"video-canvas/internal/model"
 	"video-canvas/internal/pkg/errcode"
 	"video-canvas/internal/pkg/response"
@@ -67,14 +66,10 @@ func (h *DramaHandler) EstimateSource(c *gin.Context) {
 
 // PromptTemplates 只返回可替换正文，不返回固定协议。
 func (h *DramaHandler) PromptTemplates(c *gin.Context) {
-	items := []gin.H{}
-	labels := map[string]string{"plan": "分集规划", "scripts": "分集剧本", "breakdown": "资产拆解", "asset_prompts": "资产图提示词", "storyboard": "视频提示词", "board": "故事板提示词"}
-	for _, step := range service.DramaPromptSteps {
-		pages := []gin.H{}
-		for _, key := range service.DramaPromptPages(step) {
-			pages = append(pages, gin.H{"key": key, "label": labels[key], "body": drama.PromptBody(key)})
-		}
-		items = append(items, gin.H{"step": step, "pages": pages})
+	items, err := h.svc.PromptTemplates(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
 	}
 	response.OK(c, gin.H{"items": items})
 }

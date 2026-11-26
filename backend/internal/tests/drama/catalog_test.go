@@ -11,9 +11,9 @@ import (
 func TestStyles(t *testing.T) {
 	view := Styles()
 	genres := []string{"甜宠言情", "悬疑推理", "热血少年与动作", "喜剧搞笑", "科幻末世", "都市职场", "古风仙侠", "历史史诗", "家庭温情", "青春成长", "恐怖灵异", "心理博弈"}
-	styles := []string{"90年代日式动画", "国风二次元", "二维扁平设计", "成熟都市言情动画", "三维动画渲染", "国风三维", "黏土定格", "国风赛博三维", "古风真人", "真人都市电影", "都市甜宠写实"}
+	styles := []string{"90年代日式动画", "国风二次元", "二维扁平设计", "成熟都市言情动画", "三维动画渲染", "国风三维", "黏土定格", "国风赛博三维", "古风真人", "真人都市电影", "都市甜宠写实", "超写实3A级CG"}
 	if len(view.Genres) != len(genres) || len(view.Styles) != len(styles) {
-		t.Fatalf("目录数量 = %d / %d，期望 12 / 11", len(view.Genres), len(view.Styles))
+		t.Fatalf("目录数量 = %d / %d，期望 12 / 12", len(view.Genres), len(view.Styles))
 	}
 	keys := make(map[string]bool)
 	for i, genre := range view.Genres {

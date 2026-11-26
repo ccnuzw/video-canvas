@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>剧本编辑器原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<style>
+/* 令牌沿用 docs/design/短剧工作室/短剧工作室原型-v2.html，让原型看起来像真实产品 */
+:root{
+  --sans:"Inter","PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --serif:"Noto Serif SC","Songti SC",serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",monospace;
+  --bg:#0A0A0B; --surface:#131316; --surface-2:#1A1A1F; --surface-3:#24242B; --surface-4:#2E2E37;
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.13);
+  --text:#F3F0EA; --text-2:#B2ADA4; --text-3:#8A857D;
+  --amber:#F4B740; --amber-2:#FFCF6E; --amber-ink:#1B1304; --amber-soft:rgba(244,183,64,.14);
+  --rec:#FF5A48; --rec-soft:rgba(255,90,72,.14);
+  --ok:#5AD6A0; --ok-soft:rgba(90,214,160,.13);
+  --info:#86AEFF; --info-soft:rgba(134,174,255,.14);
+  --violet:#B79BFF; --violet-soft:rgba(183,155,255,.14);
+  --chrome:rgba(28,28,33,.72); --chrome-border:rgba(255,255,255,.1); --chrome-hover:rgba(255,255,255,.08);
+  --paper:#16161A; --paper-text:#E9E5DD;
+  --shadow-2:0 1px 0 rgba(255,255,255,.05) inset,0 24px 60px -20px rgba(0,0,0,.75),0 0 0 1px var(--line);
+  --ease:cubic-bezier(.22,1,.36,1);
+  color-scheme:dark;
+}
+[data-theme="light"]{
+  --bg:#F4F1EC; --surface:#FFFFFF; --surface-2:#F7F5F1; --surface-3:#ECE8E1; --surface-4:#E0DBD2;
+  --line:rgba(20,16,10,.08); --line-2:rgba(20,16,10,.15);
+  --text:#1C1A17; --text-2:#5B564E; --text-3:#78726A;
+  --amber:#C98A0E; --amber-2:#A87208; --amber-ink:#FFFFFF; --amber-soft:rgba(201,138,14,.12);
+  --rec:#D93A28; --rec-soft:rgba(217,58,40,.1);
+  --ok:#14945F; --ok-soft:rgba(20,148,95,.1);
+  --info:#2F62D9; --info-soft:rgba(47,98,217,.1);
+  --violet:#6D3FE0; --violet-soft:rgba(109,63,224,.1);
+  --chrome:rgba(255,255,255,.72); --chrome-border:rgba(20,16,10,.1); --chrome-hover:rgba(20,16,10,.06);
+  --paper:#FFFDF8; --paper-text:#2A2620;
+  --shadow-2:0 24px 60px -24px rgba(20,16,10,.35),0 0 0 1px var(--line);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 var(--sans);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.4}
+input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:6px}
+[data-lucide]{width:16px;height:16px;flex:none}
+[hidden]{display:none!important}
+.mono{font-family:var(--mono)}
+.muted{color:var(--text-2)} .dim{color:var(--text-3)}
+.row{display:flex;align-items:center;gap:8px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+
+/* 清透胶囊（web/docs/coding-standards.md 6.1） */
+.chrome{background:var(--chrome);box-shadow:0 0 0 1px var(--chrome-border),0 10px 30px -12px rgba(0,0,0,.5);backdrop-filter:blur(20px) saturate(1.5);-webkit-backdrop-filter:blur(20px) saturate(1.5)}
+.pill{border-radius:999px}
+.seg{display:flex;gap:2px;padding:3px}
+.seg button{height:30px;padding:0 12px;border-radius:999px;color:var(--text-2);font-size:13px;font-weight:500;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.seg button:hover:not(:disabled){background:var(--chrome-hover);color:var(--text)}
+.seg button[aria-selected="true"]{background:var(--chrome-hover);color:var(--text);box-shadow:0 0 0 1px var(--chrome-border)}
+.ibtn{width:32px;height:32px;border-radius:999px;display:inline-grid;place-items:center;color:var(--text-2)}
+.ibtn:hover:not(:disabled){background:var(--chrome-hover);color:var(--text)}
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:500;white-space:nowrap}
+.btn-amber{background:var(--amber);color:var(--amber-ink)} .btn-amber:hover{background:var(--amber-2)}
+.btn-soft{background:var(--chrome-hover);box-shadow:0 0 0 1px var(--chrome-border)} .btn-soft:hover{background:var(--surface-4)}
+.tag{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.t-amber{background:var(--amber-soft);color:var(--amber)} .t-ok{background:var(--ok-soft);color:var(--ok)}
+.t-rec{background:var(--rec-soft);color:var(--rec)} .t-info{background:var(--info-soft);color:var(--info)}
+.t-mute{background:var(--surface-3);color:var(--text-2)} .t-vio{background:var(--violet-soft);color:var(--violet)}
+
+/* ---- 布局 ---- */
+.app{display:grid;grid-template-rows:56px 1fr;height:100vh}
+.top{display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--line)}
+.title{font-weight:600;white-space:nowrap}
+.main{display:grid;grid-template-columns:208px minmax(0,1fr) 316px;min-height:0}
+.rail{border-right:1px solid var(--line);padding:12px 10px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.rail h4{margin:4px 8px 6px;font-size:11.5px;font-weight:500;color:var(--text-3);letter-spacing:.04em}
+.ep{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 10px;border-radius:12px;text-align:left;color:var(--text-2);font-size:13px}
+.ep:hover{background:var(--chrome-hover);color:var(--text)}
+.ep[aria-current="true"]{background:var(--chrome-hover);color:var(--text);box-shadow:0 0 0 1px var(--chrome-border)}
+.ep .no{font-family:var(--mono);font-size:11.5px;color:var(--text-3);width:22px}
+.ep .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0}
+.whead{display:flex;align-items:center;gap:10px;padding:12px 20px 8px;flex-wrap:wrap}
+.whead h2{margin:0;font-size:16px;font-weight:600;font-family:var(--serif)}
+.banners{padding:0 20px;display:grid;gap:8px}
+.banner{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;font-size:13px}
+.b-warn{background:var(--amber-soft);color:var(--text)} .b-warn>i{color:var(--amber)}
+.b-rec{background:var(--rec-soft)} .b-rec>i{color:var(--rec)}
+.b-mute{background:var(--surface-2)} .b-mute>i{color:var(--text-2)}
+.wbody{flex:1;min-height:0;display:flex;padding:8px 20px 0;gap:0}
+.source{flex:0 0 var(--srcw,40%);min-width:220px;overflow:auto;border-radius:16px 16px 0 0;background:var(--surface);box-shadow:0 0 0 1px var(--line);padding:22px 24px 120px}
+.source h3{margin:0 0 4px;font-family:var(--serif);font-size:15px}
+.source p{font-family:var(--serif);font-size:14px;line-height:1.95;color:var(--text-2);margin:0 0 12px;text-indent:2em}
+.resizer{flex:0 0 12px;cursor:col-resize;display:grid;place-items:center}
+.resizer::after{content:"";width:3px;height:36px;border-radius:3px;background:var(--line-2)}
+.pwrap{flex:1;min-width:0;position:relative;overflow:auto;border-radius:16px 16px 0 0}
+.paper{max-width:760px;margin:0 auto;background:var(--paper);color:var(--paper-text);box-shadow:var(--shadow-2);border-radius:16px 16px 0 0;padding:36px 56px 160px;min-height:100%;font-family:var(--serif);font-size:15px;line-height:1.8}
+.side{border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.side .seg{margin:12px}
+.sbody{flex:1;overflow:auto;padding:0 12px 24px}
+
+/* ---- 剧本版式 ---- */
+.scene{margin-bottom:26px;scroll-margin-top:16px}
+.sh{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:var(--sans);font-weight:600;margin-bottom:10px;padding:6px 8px;margin-left:-8px;border-radius:12px}
+.sh:hover{background:var(--chrome-hover)}
+.sno{font-family:var(--mono);font-size:13px;color:var(--amber);min-width:34px}
+.sh select,.sh .locbtn{height:28px;border-radius:999px;border:0;background:var(--chrome-hover);box-shadow:0 0 0 1px var(--chrome-border);padding:0 10px;font-size:13px;font-weight:600;color:var(--paper-text);appearance:none;-webkit-appearance:none;cursor:pointer}
+.sh select:disabled,.sh .locbtn:disabled{cursor:default;opacity:1;box-shadow:none;background:none;padding:0 2px}
+.sh .locbtn.empty{color:var(--text-3);font-weight:500}
+.sh .sp{flex:1}
+.sh .del{opacity:0} .sh:hover .del{opacity:1}
+.el{position:relative;border-radius:8px;transition:background .15s}
+.el.hl{background:var(--amber-soft)}
+.el.err{background:var(--rec-soft);box-shadow:0 0 0 1px var(--rec)}
+.txt{outline:none;padding:2px 8px;margin:0 -8px;border-radius:8px;min-height:1.8em;white-space:pre-wrap;word-break:break-word}
+.txt:focus{background:var(--chrome-hover)}
+.txt:empty::before{content:attr(data-ph);color:var(--text-3)}
+.el-action{margin:6px 0}
+.el-character{margin-top:14px;text-align:center}
+.cpick{font-family:var(--sans);font-weight:600;letter-spacing:.2em;padding:2px 10px;border-radius:999px}
+.cpick:hover:not(:disabled),.cpick:focus{background:var(--chrome-hover)}
+.cpick.empty{color:var(--text-3);letter-spacing:0;font-weight:500;outline:1px dashed var(--line-2);outline-offset:-1px}
+.cpick:disabled{opacity:1;cursor:default}
+.ext{font-family:var(--mono);font-size:11px;color:var(--text-3);padding:1px 6px;border-radius:999px;margin-left:2px}
+.ext.on{color:var(--amber);background:var(--amber-soft)}
+.ext:disabled{opacity:1;cursor:default}
+.unconf{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--info);vertical-align:middle;margin-left:4px}
+.el-parenthetical .txt{width:52%;margin:0 auto;text-align:center;color:var(--text-2);font-size:14px}
+.el-parenthetical .txt:not(:empty)::before{content:"（"}
+.el-parenthetical .txt:not(:empty)::after{content:"）"}
+.el-dialogue .txt{width:62%;margin:0 auto 2px;text-align:center}
+.el-transition .txt{text-align:right;font-family:var(--sans);font-weight:600;font-size:13px;letter-spacing:.1em}
+.el-subtitle .txt{text-align:center;font-family:var(--sans);font-size:13px;color:var(--info)}
+.el-subtitle .txt:not(:empty)::before{content:"【字幕】";color:var(--text-3)}
+.el-shot .txt:not(:empty)::before{content:"【空镜】";color:var(--text-3);font-family:var(--sans);font-size:13px}
+.el-note .txt{font-family:var(--sans);font-size:13px;color:var(--violet);background:var(--violet-soft);margin:6px -8px}
+.marker{display:flex;align-items:center;gap:10px;margin:12px 0;font-family:var(--sans);font-size:12px;letter-spacing:.15em;color:var(--text-3);outline:none;border-radius:8px;padding:2px 0}
+.marker::before,.marker::after{content:"";flex:1;height:1px;background:var(--line-2)}
+.marker:focus{color:var(--amber)} .marker:focus::before,.marker:focus::after{background:var(--amber)}
+
+/* ---- 浮动工具条与状态 ---- */
+.tools{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:4px;z-index:20;max-width:calc(100% - 32px);overflow-x:auto}
+.tools button{height:32px;padding:0 11px;border-radius:999px;font-size:12.5px;font-weight:500;color:var(--text-2);white-space:nowrap}
+.tools button:hover:not(:disabled){background:var(--chrome-hover);color:var(--text)}
+.tools button[aria-pressed="true"]{background:var(--amber);color:var(--amber-ink)}
+.tools .sep{width:1px;height:18px;background:var(--chrome-border);margin:0 4px;flex:none}
+.save{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;font-size:12.5px;color:var(--text-2)}
+.save .d{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.save.dirty .d{background:var(--text-3)} .save.saving .d{background:var(--amber);animation:pulse 1s infinite}
+.save.bad .d{background:var(--rec)}
+@keyframes pulse{50%{opacity:.3}}
+.statpill{display:inline-flex;align-items:center;gap:10px;height:30px;padding:0 12px;font-size:12.5px;color:var(--text-2)}
+.statpill b{color:var(--text);font-weight:600}
+.statpill .over{color:var(--rec)}
+
+/* ---- 选择器 ---- */
+.picker{position:absolute;z-index:40;width:240px;border-radius:18px;padding:8px;font-family:var(--sans)}
+.picker input{width:100%;height:34px;border-radius:999px;border:0;background:var(--chrome-hover);box-shadow:0 0 0 1px var(--chrome-border);padding:0 12px;outline:none;color:var(--text)}
+.picker .opts{max-height:220px;overflow:auto;margin-top:6px;display:grid;gap:2px}
+.picker .opt{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 10px;border-radius:12px;text-align:left;font-size:13px;color:var(--text)}
+.picker .opt:hover,.picker .opt.act{background:var(--chrome-hover)}
+.picker .opt small{color:var(--text-3);font-size:11.5px}
+.av{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:600;background:var(--surface-3);color:var(--text-2);flex:none}
+.av.node{background:var(--amber-soft);color:var(--amber)}
+
+/* ---- 侧栏 ---- */
+.card{background:var(--surface-2);border-radius:16px;padding:14px;margin-bottom:12px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stats .k{font-size:11.5px;color:var(--text-3)} .stats .v{font-size:18px;font-weight:600;font-family:var(--mono)}
+.bar{height:6px;border-radius:6px;background:var(--surface-4);margin-top:10px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--ok);border-radius:6px}
+.bar.over>i{background:var(--rec)}
+.srow{border-radius:14px;padding:10px 12px;margin-bottom:4px;cursor:pointer}
+.srow:hover{background:var(--chrome-hover)}
+.srow.open{background:var(--surface-2)}
+.srow.dragging{opacity:.4}
+.srow.over{box-shadow:0 -2px 0 var(--amber)}
+.srow .h{display:flex;align-items:center;gap:8px;min-height:24px}
+.srow .grip{color:var(--text-3);cursor:grab}
+.srow .tt{flex:1;min-width:0;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow .chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.srow .cast{display:flex}
+.srow .cast .av{width:20px;height:20px;font-size:10px;margin-left:-4px;box-shadow:0 0 0 2px var(--bg)}
+.field{display:block;width:100%;border:0;border-radius:12px;background:var(--chrome-hover);box-shadow:0 0 0 1px var(--chrome-border);padding:7px 12px;font-size:13px;outline:none;margin-top:8px;resize:vertical}
+.field:disabled{opacity:.6}
+.chipx{display:inline-flex;align-items:center;gap:2px;height:22px;padding:0 4px 0 9px;border-radius:999px;font-size:12px;background:var(--surface-3);color:var(--text-2)}
+.chipx button{width:16px;height:16px;border-radius:50%;display:grid;place-items:center}
+.chipx button:hover{background:var(--surface-4)}
+.chipadd{height:22px;width:76px;border-radius:999px;border:0;background:none;box-shadow:0 0 0 1px var(--chrome-border);padding:0 9px;font-size:12px;outline:none}
+.prow{display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 10px;border-radius:14px;cursor:pointer}
+.prow:hover{background:var(--chrome-hover)}
+.prow.on{background:var(--amber-soft)}
+.prow .nm{font-size:13.5px;font-weight:500}
+.prow .meta{font-size:11.5px;color:var(--text-3)}
+.prow .acts{margin-left:auto;display:flex;gap:2px;opacity:0}
+.prow:hover .acts,.prow.on .acts{opacity:1}
+.sec-t{font-size:11.5px;color:var(--text-3);margin:14px 10px 6px;letter-spacing:.04em}
+
+/* ---- 空 / 加载 ---- */
+.empty{display:grid;place-items:center;gap:12px;padding:120px 0;text-align:center;font-family:var(--sans)}
+.empty .ic{width:52px;height:52px;border-radius:18px;background:var(--surface-3);display:grid;place-items:center;color:var(--text-2)}
+.empty .ic [data-lucide]{width:22px;height:22px}
+.sk{height:14px;border-radius:8px;background:linear-gradient(90deg,var(--surface-3),var(--surface-4),var(--surface-3));background-size:200% 100%;animation:sk 1.2s infinite;margin:14px 0}
+@keyframes sk{to{background-position:-200% 0}}
+
+/* ---- 演示控制与设计标注（不属于产品界面） ---- */
+.demo{margin-top:auto;border-radius:16px;padding:12px;background:var(--surface-2);outline:1px dashed var(--line-2);font-size:12px}
+.demo b{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}
+.demo label{display:flex;align-items:center;gap:8px;min-height:28px;cursor:pointer;color:var(--text-2)}
+.demo .tip{color:var(--text-3);margin-top:6px;line-height:1.5}
+[data-note]:not(.tools):not(.source){position:relative}
+.show-notes [data-note]{outline:1.5px dashed var(--violet);outline-offset:3px}
+.show-notes [data-note]::after{content:attr(data-note);position:absolute;top:-9px;right:-9px;width:18px;height:18px;border-radius:50%;background:var(--violet);color:#fff;font:600 11px/18px var(--sans);text-align:center;z-index:5;pointer-events:none}
+.notes{position:fixed;right:330px;top:70px;width:300px;max-height:calc(100vh - 90px);overflow:auto;z-index:50;border-radius:18px;padding:14px;font-size:12.5px;display:none}
+.show-notes .notes{display:block}
+.notes h4{margin:0 0 8px;font-size:13px;color:var(--violet);display:flex;align-items:center;gap:6px}
+.notes ol{margin:0;padding-left:18px;display:grid;gap:6px;color:var(--text-2)}
+.notes ol b{color:var(--text)}
+.switch{width:34px;height:20px;border-radius:999px;background:var(--surface-4);position:relative}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch[aria-checked="true"]{background:var(--violet)}
+.switch[aria-checked="true"]::after{transform:translateX(14px)}
+.toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:80;pointer-events:none}
+.toast>div{display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;font-size:13px}
+@media (max-width:1100px){.main{grid-template-columns:0 minmax(0,1fr) 300px}.rail{display:none}.notes{right:16px}}
+@media (max-width:760px){.main{grid-template-columns:1fr}.side{display:none}.paper{padding:24px 20px 160px}.wbody{padding:8px 0 0}.whead,.banners{padding-left:16px;padding-right:16px}}
+</style>
+</head>
+<body class="show-notes">
+<div class="app">
+  <header class="top">
+    <button class="ibtn" title="返回短剧列表"><i data-lucide="chevron-left"></i></button>
+    <span class="title">断潮</span>
+    <div class="seg chrome pill" role="tablist" style="margin-left:8px">
+      <button aria-selected="false" onclick="toast('原型只做了剧本页','info')">总览</button>
+      <button aria-selected="true">剧本</button>
+      <button aria-selected="false" onclick="toast('原型只做了剧本页','info')">资产管理</button>
+      <button aria-selected="false" onclick="toast('原型只做了剧本页','info')">片场</button>
+      <button aria-selected="false" onclick="toast('原型只做了剧本页','info')">成片</button>
+    </div>
+    <span style="flex:1"></span>
+    <span id="save" class="save chrome pill" data-note="4"></span>
+    <a class="btn btn-soft" href="结构化剧本编辑器-演示.html" style="text-decoration:none"><i data-lucide="presentation"></i>方案演示</a>
+    <label class="row dim" style="font-size:12px;cursor:pointer">设计标注<button class="switch" id="notesSw" role="switch" aria-checked="true" onclick="toggleNotes()"></button></label>
+    <button class="ibtn" onclick="toggleTheme()" title="切换明暗"><i data-lucide="sun-moon"></i></button>
+  </header>
+
+  <div class="main">
+    <aside class="rail" id="rail"></aside>
+
+    <section class="work">
+      <div class="whead" id="whead"></div>
+      <div class="banners" id="banners"></div>
+      <div class="wbody" id="wbody">
+        <div class="source" id="source" hidden data-note="7"></div>
+        <div class="resizer" id="resizer" hidden></div>
+        <div class="pwrap" id="pwrap">
+          <div class="paper" id="paper"></div>
+          <div class="picker chrome" id="picker" hidden></div>
+        </div>
+      </div>
+      <div class="tools chrome pill" id="tools" data-note="1"></div>
+    </section>
+
+    <aside class="side">
+      <div class="seg chrome pill" role="tablist" id="sideTabs">
+        <button data-tab="scenes" aria-selected="true" style="flex:1;justify-content:center"><i data-lucide="list-ordered"></i>场次</button>
+        <button data-tab="people" aria-selected="false" style="flex:1;justify-content:center"><i data-lucide="users"></i>人物与地点</button>
+      </div>
+      <div class="sbody" id="sbody"></div>
+    </aside>
+  </div>
+</div>
+
+<div class="notes chrome">
+  <h4><i data-lucide="pen-tool"></i>设计标注</h4>
+  <ol>
+    <li><b>元素工具条</b>：当前行的类型高亮；不合法的类型置灰并在悬停里写原因，不隐藏。Tab / Shift+Tab 循环切换，Enter 按规则接下一种（角色、括号 → 对白，对白 → 动作）。取代了手打「人物（语气）：台词」。</li>
+    <li><b>角色行是选择器，不是文字</b>：存人物 ID，显示正式名；输入时按名字和别名匹配，没有就「新建人物」。对白永远挂在角色下面，所以格式乱不了。</li>
+    <li><b>场次标题由三个控件拼成</b>：内外、时间、地点（来自地点表），和拆解、分镜用同一个地点身份；场号由顺序推出，不单独存。</li>
+    <li><b>保存</b>：停手 1.5 秒整集保存（<code>PUT …/script</code>），集级 revision 乐观锁；冲突和锁定沿用现有 DocEditor 的处理。</li>
+    <li><b>场次栏</b>：短标题、梗概、情绪本期手填，B（跨集状态提取）上线后自动填；拖动调整场次顺序。</li>
+    <li><b>人物表</b>：蓝点 =「待确认」，是解析剧本时自动登记的；改名后旧名进别名；锁定集的剧本文本不跟着改；仍被引用的不能删。</li>
+    <li><b>原著对照</b>：左侧只读显示本集对应的原文单元，两栏各自滚动，不做段落联动（默认值）；没有对应原文时开关不出现。</li>
+    <li><b>备注</b>（紫色行）：作者自己看的，不渲染进 <code>script_md</code>，拆解、分镜和 Agent 都读不到；整集重写时跟着相邻行保留。</li>
+  </ol>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const icons = () => { if (window.lucide) lucide.createIcons(); };
+let toastT;
+function toast(msg, kind = "ok") {
+  const icon = { ok: "circle-check", bad: "circle-x", warn: "triangle-alert", info: "info" }[kind];
+  const color = { ok: "var(--ok)", bad: "var(--rec)", warn: "var(--amber)", info: "var(--info)" }[kind];
+  $("#toast").innerHTML = `<div class="chrome"><i data-lucide="${icon}" style="color:${color}"></i>${esc(msg)}</div>`;
+  icons(); clearTimeout(toastT); toastT = setTimeout(() => ($("#toast").innerHTML = ""), 2600);
+}
+function toggleNotes() { const on = document.body.classList.toggle("show-notes"); $("#notesSw").setAttribute("aria-checked", String(on)); }
+function toggleTheme() { const h = document.documentElement; h.dataset.theme = h.dataset.theme === "dark" ? "light" : "dark"; }
+
+/* ================= 常量 ================= */
+const TYPES = { action: "动作", character: "角色", parenthetical: "括号", dialogue: "对白", transition: "转场", subtitle: "字幕", shot: "空镜", flashback_start: "闪回", flashback_end: "闪回结束", note: "备注" };
+const CYCLE = ["action", "character", "parenthetical", "dialogue", "transition", "subtitle", "shot", "note"];
+const SPEECH = new Set(["character", "parenthetical", "dialogue"]);
+const TEXTUAL = new Set(["action", "parenthetical", "dialogue", "transition", "subtitle", "shot", "note"]);
+const PH = { action: "动作", parenthetical: "语气或动作", dialogue: "台词", transition: "切至：", subtitle: "字幕内容", shot: "空镜画面", note: "备注，只有你看得到" };
+const IE_TXT = { interior: "内", exterior: "外", interior_exterior: "内外" };
+const LOCKED_EPS = [1, 2];
+let seq = 100;
+const nid = (p = "e") => p + (++seq);
+
+/* ================= 初始数据（示意） ================= */
+function initial() {
+  return {
+    roster: [
+      { id: "c1", name: "林骁", aliases: ["林川"], confirmed: true, node: true, eps: [1, 2, 3, 4] },
+      { id: "c2", name: "苏晚", aliases: [], confirmed: true, node: true, eps: [1, 2, 3] },
+      { id: "c3", name: "老周", aliases: [], confirmed: false, node: false, eps: [2, 3] },
+      { id: "c4", name: "阿彪", aliases: [], confirmed: false, node: false, eps: [] },
+    ],
+    locs: [
+      { id: "l1", name: "城西老码头", aliases: [], confirmed: true, node: true, eps: [1, 3] },
+      { id: "l2", name: "林家老宅客厅", aliases: ["老宅客厅"], confirmed: true, node: true, eps: [2, 3] },
+      { id: "l3", name: "医院走廊", aliases: [], confirmed: false, node: false, eps: [3] },
+    ],
+    scenes: [
+      { id: "s1", ie: "exterior", time: "夜", locId: "l1", title: "码头对峙", summary: "苏晚逼问信封来历，林骁咬死不说", emotions: ["紧张", "压抑"], els: [
+        { id: "e1", type: "action", text: "雨砸在铁皮棚上，林骁攥着一只湿透的信封，指节发白。" },
+        { id: "e2", type: "character", cid: "c2", ext: "" },
+        { id: "e3", type: "dialogue", text: "你到底瞒了我什么？" },
+        { id: "e4", type: "note", text: "苏晚这句可以更冷一点" },
+        { id: "e5", type: "action", text: "林骁没有回头。远处一艘货轮拉响汽笛。" },
+        { id: "e6", type: "character", cid: "c1", ext: "" },
+        { id: "e7", type: "parenthetical", text: "压低声音" },
+        { id: "e8", type: "dialogue", text: "这事别让她知道。" },
+        { id: "e9", type: "character", cid: "c2", ext: "" },
+        { id: "e10", type: "dialogue", text: "她？她是谁？" },
+        { id: "e11", type: "transition", text: "切至：" },
+      ] },
+      { id: "s2", ie: "interior", time: "日", locId: "l2", title: "老爷子苏醒", summary: "", emotions: ["紧迫"], els: [
+        { id: "e12", type: "subtitle", text: "三天后" },
+        { id: "e13", type: "action", text: "老周端着药碗站在门口，碗沿还冒着热气。" },
+        { id: "e14", type: "character", cid: "c3", ext: "" },
+        { id: "e15", type: "dialogue", text: "少爷，老爷子醒了。" },
+        { id: "e16", type: "character", cid: "c1", ext: "" },
+        { id: "e17", type: "dialogue", text: "我这就去。" },
+        { id: "e18", type: "character", cid: "c1", ext: "OS" },
+        { id: "e19", type: "dialogue", text: "他醒得太巧了。" },
+      ] },
+      { id: "s3", ie: "interior", time: "夜", locId: "l3", title: "", summary: "", emotions: [], els: [
+        { id: "e20", type: "shot", text: "医院走廊尽头的灯一闪一闪。" },
+        { id: "e21", type: "flashback_start", text: "" },
+        { id: "e22", type: "action", text: "十年前，同一条走廊，少年林骁蹲在长椅边。" },
+        { id: "e23", type: "character", cid: "c1", ext: "" },
+        { id: "e24", type: "parenthetical", text: "少年，哭腔" },
+        { id: "e25", type: "dialogue", text: "妈，你别走。" },
+        { id: "e26", type: "flashback_end", text: "" },
+        { id: "e27", type: "action", text: "林骁推开病房门 门里一片漆黑" },
+      ] },
+    ],
+  };
+}
+const SOURCE = {
+  title: "第十二章 夜雨",
+  paras: [
+    "那天夜里的雨下得很大，城西老码头的铁皮棚被砸得噼啪作响。林骁把信封揣在怀里，信封早就湿透了，边角软塌塌地卷起来。",
+    "苏晚是追着他来的。她站在棚子另一头，头发贴在脸上，问他到底瞒了她什么。林骁没回头，只是盯着江面上那艘慢慢靠岸的货轮。",
+    "“这事别让她知道。”他终于开口，声音压得很低，像是说给自己听。",
+    "苏晚愣了一下：“她？她是谁？”",
+    "三天后，老宅里传来消息，昏迷了半个月的老爷子醒了。老周端着药碗来报信的时候，林骁正对着那封信发呆。他嘴上应着“我这就去”，心里却只有一个念头：醒得太巧了。",
+    "医院的走廊还是十年前的样子。灯管一闪一闪，长椅上的漆掉了一块又一块。林骁想起那年他就蹲在这张长椅边，哭着喊母亲别走。",
+  ],
+};
+
+const S = {
+  ...initial(),
+  ep: 3, view: "editor", loading: true,
+  cur: { sid: "s1", i: 0 }, focus: null,
+  locked: false, remote: false, noSource: false, showSource: false,
+  revision: 12, save: "saved", dirty: false, errorAt: null,
+  hlChar: null, sideTab: "scenes", openScene: "s1",
+  warnings: [{ sid: "s3", id: "e27" }],
+  target: 90,
+};
+
+/* ================= 工具 ================= */
+const scene = (sid) => S.scenes.find((s) => s.id === sid);
+const person = (id) => S.roster.find((c) => c.id === id);
+const loc = (id) => S.locs.find((l) => l.id === id);
+const sceneNo = (sid) => `${S.ep}-${S.scenes.findIndex((s) => s.id === sid) + 1}`;
+const initialOf = (n) => (n || "?").slice(0, 1);
+
+function canType(els, i, t) {
+  const prev = els[i - 1], next = els[i + 1];
+  if ((t === "parenthetical" || t === "dialogue") && !(prev && SPEECH.has(prev.type))) return "前面要先有角色行";
+  if (next && (next.type === "parenthetical" || next.type === "dialogue") && !SPEECH.has(t)) return "后面还挂着台词，先改掉台词";
+  return "";
+}
+function canDelete(els, i) {
+  const prev = els[i - 1], next = els[i + 1];
+  if (els.length === 1) return "一场至少保留一行";
+  if (next && (next.type === "parenthetical" || next.type === "dialogue") && !(prev && SPEECH.has(prev.type))) return "后面还挂着台词，先删掉台词";
+  return "";
+}
+function validate() {
+  for (const s of S.scenes) {
+    let open = -1;
+    for (let i = 0; i < s.els.length; i++) {
+      const e = s.els[i];
+      const err = (msg) => ({ sid: s.id, i, msg });
+      if (e.type === "character") {
+        if (!e.cid) return err("角色行没有选人物");
+        let k = i + 1;
+        while (s.els[k] && s.els[k].type === "parenthetical") k++;
+        if (!s.els[k] || s.els[k].type !== "dialogue") return err("角色行后面没有台词");
+      }
+      if ((e.type === "parenthetical" || e.type === "dialogue") && !(s.els[i - 1] && SPEECH.has(s.els[i - 1].type))) return err("台词前面没有角色行");
+      if (e.type === "flashback_start") { if (open >= 0) return err("闪回不能嵌套"); open = i; }
+      if (e.type === "flashback_end") { if (open < 0) return err("闪回结束前没有闪回"); open = -1; }
+    }
+    if (open >= 0) return { sid: s.id, i: open, msg: "闪回没有结束" };
+  }
+  return null;
+}
+function stats() {
+  let chars = 0, dia = 0, act = 0, misc = 0;
+  S.scenes.forEach((s) => s.els.forEach((e) => {
+    if (e.type === "note" || e.type === "character") return;
+    const n = [...(e.text || "")].length;
+    chars += n;
+    if (e.type === "dialogue") dia += n;
+    if (e.type === "action") act++;
+    if (e.type === "shot" || e.type === "subtitle") misc++;
+  }));
+  return { scenes: S.scenes.length, chars, ratio: chars ? Math.round((dia / chars) * 100) : 0, sec: Math.round(dia / 4 + act * 2 + misc * 2) };
+}
+function linesOf(cid) {
+  let n = 0;
+  S.scenes.forEach((s) => { let who = null; s.els.forEach((e) => { if (e.type === "character") who = e.cid; if (e.type === "dialogue" && who === cid) n++; }); });
+  return n;
+}
+const castOf = (s) => [...new Set(s.els.filter((e) => e.type === "character" && e.cid).map((e) => e.cid))];
+
+/* ================= 光标 ================= */
+function caretOffset(el) {
+  const sel = getSelection();
+  if (!sel.rangeCount) return 0;
+  const r = sel.getRangeAt(0), pre = r.cloneRange();
+  pre.selectNodeContents(el); pre.setEnd(r.startContainer, r.startOffset);
+  return pre.toString().length;
+}
+function setCaret(el, off) {
+  el.focus();
+  const t = el.firstChild, r = document.createRange();
+  if (!t) r.setStart(el, 0);
+  else r.setStart(t, off === "end" ? t.length : Math.min(off, t.length));
+  r.collapse(true);
+  const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+}
+function applyFocus() {
+  const f = S.focus; S.focus = null;
+  if (!f) return;
+  const node = $(`#paper [data-sid="${f.sid}"][data-i="${f.i}"]`);
+  if (!node) return;
+  const target = node.querySelector(".txt, .cpick, .marker");
+  if (!target) return;
+  if (target.classList.contains("txt")) setCaret(target, f.off ?? "end");
+  else target.focus();
+  S.cur = { sid: f.sid, i: f.i };
+  if (f.pick) openPicker("char", f.sid, f.i, target);
+  renderTools();
+}
+
+/* ================= 保存（模拟，非真实调用） ================= */
+let saveT;
+function markDirty({ side = true } = {}) {
+  if (S.locked) return;
+  S.dirty = true; S.errorAt = null;
+  if (S.save !== "conflict") S.save = "dirty";
+  renderStatus(); renderHead();
+  if (side) renderSide();
+  clearTimeout(saveT); saveT = setTimeout(save, 1500);
+}
+function save() {
+  if (!S.dirty || S.save === "conflict") return;
+  S.save = "saving"; renderStatus();
+  setTimeout(() => {
+    if (S.remote) { S.save = "conflict"; renderStatus(); renderBanners(); return; }
+    const err = validate();
+    if (err) {
+      S.save = "error"; S.errorAt = err;
+      renderStatus(); renderBanners();
+      S.focus = { ...S.cur }; renderPaper();
+      toast(`67043 剧本结构不合法：第 ${sceneNo(err.sid)} 场第 ${err.i + 1} 行，${err.msg}`, "bad");
+      return;
+    }
+    S.revision++; S.dirty = false; S.save = "saved";
+    renderStatus(); renderBanners();
+  }, 600);
+}
+function reloadRemote() {
+  const fresh = initial();
+  fresh.scenes[0].els[4].text = "林骁没有回头。货轮的汽笛声被雨声压得很闷。";
+  Object.assign(S, { scenes: fresh.scenes, remote: false, dirty: false, save: "saved", errorAt: null, revision: 13 });
+  S.cur = { sid: "s1", i: 0 };
+  renderAll();
+  toast("已载入最新版本（revision 13）", "info");
+}
+function overwrite() {
+  S.remote = false; S.revision = 13; S.save = "dirty";
+  renderBanners(); save();
+}
+
+/* ================= 编辑操作 ================= */
+function setType(sid, i, t) {
+  if (S.locked) return;
+  const sc = scene(sid), e = sc.els[i];
+  if (!e || e.type === t) return;
+  const why = canType(sc.els, i, t);
+  if (why) return toast(why, "warn");
+  if (t === "character") {
+    const text = e.text || "";
+    sc.els[i] = { id: e.id, type: "character", cid: null, ext: "" };
+    const next = sc.els[i + 1];
+    if (text.trim()) sc.els.splice(i + 1, 0, { id: nid(), type: "dialogue", text });
+    else if (!next || !(next.type === "parenthetical" || next.type === "dialogue")) sc.els.splice(i + 1, 0, { id: nid(), type: "dialogue", text: "" });
+    S.focus = { sid, i, pick: true };
+  } else {
+    sc.els[i] = { id: e.id, type: t, text: TEXTUAL.has(e.type) && TEXTUAL.has(t) ? e.text : "" };
+    S.focus = { sid, i, off: "end" };
+  }
+  markDirty(); renderPaper();
+}
+function cycle(sid, i, dir) {
+  const sc = scene(sid), e = sc.els[i];
+  let k = CYCLE.indexOf(e.type);
+  for (let n = 0; n < CYCLE.length; n++) {
+    k = (k + dir + CYCLE.length) % CYCLE.length;
+    if (!canType(sc.els, i, CYCLE[k])) return setType(sid, i, CYCLE[k]);
+  }
+}
+function insertAfter(sid, i, el, opts = {}) {
+  const sc = scene(sid);
+  sc.els.splice(i + 1, 0, el);
+  S.focus = { sid, i: i + 1, off: 0, ...opts };
+  markDirty(); renderPaper();
+}
+function nextTypeAfter(sc, i, base) {
+  const after = sc.els[i + 1];
+  if (after && (after.type === "parenthetical" || after.type === "dialogue")) return "dialogue";
+  return base;
+}
+function removeAt(sid, i) {
+  const sc = scene(sid);
+  const why = canDelete(sc.els, i);
+  if (why) { toast(why, "warn"); return false; }
+  sc.els.splice(i, 1);
+  S.focus = { sid, i: Math.max(0, i - 1), off: "end" };
+  markDirty(); renderPaper();
+  return true;
+}
+function newScene(afterSid) {
+  if (S.locked) return;
+  const at = S.scenes.findIndex((s) => s.id === afterSid);
+  const s = { id: nid("s"), ie: null, time: null, locId: null, title: "", summary: "", emotions: [], els: [{ id: nid(), type: "action", text: "" }] };
+  S.scenes.splice(at + 1, 0, s);
+  S.focus = { sid: s.id, i: 0, off: 0 };
+  markDirty(); renderPaper();
+  setTimeout(() => $(`#paper .scene[data-scene="${s.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 30);
+}
+function insertMarker(t) {
+  if (S.locked) return;
+  const { sid, i } = S.cur, sc = scene(sid);
+  if (sc.els[i + 1] && (sc.els[i + 1].type === "parenthetical" || sc.els[i + 1].type === "dialogue")) return toast("不能插在角色和台词中间", "warn");
+  insertAfter(sid, i, { id: nid(), type: t, text: "" });
+}
+
+/* 粘贴多行：模拟 POST /dramas/:id/script/parse */
+function parseText(text) {
+  const out = [], warn = [], fresh = [];
+  let cur = null;
+  const find = (list, n) => {
+    let hit = list.find((x) => x.name === n || x.aliases.includes(n));
+    if (!hit) { hit = { id: nid(list === S.roster ? "c" : "l"), name: n, aliases: [], confirmed: false, node: false, eps: [3] }; list.push(hit); fresh.push(n); }
+    return hit;
+  };
+  text.split(/\r?\n/).forEach((raw, idx) => {
+    const line = raw.trim().replace(/^#{1,6}\s+/, "").replace(/^\*\*(.+)\*\*$/, "$1").trim();
+    if (!line || /^第\s*[\d一二三四五六七八九十百]+\s*集/.test(line)) return;
+    let m = /^(\d+)\s*[-–]\s*(\d+)\s+(.+?)\s*[·•]\s*(.+)$/.exec(line);
+    if (m) {
+      let ie = null, time = null;
+      for (const p of m[3].split(/[\/／\s]+/).filter(Boolean)) { if (p === "内") ie = "interior"; else if (p === "外") ie = "exterior"; else if (p === "内外") ie = "interior_exterior"; else time = p; }
+      cur = { id: nid("s"), ie, time, locId: find(S.locs, m[4].trim()).id, title: "", summary: "", emotions: [], els: [] };
+      out.push(cur); return;
+    }
+    if (!cur) { cur = { head: false, els: [] }; out.push(cur); }
+    if (/^(人物|道具)[:：]/.test(line)) return;
+    if (/^【闪回】$/.test(line)) return cur.els.push({ id: nid(), type: "flashback_start", text: "" });
+    if (/^【闪回结束】$/.test(line)) return cur.els.push({ id: nid(), type: "flashback_end", text: "" });
+    if ((m = /^【字幕[:：](.+)】$/.exec(line))) return cur.els.push({ id: nid(), type: "subtitle", text: m[1].trim() });
+    if ((m = /^【空镜】(.*)$/.exec(line))) return cur.els.push({ id: nid(), type: "shot", text: m[1].trim() });
+    if ((m = /^△\s*(.+)$/.exec(line))) return cur.els.push({ id: nid(), type: "action", text: m[1].trim() });
+    if (/^(切至|切回|淡入|淡出|叠化|黑场)/.test(line)) return cur.els.push({ id: nid(), type: "transition", text: line });
+    if ((m = /^([一-龥A-Za-z·]{1,8})\s*(?:[（(]([^）)]*)[）)])?\s*[:：]\s*(.+)$/.exec(line))) {
+      const who = find(S.roster, m[1]);
+      const tags = (m[2] || "").split(/[，,]/).map((x) => x.trim()).filter(Boolean);
+      const ext = (tags.find((t) => /^(OS|VO)$/i.test(t)) || "").toUpperCase();
+      const paren = tags.filter((t) => !/^(OS|VO)$/i.test(t)).join("，");
+      cur.els.push({ id: nid(), type: "character", cid: who.id, ext });
+      if (paren) cur.els.push({ id: nid(), type: "parenthetical", text: paren });
+      cur.els.push({ id: nid(), type: "dialogue", text: m[3].trim() });
+      return;
+    }
+    cur.els.push({ id: nid(), type: "action", text: line });
+    warn.push(idx + 1);
+  });
+  return { out, warn, fresh };
+}
+function pasteMulti(sid, i, text) {
+  toast("正在解析粘贴内容（模拟）", "info");
+  setTimeout(() => {
+    const { out, warn, fresh } = parseText(text);
+    const sc = scene(sid);
+    let at = i, count = 0, sAt = S.scenes.findIndex((s) => s.id === sid);
+    const blockedAfter = sc.els[i + 1] && (sc.els[i + 1].type === "parenthetical" || sc.els[i + 1].type === "dialogue");
+    if (blockedAfter) return toast("不能粘贴在角色和台词中间", "warn");
+    out.forEach((p) => {
+      if (p.head === false) { sc.els.splice(at + 1, 0, ...p.els); at += p.els.length; count += p.els.length; }
+      else { S.scenes.splice(++sAt, 0, p); if (!p.els.length) p.els.push({ id: nid(), type: "action", text: "" }); count += p.els.length; }
+    });
+    S.focus = { sid, i: at, off: "end" };
+    markDirty(); renderPaper();
+    toast(`已插入 ${count} 行${warn.length ? `，${warn.length} 行未识别已作为动作` : ""}${fresh.length ? `，新登记 ${fresh.join("、")}（待确认）` : ""}`, warn.length ? "warn" : "ok");
+  }, 400);
+}
+
+/* ================= 选择器 ================= */
+let picker = null;
+function openPicker(mode, sid, i, anchor) {
+  if (S.locked) return;
+  picker = { mode, sid, i, q: "", act: 0 };
+  const box = $("#picker"), wrap = $("#pwrap");
+  const a = anchor.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(a.left - w.left + wrap.scrollLeft + a.width / 2 - 120, wrap.scrollWidth - 250)) + "px";
+  box.style.top = a.bottom - w.top + wrap.scrollTop + 6 + "px";
+  box.hidden = false;
+  box.innerHTML = `<input id="pq" placeholder="${mode === "char" ? "人物名或别名" : "地点名或别名"}" autocomplete="off" /><div class="opts" id="popts"></div>`;
+  renderPickerOpts();
+  const q = $("#pq");
+  q.addEventListener("input", () => { picker.q = q.value.trim(); picker.act = 0; renderPickerOpts(); });
+  q.addEventListener("keydown", (e) => {
+    const n = $("#popts").children.length;
+    if (e.key === "ArrowDown") { e.preventDefault(); picker.act = (picker.act + 1) % n; renderPickerOpts(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); picker.act = (picker.act - 1 + n) % n; renderPickerOpts(); }
+    else if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); $("#popts").children[picker.act]?.click(); }
+    else if (e.key === "Escape") { closePicker(true); }
+  });
+  q.focus();
+}
+function renderPickerOpts() {
+  const list = picker.mode === "char" ? S.roster : S.locs;
+  const q = picker.q;
+  const hits = list.filter((x) => !q || x.name.includes(q) || x.aliases.some((a) => a.includes(q)));
+  const exact = list.some((x) => x.name === q || x.aliases.includes(q));
+  let html = hits.map((x) => `<button class="opt" data-id="${x.id}"><span class="av ${x.node ? "node" : ""}">${esc(initialOf(x.name))}</span><span>${esc(x.name)}${x.aliases.length ? ` <small>${esc(x.aliases.join("、"))}</small>` : ""}</span>${x.confirmed ? "" : '<span class="unconf" title="待确认"></span>'}</button>`).join("");
+  if (q && !exact) html += `<button class="opt" data-new="1"><span class="av"><i data-lucide="plus" style="width:12px;height:12px"></i></span>新建${picker.mode === "char" ? "人物" : "地点"}：${esc(q)}</button>`;
+  $("#popts").innerHTML = html || `<div class="dim" style="padding:10px;font-size:12.5px">没有匹配</div>`;
+  [...$("#popts").children].forEach((b, k) => { b.classList.toggle("act", k === picker.act); b.onclick = () => pick(b.dataset.id, !!b.dataset.new); });
+  icons();
+}
+function pick(id, isNew) {
+  const list = picker.mode === "char" ? S.roster : S.locs;
+  if (isNew) { const x = { id: nid(picker.mode === "char" ? "c" : "l"), name: picker.q, aliases: [], confirmed: true, node: false, eps: [3] }; list.push(x); id = x.id; }
+  const { mode, sid, i } = picker;
+  if (mode === "char") { scene(sid).els[i].cid = id; S.focus = { sid, i: i + 1, off: "end" }; }
+  else { scene(sid).locId = id; }
+  closePicker();
+  markDirty(); renderPaper();
+}
+function closePicker(refocus) {
+  if (!picker) return;
+  const p = picker; picker = null; $("#picker").hidden = true;
+  if (refocus && p.mode === "char") { S.focus = { sid: p.sid, i: p.i }; applyFocus(); }
+}
+document.addEventListener("mousedown", (e) => { if (picker && !e.target.closest("#picker") && !e.target.closest(".cpick, .locbtn")) closePicker(); });
+
+/* ================= 渲染：剧本 ================= */
+function elHtml(s, e, i, who) {
+  const ed = !S.locked;
+  const cls = ["el", "el-" + e.type];
+  if (S.hlChar && ((e.type === "dialogue" || e.type === "parenthetical") && who === S.hlChar || e.type === "character" && e.cid === S.hlChar)) cls.push("hl");
+  if (S.errorAt && S.errorAt.sid === s.id && S.errorAt.i === i) cls.push("err");
+  const attrs = `data-sid="${s.id}" data-i="${i}"`;
+  let note = "";
+  if (s.id === "s1" && e.id === "e6") note = ' data-note="2"';
+  if (s.id === "s1" && e.id === "e4") note = ' data-note="8"';
+  if (e.type === "character") {
+    const p = person(e.cid);
+    return `<div class="${cls.join(" ")}" ${attrs}${note}><button class="cpick ${p ? "" : "empty"}" data-act="pick" ${ed ? "" : "disabled"}>${p ? esc(p.name) : "选择人物"}</button><button class="ext ${e.ext ? "on" : ""}" data-act="ext" title="画外音 / 内心独白" ${ed ? "" : "disabled"}>${e.ext || "OS/VO"}</button>${p && !p.confirmed ? '<span class="unconf" title="待确认"></span>' : ""}</div>`;
+  }
+  if (e.type === "flashback_start" || e.type === "flashback_end") {
+    return `<div class="${cls.join(" ")}" ${attrs}><div class="marker" tabindex="0">${e.type === "flashback_start" ? "闪回" : "闪回结束"}</div></div>`;
+  }
+  return `<div class="${cls.join(" ")}" ${attrs}${note}><div class="txt" contenteditable="${ed ? "plaintext-only" : "false"}" data-ph="${PH[e.type]}" spellcheck="false">${esc(e.text)}</div></div>`;
+}
+function renderPaper() {
+  const p = $("#paper");
+  if (S.view === "empty") {
+    p.innerHTML = `<div class="empty"><div class="ic"><i data-lucide="file-text"></i></div><div style="font-weight:600">这一集还没有剧本</div><button class="btn btn-amber" onclick="toast('原型不模拟生成任务','info')"><i data-lucide="sparkles"></i>生成剧本</button></div>`;
+    icons(); return;
+  }
+  if (S.loading) { p.innerHTML = `<div style="padding-top:8px">${[60, 92, 80, 40, 70, 88, 55].map((w) => `<div class="sk" style="width:${w}%"></div>`).join("")}</div>`; return; }
+  p.innerHTML = S.scenes.map((s, si) => {
+    let who = null;
+    const ed = !S.locked;
+    const body = s.els.map((e, i) => { if (e.type === "character") who = e.cid; return elHtml(s, e, i, who); }).join("");
+    const l = loc(s.locId);
+    return `<div class="scene" data-scene="${s.id}">
+      <div class="sh" ${si === 0 ? 'data-note="3"' : ""}>
+        <span class="sno">${S.ep}-${si + 1}</span>
+        <select data-act="time" data-scene="${s.id}" ${ed ? "" : "disabled"}>${["", "日", "夜", "清晨", "黄昏"].map((t) => `<option value="${t}" ${s.time === t || (!s.time && !t) ? "selected" : ""}>${t || "时间"}</option>`).join("")}</select>
+        <select data-act="ie" data-scene="${s.id}" ${ed ? "" : "disabled"}>${[["", "内/外"], ["interior", "内"], ["exterior", "外"], ["interior_exterior", "内外"]].map(([v, t]) => `<option value="${v}" ${(s.ie || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+        <span class="dim">·</span>
+        <button class="locbtn ${l ? "" : "empty"}" data-act="loc" data-scene="${s.id}" ${ed ? "" : "disabled"}>${l ? esc(l.name) : "选择地点"}</button>
+        ${l && !l.confirmed ? '<span class="unconf" title="待确认"></span>' : ""}
+        <span class="sp"></span>
+        ${ed && S.scenes.length > 1 ? `<button class="ibtn del" data-act="delscene" data-scene="${s.id}" title="删除这一场"><i data-lucide="trash-2"></i></button>` : ""}
+      </div>${body}</div>`;
+  }).join("");
+  icons();
+  applyFocus();
+}
+
+/* 剧本区事件（委托） */
+const paper = $("#paper");
+paper.addEventListener("focusin", (e) => {
+  const el = e.target.closest(".el");
+  if (!el) return;
+  S.cur = { sid: el.dataset.sid, i: +el.dataset.i };
+  renderTools();
+});
+paper.addEventListener("input", (e) => {
+  const t = e.target.closest(".txt"); if (!t) return;
+  const el = t.closest(".el");
+  scene(el.dataset.sid).els[+el.dataset.i].text = t.textContent;
+  markDirty({ side: false }); renderSideStats();
+});
+paper.addEventListener("keydown", (e) => {
+  if (e.isComposing || S.locked) return;
+  const el = e.target.closest(".el"); if (!el) return;
+  const sid = el.dataset.sid, i = +el.dataset.i, sc = scene(sid), item = sc.els[i];
+  const txt = e.target.classList.contains("txt") ? e.target : null;
+  if (e.key === "Tab") { e.preventDefault(); return cycle(sid, i, e.shiftKey ? -1 : 1); }
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); return newScene(sid); }
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    if (item.type === "character") {
+      const next = sc.els[i + 1];
+      if (next && (next.type === "dialogue" || next.type === "parenthetical")) { S.focus = { sid, i: i + 1, off: "end" }; return applyFocus(); }
+      return insertAfter(sid, i, { id: nid(), type: "dialogue", text: "" });
+    }
+    if (!txt) return insertAfter(sid, i, { id: nid(), type: nextTypeAfter(sc, i, "action"), text: "" });
+    if (!item.text.trim()) return cycle(sid, i, 1);
+    const off = caretOffset(txt);
+    const after = item.text.slice(off);
+    item.text = item.text.slice(0, off);
+    const base = item.type === "parenthetical" ? "dialogue" : item.type === "dialogue" ? "action" : item.type;
+    return insertAfter(sid, i, { id: nid(), type: nextTypeAfter(sc, i, base), text: after });
+  }
+  if (e.key === "Backspace") {
+    if (!txt) { e.preventDefault(); return removeAt(sid, i); }
+    const sel = getSelection();
+    if (!sel.isCollapsed || caretOffset(txt) !== 0) return;
+    e.preventDefault();
+    if (!item.text) return removeAt(sid, i);
+    const prev = sc.els[i - 1];
+    if (prev && TEXTUAL.has(prev.type)) {
+      const why = canDelete(sc.els, i); if (why) return toast(why, "warn");
+      const off = prev.text.length;
+      prev.text += item.text; sc.els.splice(i, 1);
+      S.focus = { sid, i: i - 1, off }; markDirty(); renderPaper();
+    }
+  }
+});
+paper.addEventListener("paste", (e) => {
+  const t = e.target.closest(".txt"); if (!t || S.locked) return;
+  const text = e.clipboardData.getData("text/plain");
+  if (!/\n/.test(text.trim())) return; // 单行交给浏览器（plaintext-only）
+  e.preventDefault();
+  const el = t.closest(".el");
+  pasteMulti(el.dataset.sid, +el.dataset.i, text);
+});
+paper.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]"); if (!b || S.locked) return;
+  const act = b.dataset.act;
+  if (act === "pick") { const el = b.closest(".el"); openPicker("char", el.dataset.sid, +el.dataset.i, b); }
+  if (act === "ext") { const el = b.closest(".el"); const it = scene(el.dataset.sid).els[+el.dataset.i]; it.ext = { "": "OS", OS: "VO", VO: "" }[it.ext || ""]; markDirty({ side: false }); S.focus = { sid: el.dataset.sid, i: +el.dataset.i }; renderPaper(); }
+  if (act === "loc") openPicker("loc", b.dataset.scene, -1, b);
+  if (act === "delscene") {
+    const s = scene(b.dataset.scene);
+    if (!confirm(`删除第 ${sceneNo(s.id)} 场？`)) return;
+    S.scenes = S.scenes.filter((x) => x.id !== s.id);
+    S.cur = { sid: S.scenes[0].id, i: 0 };
+    markDirty(); renderPaper();
+  }
+});
+paper.addEventListener("change", (e) => {
+  const sel = e.target.closest("select[data-act]"); if (!sel) return;
+  const s = scene(sel.dataset.scene);
+  if (sel.dataset.act === "time") s.time = sel.value || null;
+  if (sel.dataset.act === "ie") s.ie = sel.value || null;
+  markDirty();
+});
+
+/* ================= 渲染：其他区域 ================= */
+function renderStatus() {
+  const map = { saved: ["", `已保存 · r${S.revision}`], dirty: ["dirty", "未保存"], saving: ["saving", "保存中"], error: ["bad", "保存失败"], conflict: ["bad", "有冲突"] };
+  const [c, t] = S.locked ? ["dirty", "只读"] : map[S.save];
+  const el = $("#save"); el.className = `save chrome pill ${c}`; el.innerHTML = `<span class="d"></span>${t}`;
+}
+function renderHead() {
+  if (S.view === "empty") { $("#whead").innerHTML = `<h2>第 ${S.ep} 集</h2>`; return; }
+  const st = stats();
+  $("#whead").innerHTML = `
+    <h2>第 ${S.ep} 集 · 码头夜雨</h2>
+    ${S.locked ? '<span class="tag t-mute"><i data-lucide="lock" style="width:12px;height:12px"></i>已锁定</span>' : ""}
+    <span style="flex:1"></span>
+    <span class="statpill chrome pill"><span><b>${st.scenes}</b> 场</span><span><b>${st.chars.toLocaleString()}</b> 字</span><span class="${st.sec > S.target ? "over" : ""}">约 <b class="${st.sec > S.target ? "over" : ""}">${st.sec}</b> 秒 / ${S.target} 秒</span></span>
+    ${S.noSource ? "" : `<button class="btn ${S.showSource ? "btn-amber" : "btn-soft"}" onclick="toggleSource()"><i data-lucide="book-open"></i>原著对照</button>`}`;
+  icons();
+}
+function renderBanners() {
+  const b = [];
+  if (S.view === "editor" && !S.loading) {
+    if (S.locked) b.push(`<div class="banner b-mute"><i data-lucide="lock"></i>已拆解资产，剧本已锁定</div>`);
+    if (S.save === "conflict") b.push(`<div class="banner b-rec"><i data-lucide="git-compare"></i><span style="flex:1">内容已在别处修改</span><button class="btn btn-soft" onclick="reloadRemote()">重新加载</button><button class="btn btn-soft" onclick="overwrite()">覆盖</button></div>`);
+    if (S.save === "error" && S.errorAt) b.push(`<div class="banner b-rec"><i data-lucide="circle-x"></i><span style="flex:1">剧本结构不合法：第 ${sceneNo(S.errorAt.sid)} 场第 ${S.errorAt.i + 1} 行，${esc(S.errorAt.msg)}</span><button class="btn btn-soft" onclick="jumpTo('${S.errorAt.sid}', ${S.errorAt.i})">定位</button></div>`);
+    if (S.warnings.length) b.push(`<div class="banner b-warn"><i data-lucide="triangle-alert"></i><span style="flex:1">有 ${S.warnings.length} 行未识别，已作为动作保存</span><button class="btn btn-soft" onclick="jumpWarn()">定位</button><button class="ibtn" title="知道了" onclick="S.warnings=[];renderBanners()"><i data-lucide="x"></i></button></div>`);
+  }
+  $("#banners").innerHTML = b.join("");
+  icons();
+}
+function jumpTo(sid, i) {
+  const node = $(`#paper [data-sid="${sid}"][data-i="${i}"]`);
+  node?.scrollIntoView({ block: "center", behavior: "smooth" });
+  S.focus = { sid, i, off: "end" }; setTimeout(applyFocus, 300);
+}
+function jumpWarn() {
+  const w = S.warnings[0], s = scene(w.sid); if (!s) return;
+  const i = s.els.findIndex((e) => e.id === w.id); if (i >= 0) jumpTo(w.sid, i);
+}
+function renderTools() {
+  const box = $("#tools");
+  if (S.view === "empty" || S.loading) { box.hidden = true; return; }
+  box.hidden = false;
+  const sc = scene(S.cur.sid) || S.scenes[0], i = Math.min(S.cur.i, sc.els.length - 1), e = sc.els[i];
+  const btn = (t) => {
+    const why = S.locked ? "剧本已锁定" : canType(sc.els, i, t);
+    return `<button data-t="${t}" aria-pressed="${e && e.type === t}" ${why ? `disabled title="${esc(why)}"` : `title="${TYPES[t]}"`}>${TYPES[t]}</button>`;
+  };
+  const dis = S.locked ? 'disabled title="剧本已锁定"' : "";
+  box.innerHTML = CYCLE.map(btn).join("") + `<span class="sep"></span><button data-m="flashback_start" ${dis}>闪回</button><button data-m="flashback_end" ${dis}>闪回结束</button><span class="sep"></span><button data-new="1" ${dis} title="新场次（⌘/Ctrl + Enter）"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:-2px"></i> 场次</button>`;
+  box.querySelectorAll("[data-t]").forEach((b) => b.onmousedown = (ev) => { ev.preventDefault(); setType(sc.id, i, b.dataset.t); });
+  box.querySelectorAll("[data-m]").forEach((b) => b.onmousedown = (ev) => { ev.preventDefault(); insertMarker(b.dataset.m); });
+  box.querySelector("[data-new]").onmousedown = (ev) => { ev.preventDefault(); newScene(sc.id); };
+  icons();
+}
+function renderRail() {
+  const eps = [[1, "码头旧案", "locked"], [2, "一封信", "locked"], [3, "码头夜雨", "ready"], [4, "老宅", "ready"], [5, "", "empty"], [6, "", "empty"]];
+  $("#rail").innerHTML = `<h4>分集</h4>` + eps.map(([no, nm, st]) => `
+    <button class="ep" aria-current="${S.ep === no}" onclick="gotoEp(${no})">
+      <span class="no">${String(no).padStart(2, "0")}</span>
+      <span class="nm">${nm ? esc(nm) : '<span class="dim">未生成</span>'}</span>
+      ${st === "locked" || (no === 3 && S.locked) ? '<i data-lucide="lock" style="width:13px;height:13px;color:var(--text-3)"></i>' : ""}
+    </button>`).join("") + `
+    <div class="demo">
+      <b><i data-lucide="flask-conical"></i>演示控制 · 不属于产品界面</b>
+      <label><input type="checkbox" ${S.remote ? "checked" : ""} onchange="S.remote=this.checked;toast(this.checked?'下次保存会 409':'已取消','info')"/>别处改了这一集</label>
+      <label><input type="checkbox" ${S.locked ? "checked" : ""} onchange="setLocked(this.checked)"/>这一集已拆解锁定</label>
+      <label><input type="checkbox" ${S.noSource ? "checked" : ""} onchange="S.noSource=this.checked;S.showSource=false;renderAll()"/>没有对应原文</label>
+      <button class="btn btn-soft" style="margin-top:6px;width:100%;justify-content:center" onclick="resetAll()">重置</button>
+      <div class="tip">触发 67043：插一个「闪回」不加「闪回结束」，或把某行切成「角色」后不选人。<br>粘贴多行剧本文本会走解析。</div>
+    </div>`;
+  icons();
+}
+function gotoEp(no) {
+  if (no === 3) { S.view = "editor"; S.ep = 3; renderAll(); return; }
+  if (no >= 5) { S.view = "empty"; S.ep = no; renderAll(); return; }
+  toast("原型只做了第 3 集", "info");
+}
+function setLocked(v) { S.locked = v; closePicker(); renderAll(); }
+function resetAll() { Object.assign(S, initial(), { ep: 3, view: "editor", locked: false, remote: false, noSource: false, showSource: false, revision: 12, save: "saved", dirty: false, errorAt: null, hlChar: null, warnings: [{ sid: "s3", id: "e27" }], cur: { sid: "s1", i: 0 } }); clearTimeout(saveT); renderAll(); toast("已重置", "info"); }
+
+/* 原著对照 */
+function toggleSource() { S.showSource = !S.showSource; renderSource(); renderHead(); }
+function renderSource() {
+  const on = S.showSource && !S.noSource && S.view === "editor";
+  $("#source").hidden = !on; $("#resizer").hidden = !on;
+  if (!on) return;
+  try { const w = localStorage.getItem("script-src-w"); if (w) $("#wbody").style.setProperty("--srcw", w); } catch (_) {}
+  $("#source").innerHTML = `<div class="row" style="margin-bottom:12px"><span class="tag t-mute">原文单元 12</span><span class="dim" style="font-size:12px">只读</span></div><h3>${esc(SOURCE.title)}</h3><div style="height:10px"></div>${SOURCE.paras.map((p) => `<p>${esc(p)}</p>`).join("")}`;
+}
+(() => {
+  let drag = false;
+  $("#resizer").addEventListener("mousedown", () => { drag = true; document.body.style.userSelect = "none"; });
+  window.addEventListener("mousemove", (e) => {
+    if (!drag) return;
+    const r = $("#wbody").getBoundingClientRect();
+    const pct = Math.min(60, Math.max(22, ((e.clientX - r.left) / r.width) * 100));
+    $("#wbody").style.setProperty("--srcw", pct + "%");
+  });
+  window.addEventListener("mouseup", () => {
+    if (!drag) return; drag = false; document.body.style.userSelect = "";
+    try { localStorage.setItem("script-src-w", $("#wbody").style.getPropertyValue("--srcw")); } catch (_) {}
+  });
+})();
+
+/* ================= 侧栏 ================= */
+$("#sideTabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tab]"); if (!b) return;
+  S.sideTab = b.dataset.tab;
+  $("#sideTabs").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+  renderSide();
+});
+function statsHtml() {
+  const st = stats(), over = st.sec > S.target;
+  return `<div class="card" id="statCard">
+    <div class="stats">
+      <div><div class="k">场次</div><div class="v">${st.scenes}</div></div>
+      <div><div class="k">字数</div><div class="v">${st.chars.toLocaleString()}</div></div>
+      <div><div class="k">对白占比</div><div class="v">${st.ratio}%</div></div>
+      <div><div class="k">预估 / 目标</div><div class="v" style="${over ? "color:var(--rec)" : ""}">${st.sec}<span class="dim" style="font-size:12px">/${S.target}秒</span></div></div>
+    </div>
+    <div class="bar ${over ? "over" : ""}"><i style="width:${Math.min(100, (st.sec / S.target) * 100)}%"></i></div>
+  </div>`;
+}
+function renderSideStats() { const c = $("#statCard"); if (c) c.outerHTML = statsHtml(); renderHead(); }
+function renderSide() {
+  const box = $("#sbody");
+  if (S.view === "empty" || S.loading) { box.innerHTML = S.loading ? `<div class="sk" style="width:90%"></div><div class="sk" style="width:70%"></div>` : ""; return; }
+  if (S.sideTab === "scenes") {
+    const ro = S.locked ? "disabled" : "";
+    box.innerHTML = statsHtml() + `<div data-note="5">` + S.scenes.map((s, si) => {
+      const l = loc(s.locId), open = S.openScene === s.id;
+      return `<div class="srow ${open ? "open" : ""}" draggable="${!S.locked}" data-sid="${s.id}">
+        <div class="h">
+          <i data-lucide="grip-vertical" class="grip"></i>
+          <span class="mono dim" style="font-size:12px">${S.ep}-${si + 1}</span>
+          <span class="tt">${s.title ? esc(s.title) : `<span class="dim">${l ? esc(l.name) : "未命名场次"}</span>`}</span>
+          <span class="cast">${castOf(s).map((id) => { const p = person(id); return `<span class="av ${p.node ? "node" : ""}" title="${esc(p.name)}">${esc(initialOf(p.name))}</span>`; }).join("")}</span>
+        </div>
+        ${!open && s.emotions.length ? `<div class="chips">${s.emotions.map((x) => `<span class="tag t-mute">${esc(x)}</span>`).join("")}</div>` : ""}
+        ${open ? `
+          <input class="field" data-f="title" data-sid="${s.id}" value="${esc(s.title)}" placeholder="短标题" ${ro} />
+          <textarea class="field" rows="2" data-f="summary" data-sid="${s.id}" placeholder="梗概" ${ro}>${esc(s.summary)}</textarea>
+          <div class="chips" style="margin-top:8px">${s.emotions.map((x, k) => `<span class="chipx">${esc(x)}${S.locked ? "" : `<button data-rmemo="${k}" data-sid="${s.id}" title="移除"><i data-lucide="x" style="width:11px;height:11px"></i></button>`}</span>`).join("")}${S.locked ? "" : `<input class="chipadd" data-addemo="${s.id}" placeholder="+ 情绪" />`}</div>` : ""}
+      </div>`;
+    }).join("") + `</div>`;
+    bindSceneRows();
+  } else {
+    const prow = (x, kind) => {
+      const n = kind === "char" ? linesOf(x.id) : S.scenes.filter((s) => s.locId === x.id).length;
+      const eps = x.eps.length ? `第 ${x.eps.join("、")} 集` : "暂未出现";
+      return `<div class="prow ${S.hlChar === x.id ? "on" : ""}" data-pid="${x.id}" data-kind="${kind}">
+        <span class="av ${x.node ? "node" : ""}">${esc(initialOf(x.name))}</span>
+        <div style="min-width:0">
+          <div class="row" style="gap:6px"><span class="nm">${esc(x.name)}</span>${x.confirmed ? "" : '<span class="tag t-info">待确认</span>'}${x.node ? '<span class="tag t-amber">已关联资产</span>' : ""}</div>
+          <div class="meta">${kind === "char" ? `本集 ${n} 句` : `本集 ${n} 场`} · ${eps}${x.aliases.length ? ` · 别名 ${esc(x.aliases.join("、"))}` : ""}</div>
+        </div>
+        <div class="acts">
+          ${x.confirmed ? "" : `<button class="ibtn" data-pact="ok" title="确认"><i data-lucide="check"></i></button>`}
+          <button class="ibtn" data-pact="rename" title="改名"><i data-lucide="pencil"></i></button>
+          <button class="ibtn" data-pact="del" title="删除"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>`;
+    };
+    box.innerHTML = `<div data-note="6"><div class="sec-t">人物 ${S.roster.length}</div>${S.roster.map((x) => prow(x, "char")).join("")}</div><div class="sec-t">地点 ${S.locs.length}</div>${S.locs.map((x) => prow(x, "loc")).join("")}`;
+    bindPeople();
+  }
+  icons();
+}
+function bindSceneRows() {
+  let dragSid = null;
+  $("#sbody").querySelectorAll(".srow").forEach((row) => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("input, textarea, button")) return;
+      S.openScene = S.openScene === row.dataset.sid ? null : row.dataset.sid;
+      renderSide();
+      $(`#paper .scene[data-scene="${row.dataset.sid}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    row.addEventListener("dragstart", () => { dragSid = row.dataset.sid; row.classList.add("dragging"); });
+    row.addEventListener("dragend", () => row.classList.remove("dragging"));
+    row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("over"); });
+    row.addEventListener("dragleave", () => row.classList.remove("over"));
+    row.addEventListener("drop", (e) => {
+      e.preventDefault(); row.classList.remove("over");
+      if (!dragSid || dragSid === row.dataset.sid) return;
+      const from = S.scenes.findIndex((s) => s.id === dragSid);
+      const [moved] = S.scenes.splice(from, 1);
+      S.scenes.splice(S.scenes.findIndex((s) => s.id === row.dataset.sid), 0, moved);
+      markDirty(); renderPaper();
+      toast("场次顺序已调整，场号随之重排", "info");
+    });
+  });
+  $("#sbody").querySelectorAll("[data-f]").forEach((f) => f.addEventListener("input", () => {
+    scene(f.dataset.sid)[f.dataset.f] = f.value;
+    markDirty({ side: false });
+  }));
+  $("#sbody").querySelectorAll("[data-rmemo]").forEach((b) => b.addEventListener("click", () => {
+    scene(b.dataset.sid).emotions.splice(+b.dataset.rmemo, 1); markDirty();
+  }));
+  $("#sbody").querySelectorAll("[data-addemo]").forEach((inp) => inp.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.isComposing || !inp.value.trim()) return;
+    const s = scene(inp.dataset.addemo);
+    if (!s.emotions.includes(inp.value.trim())) s.emotions.push(inp.value.trim());
+    markDirty();
+    setTimeout(() => $(`[data-addemo="${s.id}"]`)?.focus(), 0);
+  }));
+}
+function bindPeople() {
+  $("#sbody").querySelectorAll(".prow").forEach((row) => row.addEventListener("click", (e) => {
+    const list = row.dataset.kind === "char" ? S.roster : S.locs;
+    const x = list.find((y) => y.id === row.dataset.pid);
+    const act = e.target.closest("[data-pact]")?.dataset.pact;
+    if (act === "ok") { x.confirmed = true; renderSide(); renderPaper(); return toast(`已确认「${x.name}」`); }
+    if (act === "rename") return renameEntry(list, x, row.dataset.kind);
+    if (act === "del") return deleteEntry(list, x, row.dataset.kind);
+    if (row.dataset.kind === "char") { S.hlChar = S.hlChar === x.id ? null : x.id; renderSide(); renderPaper(); }
+  }));
+}
+function renameEntry(list, x, kind) {
+  const name = (prompt(`把「${x.name}」改名为`, x.name) || "").trim();
+  if (!name || name === x.name) return;
+  if (list.some((y) => y !== x && (y.name === name || y.aliases.includes(name)))) return toast(`67045 名字已存在：${name}`, "bad");
+  const old = x.name;
+  x.aliases = [...new Set([old, ...x.aliases.filter((a) => a !== name)])];
+  x.name = name; x.confirmed = true;
+  renderPaper(); renderSide();
+  const locked = x.eps.filter((n) => LOCKED_EPS.includes(n));
+  toast(locked.length ? `已改名，「${old}」进了别名。第 ${locked.join("、")} 集已锁定，剧本文本不变` : `已改名，「${old}」进了别名`, "ok");
+}
+function deleteEntry(list, x, kind) {
+  const here = kind === "char" ? S.scenes.some((s) => s.els.some((e) => e.cid === x.id) || false) : S.scenes.some((s) => s.locId === x.id);
+  const refs = [...new Set([...x.eps.filter((n) => n !== 3), ...(here ? [3] : [])])].sort();
+  if (refs.length) return toast(`67044 仍被第 ${refs.join("、")} 集引用，先在这些集里改掉`, "bad");
+  if (!confirm(`删除「${x.name}」？`)) return;
+  list.splice(list.indexOf(x), 1);
+  renderSide();
+  toast(`已删除「${x.name}」`);
+}
+
+function renderAll() {
+  renderRail(); renderStatus(); renderHead(); renderBanners(); renderSource(); renderPaper(); renderSide(); renderTools();
+}
+
+/* 载入：模拟 GET …/script（整部剧首次转换在这里完成） */
+renderAll();
+setTimeout(() => { S.loading = false; renderAll(); }, 700);
+</script>
+</body>
+</html>

@@ -2,6 +2,8 @@ import type {
   MyPrompt,
   PromptChoice,
   PromptPage,
+  PromptPreset,
+  PromptPresetGroup,
   PromptStep,
   PromptTemplate,
 } from "@/api/drama/type";
@@ -39,10 +41,25 @@ export function adaptLockedReason(kind: "script" | "novel" | null): string | nul
 /** 两个提示词选择是不是同一个（来源 + id / 技能名） */
 export function sameChoice(a: PromptChoice, b: PromptChoice): boolean {
   if (a.source !== b.source) return false;
+  if (a.source === "preset") return a.id === b.id && a.revision === b.revision;
   if (a.source === "mine") return a.id === b.id;
   if (a.source === "skill") return a.skill === b.skill;
   return true;
 }
+
+export const pickPreset = ({ id, revision }: PromptPreset): PromptChoice => ({
+  source: "preset",
+  id,
+  revision,
+});
+
+export function defaultPromptChoice(group?: PromptPresetGroup): PromptChoice {
+  const item = group?.items.find(({ id }) => id === group.default_id);
+  return item ? pickPreset(item) : { source: "builtin" };
+}
+
+export const isCurrentPreset = (choice: PromptChoice, group?: PromptPresetGroup): boolean =>
+  choice.source === "preset" && !!group?.items.some((item) => sameChoice(choice, pickPreset(item)));
 
 /**
  * 当前选择在下拉胶囊上显示的名字；来源（我的提示词 / 技能）已不存在时标「已删除 / 已停用」并报 missing

@@ -3,13 +3,13 @@ import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { GLASS_OVERLAY, GLASS_POPUP } from "@/components/admin-ui/glass";
+import { ADMIN_POPUP, GLASS_OVERLAY } from "@/components/admin-ui/glass";
 import { cn } from "@/lib/utils";
 
 /**
  * 后台的侧边抽屉（使用记录、操作审计的详情）：API 与 ui/sheet 一致，底层同样是 Base UI 的 Dialog。
  * 单独维护是为了后台的抽屉不受画布侧调整的影响：这里右侧默认更宽（560px），小屏占满；
- * 外观是「清透」浮层，左右抽屉离屏幕边缘留 8px、四角大圆角，像一张浮起来的面板。
+ * 使用后台共用的实色面板，左右抽屉离屏幕边缘留 8px 并采用大圆角。
  * <Sheet open onOpenChange><SheetContent><SheetHeader><SheetTitle /><SheetDescription /></SheetHeader>…</SheetContent></Sheet>
  */
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
@@ -59,7 +59,7 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          GLASS_POPUP,
+          ADMIN_POPUP,
           "text-popover-foreground fixed z-50 flex flex-col gap-4 overflow-hidden text-sm transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0",
           "data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem]",
           "data-[side=left]:inset-y-2 data-[side=left]:left-2 data-[side=left]:w-[calc(100%-1rem)] data-[side=left]:rounded-3xl data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=left]:sm:max-w-[560px]",

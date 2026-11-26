@@ -18,7 +18,7 @@ func (dramaQueueFailure) EnqueueDramaTx(context.Context, *sql.Tx, uint64, uint64
 }
 
 func TestDramaRepository_CreateRollbackOnQueueFailure(t *testing.T) {
-	db := isolatedDB(t, &model.CanvasProject{}, &model.DramaProject{}, &model.DramaEpisode{}, &model.DramaJob{})
+	db := isolatedDB(t, &model.CanvasProject{}, &model.DramaProject{}, &model.DramaEpisode{}, &model.DramaScriptCharacter{}, &model.DramaScriptLocation{}, &model.DramaScene{}, &model.DramaScriptElement{}, &model.DramaJob{})
 	repo := repository.NewDramaRepository(db)
 	repo.SetEnqueuer(dramaQueueFailure{})
 	ctx := context.Background()
@@ -44,7 +44,7 @@ func TestDramaRepository_CreateRollbackOnQueueFailure(t *testing.T) {
 }
 
 func TestDramaRepository_OwnershipRevisionAndCascade(t *testing.T) {
-	db := isolatedDB(t, &model.CanvasProject{}, &model.DramaProject{}, &model.DramaEpisode{}, &model.DramaJob{})
+	db := isolatedDB(t, &model.CanvasProject{}, &model.DramaProject{}, &model.DramaEpisode{}, &model.DramaScriptCharacter{}, &model.DramaScriptLocation{}, &model.DramaScene{}, &model.DramaScriptElement{}, &model.DramaJob{})
 	repo := repository.NewDramaRepository(db)
 	ctx := context.Background()
 	p := &model.DramaProject{UserID: 1, Title: "甲剧", SourceText: "原文", StyleKey: "real_city_film", Revision: 1}

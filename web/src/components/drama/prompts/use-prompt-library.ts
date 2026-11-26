@@ -5,10 +5,17 @@ import {
   deleteMyPrompt,
   listDramaSkills,
   listMyPrompts,
+  listPromptPresets,
   listPromptTemplates,
   updateMyPrompt,
 } from "@/api/drama";
-import type { DramaSkill, MyPrompt, PromptStep, PromptTemplate } from "@/api/drama/type";
+import type {
+  DramaSkill,
+  MyPrompt,
+  PromptPresetGroup,
+  PromptStep,
+  PromptTemplate,
+} from "@/api/drama/type";
 import { SKILL_STEPS } from "@/utils/drama/prompts";
 import type { PromptDraft } from "@/utils/drama/prompts";
 
@@ -16,8 +23,12 @@ import type { PromptDraft } from "@/utils/drama/prompts";
 export interface PromptLibrary {
   /** 是否已加载完（成功或失败） */
   ready: boolean;
+  presets: Partial<Record<PromptStep, PromptPresetGroup>>;
+  presetStatus: "loading" | "ready" | "error";
+  refreshPresets: () => void;
   /** 各环节的内置正文 */
   templates: PromptTemplate[];
+  templateStatus: "loading" | "ready" | "error";
   /** 各环节的我的提示词，按更新时间倒序 */
   mine: Record<PromptStep, MyPrompt[]>;
   /** 各环节可用的技能 */
@@ -50,21 +61,57 @@ const emptyByStep = <T>(): Record<PromptStep, T[]> => ({
  */
 export function usePromptLibrary(): PromptLibrary {
   const [ready, setReady] = useState(false);
+  const [presets, setPresets] = useState<PromptLibrary["presets"]>({});
+  const [presetStatus, setPresetStatus] = useState<PromptLibrary["presetStatus"]>("loading");
+  const [request, setRequest] = useState(0);
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
+  const [templateStatus, setTemplateStatus] = useState<PromptLibrary["templateStatus"]>("loading");
   const [mine, setMine] = useState<Record<PromptStep, MyPrompt[]>>(emptyByStep);
   const [skills, setSkills] = useState<Record<PromptStep, DramaSkill[]>>(emptyByStep);
   const alive = useRef(true);
 
   useEffect(() => {
+    let current = true;
+    void listPromptPresets().then(
+      (groups) => {
+        if (!current) return;
+        setPresets(Object.fromEntries(groups.map((group) => [group.step, group])));
+        setPresetStatus("ready");
+      },
+      () => {
+        if (current) setPresetStatus("error");
+      },
+    );
+    void listPromptTemplates().then(
+      (items) => {
+        if (!current) return;
+        setTemplates(items);
+        setTemplateStatus("ready");
+      },
+      () => {
+        if (current) setTemplateStatus("error");
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [request]);
+
+  const refreshPresets = useCallback(() => {
+    setPresetStatus("loading");
+    setTemplateStatus("loading");
+    setRequest((previous) => previous + 1);
+  }, []);
+
+  useEffect(() => {
     alive.current = true;
+    let current = true;
     void (async () => {
-      const [tpl, mineAll, ...skillLists] = await Promise.allSettled([
-        listPromptTemplates(),
+      const [mineAll, ...skillLists] = await Promise.allSettled([
         listMyPrompts(),
         ...SKILL_STEPS.map((item) => listDramaSkills(item.key)),
       ]);
-      if (!alive.current) return;
-      if (tpl.status === "fulfilled") setTemplates(tpl.value);
+      if (!current) return;
       if (mineAll.status === "fulfilled") {
         const grouped = emptyByStep<MyPrompt>();
         for (const item of mineAll.value) grouped[item.step]?.push(item);
@@ -78,6 +125,7 @@ export function usePromptLibrary(): PromptLibrary {
       setReady(true);
     })();
     return () => {
+      current = false;
       alive.current = false;
     };
   }, []);
@@ -106,5 +154,16 @@ export function usePromptLibrary(): PromptLibrary {
     }
   }, []);
 
-  return { ready, templates, mine, skills, save, remove };
+  return {
+    ready,
+    templates,
+    templateStatus,
+    mine,
+    skills,
+    presets,
+    presetStatus,
+    refreshPresets,
+    save,
+    remove,
+  };
 }

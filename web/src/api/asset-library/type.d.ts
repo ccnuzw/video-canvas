@@ -26,6 +26,8 @@ export interface FolderDto {
 
 /** 后端资产库条目（snake_case） */
 export interface BackendLibraryItemDto {
+  /** 库内名称，空串或缺省时显示原文件名 */
+  name?: string;
   /** 归属 ID（十六进制串） */
   id: string;
   /** 素材 */
@@ -38,6 +40,8 @@ export interface BackendLibraryItemDto {
 
 /** 前端使用的资产库条目：一个素材在资产库里的归属 */
 export interface LibraryItemDto {
+  /** 库内名称，空串或缺省时显示原文件名 */
+  name?: string;
   /** 归属 ID（十六进制串），移动、移出都用它 */
   id: string;
   /** 素材 */

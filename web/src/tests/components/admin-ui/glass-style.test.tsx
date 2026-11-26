@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { DataPanel } from "@/components/admin-ui/data-panel";
+import { FilterSelect } from "@/components/admin-ui/filter-select";
 import { ListPanel } from "@/components/admin-ui/list-panel";
 import { Segmented } from "@/components/admin-ui/segmented";
 import { StatCard } from "@/components/admin-ui/stat-card";
@@ -26,6 +27,17 @@ describe("后台面板统一用清透外观", () => {
     const html = renderToStaticMarkup(<Segmented />);
     expect(html).toContain("bg-chrome");
     expect(html).toContain("rounded-full");
+  });
+
+  test("后台分段选择和表格筛选使用同一档正文字号", () => {
+    const segmented = renderToStaticMarkup(<Segmented />);
+    const filter = renderToStaticMarkup(
+      <FilterSelect value="" options={[["", "全部状态"]]} onValueChange={() => {}} />,
+    );
+    for (const html of [segmented, filter]) {
+      expect(html).toMatch(/\btext-sm\b/);
+      expect(html).not.toMatch(/\btext-xs\b/);
+    }
   });
 });
 

@@ -20,7 +20,7 @@ import { InfoCard } from "./info-card";
 import { ScopeCard } from "./scope-card";
 import { useSkillDetail, type SkillDetailApi } from "./use-skill-detail";
 
-/** 弹窗里的区块外观：弹窗本身已是清透浮层，里面用描边分区，不再叠一层模糊 */
+/** 用描边区分弹窗内的内容区块。 */
 const SKILL_PANEL = "ring-chrome-border rounded-2xl ring-1";
 
 /** 内置技能没有包：用详情里的正文拼成只有一个 SKILL.md 的清单，复用文件工作台 */

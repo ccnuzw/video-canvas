@@ -967,6 +967,7 @@ export const CanvasEditor = memo(function CanvasEditor({
     readOnly,
     rename: onRename,
     saveStatus,
+    getVersion,
     saveNow: flush,
     nodes,
     tool,

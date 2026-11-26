@@ -86,6 +86,15 @@ function sources(dir: string): string[] {
 }
 
 describe("弹窗写法守卫", () => {
+  test("管理后台使用同一套弹窗、确认框和抽屉外观", () => {
+    const admin = join(import.meta.dir, "../../pages/admin");
+    const plainOverlay = /from\s+["']@\/components\/ui\/(dialog|alert-dialog|sheet)["']/;
+    const offenders = sources(admin).filter((path) =>
+      plainOverlay.test(readFileSync(path, "utf8")),
+    );
+    expect(offenders.map((path) => path.split("/src/")[1])).toEqual([]);
+  });
+
   test("弹窗里不写 {open && <内容/>}：关闭时内容被直接卸载，退出动画放不出来，改用 DialogSession", () => {
     const gated = /\{\s*open\s*&&\s*[<(]/;
     const offenders = sources(join(import.meta.dir, "../..")).filter((path) => {

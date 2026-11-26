@@ -340,6 +340,19 @@ func TestAssetLibraryRepository_List(t *testing.T) {
 		t.Fatalf("游标后期望 %v，实际 %v", want, got)
 	}
 
+	if err := ir.SetName(ctx, other, rootImg, "别人的修改"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("期望 ErrNotFound，实际 %v", err)
+	}
+	if err := ir.SetName(ctx, me, rootImg, "我的主图 100%"); err != nil {
+		t.Fatal(err)
+	}
+	if got := list(LibraryItemFilter{Scope: LibraryScopeAll, Q: "100%"}); !slices.Equal(got, []uint64{rootImg}) {
+		t.Fatalf("新名称应支持搜索：%v", got)
+	}
+	if got := list(LibraryItemFilter{Scope: LibraryScopeAll, Q: "CAT"}); !slices.Equal(got, []uint64{inFolder}) {
+		t.Fatalf("其他旧条目仍支持按原始文件名搜索：%v", got)
+	}
+
 	// 移动与移出：别人的条目一律 ErrNotFound
 	if err := ir.SetFolder(ctx, other, rootImg, nil); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("期望 ErrNotFound，实际 %v", err)

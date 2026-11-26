@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { GLASS_OVERLAY, GLASS_POPUP } from "@/components/admin-ui/glass";
+import { ADMIN_POPUP, GLASS_OVERLAY, GLASS_POPUP } from "@/components/admin-ui/glass";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,7 @@ import { XIcon } from "lucide-react";
 
 /**
  * 后台的弹窗：API 与 ui/dialog 一致，页面只换导入路径。
- * 单独维护（不改共享的 ui/dialog）是为了后台换成「清透」外观时不影响画布侧：
- * 半透明 + 强模糊的大圆角面板，底部操作区不再是灰色色带，只用一条发丝线隔开。
+ * 使用后台共用的实色面板、大圆角和分隔线。
  * <Dialog><DialogContent><DialogHeader><DialogTitle /></DialogHeader>…<DialogFooter /></DialogContent></Dialog>
  */
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
@@ -45,9 +44,12 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
 function DialogContent({
   className,
   children,
+  surface = "solid",
   showCloseButton = true,
   ...props
 }: DialogPrimitive.Popup.Props & {
+  /** 面板外观，后台默认用实色。 */
+  surface?: "solid" | "glass";
   showCloseButton?: boolean;
 }) {
   return (
@@ -56,7 +58,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          GLASS_POPUP,
+          surface === "glass" ? GLASS_POPUP : ADMIN_POPUP,
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 rounded-3xl p-6 text-sm text-popover-foreground duration-200 data-closed:duration-150 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className,
         )}

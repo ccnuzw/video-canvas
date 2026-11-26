@@ -10,7 +10,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/components/admin-ui/dialog";
 import { LoadFailed } from "@/components/admin-ui/load-failed";
 import { Notice } from "@/components/admin-ui/notice";
 import { PageHeader, PageHeaderHeading, PageHeaderTitle } from "@/components/admin-ui/page-header";
@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useRetained } from "@/hooks/use-retained";
 import { formatCanvasTime } from "@/utils/home/home";
 import { bindingLabel, fallbackSteps } from "@/utils/admin/steps";
 
@@ -159,17 +160,18 @@ function FormatterDialog({
   formatter: FormatterInfo | null;
   onClose: () => void;
 }) {
+  const shown = useRetained(formatter);
   return (
     <Dialog open={!!formatter} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>格式化器预览 · {formatter?.key}</DialogTitle>
+          <DialogTitle>格式化器预览 · {shown?.key}</DialogTitle>
           <DialogDescription>
             同一份脚本，经代码拼装成视频模型的提示词。它不读技能，换技能不影响这里；改写法需要改代码发版。
           </DialogDescription>
         </DialogHeader>
         <pre className="bg-muted/60 max-h-[55vh] overflow-auto rounded-xl p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-          {formatter?.sample}
+          {shown?.sample}
         </pre>
         <DialogFooter>
           <Button size="sm" onClick={onClose}>
@@ -191,6 +193,7 @@ export default function AgentStepsPage() {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [formatter, setFormatter] = useState<FormatterInfo | null>(null);
   const fallback = fallbackSteps(steps);
+  const shownStepKey = useRetained(openKey);
 
   return (
     <DataPage>
@@ -280,7 +283,7 @@ export default function AgentStepsPage() {
 
       <StepSheet
         stepKey={openKey}
-        summary={steps.find((step) => step.key === openKey)}
+        summary={steps.find((step) => step.key === shownStepKey)}
         onClose={() => setOpenKey(null)}
         onBound={() => void reload()}
       />

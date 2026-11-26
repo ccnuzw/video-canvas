@@ -148,6 +148,10 @@ func (t *dramaCanvasTx) DeleteEpisode(ctx context.Context, userID, dramaID uint6
 	if err := db.Unscoped().Delete(&model.DramaEpisode{}, ep.ID).Error; err != nil {
 		return err
 	}
+	// 这一集的场次和元素是硬数据，随集一起删
+	if err := (&DramaRepository{db: t.db}).DeleteEpisodeScript(ctx, userID, ep.ID); err != nil {
+		return err
+	}
 	later := db.Model(&model.DramaEpisode{}).Where("user_id = ? AND drama_id = ? AND no > ?", userID, dramaID, no)
 	if err := later.Update("no", gorm.Expr("-no")).Error; err != nil {
 		return err

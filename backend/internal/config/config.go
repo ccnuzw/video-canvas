@@ -19,7 +19,13 @@ type Config struct {
 	AI       AI       `mapstructure:"ai"`
 	Storage  Storage  `mapstructure:"storage"`
 	Agent    Agent    `mapstructure:"agent"`
+	Drama    Drama    `mapstructure:"drama"`
 	Update   Update   `mapstructure:"update"`
+}
+
+// Drama 配置短剧新功能入口；关闭运营目录不影响已保存的提示词快照。
+type Drama struct {
+	PromptPresetsEnabled bool `mapstructure:"prompt_presets_enabled"`
 }
 
 // DefaultUpdateRepo 是检查新版本用的 GitHub 仓库。
@@ -253,6 +259,7 @@ func Load(path string) (*Config, error) {
 	v.SetEnvPrefix("APP")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+	v.SetDefault("drama.prompt_presets_enabled", true)
 	v.SetDefault("agent.web_enabled", true) // 联网工具默认开启
 	v.SetDefault("ai.queue.max_concurrency", 64)
 	v.SetDefault("update.check_enabled", true)

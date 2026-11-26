@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { useState } from "react";
 
 import type { Drama, PromptSettings, UpdateDramaInput } from "@/api/drama/type";
 import type { PromptLibrary } from "@/components/drama/prompts/use-prompt-library";
@@ -89,6 +90,10 @@ const settings = (patch: Partial<PromptSettings> = {}): PromptSettings => ({
 
 const library: PromptLibrary = {
   ready: true,
+  presets: {},
+  presetStatus: "ready",
+  templateStatus: "ready",
+  refreshPresets: () => {},
   templates: [],
   mine: {
     plan: [],
@@ -264,6 +269,79 @@ describe("项目设置：弹窗内容", () => {
     await m.unmount();
   });
 
+  test("运营目录关闭时，已保存的模板不误报下架", async () => {
+    const drama = dramaOf({
+      promptSettings: settings({
+        video: { source: "preset", id: "video", label: "已存视频模板", version: 2 },
+      }),
+    });
+    const mounted = await mountBody(drama, []);
+    expect(chip(mounted.container, "视频提示词").textContent).toBe("已存视频模板");
+    await mounted.unmount();
+  });
+
+  test("项目保存遇到模板版本冲突后阻止重复提交，并且可以保留旧快照", async () => {
+    const { ApiError } = await import("@/utils/requests/request");
+    const template = { id: "video", name: "运营版", description: "" };
+    const patches: Omit<UpdateDramaInput, "revision">[] = [];
+    const drama = dramaOf({
+      promptSettings: settings({
+        video: { source: "preset", id: "old", label: "已存视频模板", version: 1, missing: true },
+      }),
+    });
+    let closeCount = 0;
+    const Example = () => {
+      const [revision, setRevision] = useState(1);
+      return (
+        <DramaWorkspaceContext.Provider
+          value={
+            {
+              drama,
+              patch: async (fields: Omit<UpdateDramaInput, "revision">) => {
+                patches.push(fields);
+                throw new ApiError("模板已更新", 67031, 409);
+              },
+            } as never
+          }
+        >
+          <Dialog open>
+            <ProjectSettingsBody
+              library={{
+                ...library,
+                presets: {
+                  video: {
+                    step: "video",
+                    default_id: template.id,
+                    items: [{ ...template, revision }],
+                  },
+                },
+                refreshPresets: () => setRevision(2),
+              }}
+              onClose={() => closeCount++}
+            />
+          </Dialog>
+        </DramaWorkspaceContext.Provider>
+      );
+    };
+    const mounted = await dom.mount(<Example />);
+    const videoChip = () => chip(mounted.container, "视频提示词");
+    const done = () => byText(mounted.container, "完成") as HTMLButtonElement;
+    await dom.click(videoChip());
+    await dom.click(byText(dom.win.document.body, "运营版 · 默认"));
+    await dom.click(done());
+    expect(done().disabled).toBe(true);
+    expect(mounted.container.textContent).toContain("视频提示词的内置提示词已变更，请重新选择");
+    expect(patches).toEqual([
+      { prompts: { video: { source: "preset", id: "video", revision: 1 } } },
+    ]);
+    await dom.click(videoChip());
+    await dom.click(byText(dom.win.document.body, "保留已保存的提示词"));
+    await dom.click(done());
+    expect(patches).toHaveLength(1);
+    expect(closeCount).toBe(1);
+    await mounted.unmount();
+  });
+
   test("故事板提示词一行：默认内置，下拉里有我的提示词和新建，没有技能；选了完成时只保存这一项的变化", async () => {
     const patches: Omit<UpdateDramaInput, "revision">[] = [];
     const m = await mountBody(dramaOf(), patches);
@@ -273,6 +351,7 @@ describe("项目设置：弹窗内容", () => {
     const buttons = [...dom.win.document.body.querySelectorAll("button")];
     expect(buttons.some((b) => (b.textContent ?? "").includes("新建"))).toBe(true);
     expect(buttons.some((b) => (b.textContent ?? "").includes("镜头语气"))).toBe(false);
+    expect(buttons.some((b) => (b.textContent ?? "").includes("暂无适用技能"))).toBe(false);
     await dom.click(buttons.find((b) => (b.textContent ?? "").includes("水彩分镜")));
     expect(chip(m.container, "故事板提示词").textContent).toBe("我的 · 水彩分镜");
     await dom.click(byText(m.container, "完成"));
@@ -282,7 +361,7 @@ describe("项目设置：弹窗内容", () => {
     await m.unmount();
   });
 
-  test("改了视频提示词的技能，点「完成」带上六个环节的选择一起保存", async () => {
+  test("改了视频提示词的技能，点「完成」只保存该环节", async () => {
     const patches: Omit<UpdateDramaInput, "revision">[] = [];
     let closed = 0;
     const m = await mountBody(dramaOf(), patches, () => (closed += 1));
@@ -298,12 +377,7 @@ describe("项目设置：弹窗内容", () => {
     expect(patches).toEqual([
       {
         prompts: {
-          plan: { source: "builtin" },
-          scripts: { source: "builtin" },
-          assets: { source: "skill", skill: "cross" },
-          asset_prompts: { source: "mine", id: "1f" },
           video: { source: "skill", skill: "tone" },
-          board: { source: "builtin" },
         },
       },
     ]);

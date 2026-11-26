@@ -214,6 +214,18 @@ func (r *AssetLibraryRepository) SetFolder(ctx context.Context, userID, id uint6
 	return nil
 }
 
+// SetName 更新该用户库条目的名称，不存在或不属于该用户返回 ErrNotFound。
+func (r *AssetLibraryRepository) SetName(ctx context.Context, userID, id uint64, name string) error {
+	res := r.db.WithContext(ctx).Model(&model.AssetLibraryItem{}).Where("id = ? AND user_id = ?", id, userID).UpdateColumn("name", name)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Delete 移出资产库（只删归属行，不动 assets），不存在或不属于该用户返回 ErrNotFound。
 func (r *AssetLibraryRepository) Delete(ctx context.Context, userID, id uint64) error {
 	res := r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Delete(&model.AssetLibraryItem{})
@@ -244,7 +256,7 @@ func (r *AssetLibraryRepository) List(ctx context.Context, userID uint64, f Libr
 		db = db.Where("a.kind = ?", f.Kind)
 	}
 	if f.Q != "" {
-		db = db.Where("a.file_name ILIKE ?", "%"+escapeLike(f.Q)+"%")
+		db = db.Where("COALESCE(NULLIF(i.name, ''), a.file_name) ILIKE ?", "%"+escapeLike(f.Q)+"%")
 	}
 	if f.After != nil {
 		db = db.Where("(i.created_at, i.id) < (?, ?)", f.After.At, f.After.ID)

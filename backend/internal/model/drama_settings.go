@@ -69,28 +69,31 @@ func (DramaPromptSplit) TableName() string { return "drama_prompt_splits" }
 
 // DramaPromptChoice 是四环节之一的来源选择。
 type DramaPromptChoice struct {
-	Source string     `json:"source" binding:"required,oneof=builtin mine skill"`
-	ID     idcodec.ID `json:"id"`
-	Skill  string     `json:"skill"`
+	Source   string     `json:"source" binding:"required,oneof=builtin mine skill preset"`
+	ID       idcodec.ID `json:"id"`
+	Skill    string     `json:"skill"`
+	Revision int        `json:"revision"`
 }
 
 // DramaPromptSetting 是项目内持久正文快照；对外视图不包含正文。
 type DramaPromptSetting struct {
-	Source  string            `json:"source"`
-	ID      idcodec.ID        `json:"id,omitempty"`
-	Skill   string            `json:"skill,omitempty"`
-	Label   string            `json:"label"`
-	Version int               `json:"version,omitempty"`
-	Bodies  map[string]string `json:"bodies,omitempty"`
-	Missing bool              `json:"missing"`
+	Source          string            `json:"source"`
+	ID              idcodec.ID        `json:"id,omitempty"`
+	Skill           string            `json:"skill,omitempty"`
+	Label           string            `json:"label"`
+	Version         int               `json:"version,omitempty"`
+	Bodies          map[string]string `json:"bodies,omitempty"`
+	Missing         bool              `json:"missing"`
+	UpdateAvailable bool              `json:"update_available,omitempty"`
 }
 
 // DramaSourceEstimateReq 在草稿基础上重算来源类型、范围与模型报价。
 type DramaSourceEstimateReq struct {
-	SourceKind     string `json:"source_kind" binding:"required,oneof=script novel"`
-	RangeEnd       int    `json:"range_end" binding:"min=0"`
-	EpisodeSeconds int    `json:"episode_seconds" binding:"omitempty,min=30,max=180"`
-	TextModel      string `json:"text_model" binding:"max=128"`
+	SourceKind     string             `json:"source_kind" binding:"required,oneof=script novel"`
+	RangeEnd       int                `json:"range_end" binding:"min=0"`
+	EpisodeSeconds int                `json:"episode_seconds" binding:"omitempty,min=30,max=180"`
+	TextModel      string             `json:"text_model" binding:"max=128"`
+	PlanPrompt     *DramaPromptChoice `json:"plan_prompt,omitempty"`
 }
 
 // DramaSourceEstimate 是自动研读与规划的集数、积分、分钟预估。

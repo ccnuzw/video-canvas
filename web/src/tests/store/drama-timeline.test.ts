@@ -74,7 +74,7 @@ describe("时间线编辑器", () => {
 
   test("版本冲突：载入最新版本，撤销栈作废", async () => {
     saveImpl = async () => {
-      throw new ApiError("conflict", 67034, 409);
+      throw new ApiError("conflict", 67046, 409);
     };
     getImpl = async () => view({ revision: 5, clips: [clip("server")] });
     store().edit((t) => ({ ...t, muted: true }));
@@ -87,7 +87,7 @@ describe("时间线编辑器", () => {
 
   test("保存失败：状态为 error，再次 flush 会重试", async () => {
     saveImpl = async () => {
-      throw new ApiError("bad", 67035, 400);
+      throw new ApiError("bad", 67047, 400);
     };
     store().edit((t) => ({ ...t, muted: true }));
     expect(await store().flush()).toBe(false);

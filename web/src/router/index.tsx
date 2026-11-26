@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 
+import SharedCanvasReader from "@/pages/canvas/shared-reader";
 import { DialogHost } from "@/components/dialog-host";
 import { WsRuntime } from "@/components/ws-runtime";
 import AdminLayout from "@/pages/admin/layout";
 import ChannelsPage from "@/pages/admin/ai/channels";
+import DramaPresetsPage from "@/pages/admin/drama-presets";
 import { channelsPagePath, legacyModelsRedirect } from "@/utils/admin/channel-route";
 import PluginsPage from "@/pages/admin/ai/plugins";
 import ImageProcessorPage from "@/pages/admin/image-processor";
@@ -70,7 +72,7 @@ function RequireAuth() {
   return (
     <>
       {/* 登录态下常驻：任务 WebSocket 在列表页、画布页之间不断线 */}
-      <WsRuntime />
+      {!/^\/canvas\/[^/]+\/reader\/?$/.test(location.pathname) && <WsRuntime />}
       <Outlet />
     </>
   );
@@ -138,6 +140,7 @@ export const router = createBrowserRouter([
             path: "drama/:id",
             element: <DramaWorkspace />,
           },
+          { path: "canvas/:id/reader", element: <SharedCanvasReader /> },
           { path: "drama/:id/reader", element: <DramaWorkspace viewer /> },
           /** 营销创作台：全屏，与短剧工作台同级，不带首页侧栏 */
           {
@@ -173,9 +176,17 @@ export const router = createBrowserRouter([
               // 旧链接：新建模型曾占用这个地址，现在模型在渠道与模型主从页里管理
               { path: "ai/models/new", element: <Navigate to={channelsPagePath()} replace /> },
               { path: "ai/channels", element: <ChannelsPage /> },
+              // 开拍设置的题材 / 画风目录：导航里紧跟在模型渠道下面
+              { path: "drama-presets", element: <DramaPresetsPage /> },
               { path: "ai/plugins", element: <PluginsPage /> },
               { path: "agent", element: <Navigate to="skills" replace /> },
               { path: "agent/skills", element: <AgentSkillsPage /> },
+              {
+                path: "drama-prompt-presets",
+                lazy: async () => ({
+                  Component: (await import("@/pages/admin/drama-prompt-presets")).default,
+                }),
+              },
               // 旧的详情页链接：跳到列表页并打开详情弹窗
               { path: "agent/skills/:name", element: <SkillDetailRedirect /> },
               { path: "agent/steps", element: <AgentStepsPage /> },

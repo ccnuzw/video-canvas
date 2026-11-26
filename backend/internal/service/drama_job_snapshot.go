@@ -183,8 +183,7 @@ func (s *DramaService) planBatchVariables(ctx context.Context, tx repository.Dra
 		vars["previous_cliffhanger"] = ep.Cliffhanger
 	}
 	vars["known_cast"], vars["source"] = cfg.KnownCast, ""
-	template, body := dramaTemplate("plan", cfg.Prompt)
-	prompt, err := drama.PromptWithBody(template, vars, body)
+	prompt, err := renderDramaPrompt("plan", vars, cfg.Prompt)
 	if err != nil {
 		return err
 	}

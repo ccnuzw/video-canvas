@@ -26,6 +26,13 @@ const (
 	AdminAuditAnnouncementDelete = "announcement.delete"
 	AdminAuditAnnouncementOrder  = "announcement.order"
 
+	AdminAuditDramaPresetCreate  = "drama_preset.create"
+	AdminAuditDramaPresetUpdate  = "drama_preset.update"
+	AdminAuditDramaPresetEnable  = "drama_preset.enable" // 列表里的启用开关（启用和停用都记这个，detail 带 enabled）
+	AdminAuditDramaPresetDelete  = "drama_preset.delete"
+	AdminAuditDramaPresetOrder   = "drama_preset.order"
+	AdminAuditDramaPresetPreview = "drama_preset.preview" // 上传 / 替换预览图
+
 	AdminAuditSystemUpgrade  = "system.upgrade"
 	AdminAuditSystemRollback = "system.rollback"
 
@@ -56,6 +63,7 @@ const (
 	AdminAuditTargetPayment  = "payment"
 	AdminAuditTargetQueue    = "queue"
 	AdminAuditTargetAgent    = "agent"
+	AdminAuditTargetDramaPre = "drama_preset"
 )
 
 // AdminAuditLog 后台运营审计日志（用户管理与系统设置）：只增不改不删。detail 不含任何密码、密钥。

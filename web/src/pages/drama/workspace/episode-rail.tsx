@@ -2,7 +2,7 @@ import { useSharedWorkspace } from "@/hooks/use-shared-workspace";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronsDown, Loader2, Lock, Plus, ScrollText, Trash2, Users } from "lucide-react";
+import { ChevronsDown, Loader2, Lock, MapPin, Plus, ScrollText, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { addEpisode, deleteEpisode } from "@/api/drama";
@@ -68,7 +68,7 @@ function Pips({ states }: { states: readonly PipState[] }) {
  * 集多（长篇按章规划能出上千集）时用虚拟列表，只渲染可见的几行；顶上的「大纲 / 人物 / 全集」固定不动，
  * 规划范围完成且有剩余时末尾出现「继续规划」，规划中「新增一集」禁用并写明原因。
  * 「当前是哪一集」在所有工序间共用（总览不放这条栏）；各工序栏里的条目都一样、位置不动，切工序时不跳：
- * 顶上是「大纲」「人物」（研读先出大纲，再按集拆分，所以排在第 1 集前面；在别的工序点它们会跳到剧本页），
+ * 顶上是「大纲」「人物」「地点」（研读先出大纲，再按集拆分，所以排在第 1 集前面；在别的工序点它们会跳到剧本页），
  * 接着是「全集」（只有资产区按集筛选，别处置灰禁用），再往下是各集。
  */
 export function EpisodeRail({
@@ -164,18 +164,21 @@ export function EpisodeRail({
         </div>
         {onDoc && (
           <>
-            {PROJECT_DOCS.map(({ key, label, title, icon: Icon }) => (
-              <RailItem
-                key={key}
-                active={stage === "script" && doc === key}
-                className={item}
-                label={title}
-                onClick={() => onDoc(key)}
-              >
-                <Icon className="size-4" aria-hidden />
-                <span className="text-[11px] leading-none">{label}</span>
-              </RailItem>
-            ))}
+            {/* 分享链接里没有地点表（快照只带人物传记），不显示「地点」 */}
+            {PROJECT_DOCS.filter(({ key }) => !(shared && key === "locations")).map(
+              ({ key, label, title, icon: Icon }) => (
+                <RailItem
+                  key={key}
+                  active={stage === "script" && doc === key}
+                  className={item}
+                  label={title}
+                  onClick={() => onDoc(key)}
+                >
+                  <Icon className="size-4" aria-hidden />
+                  <span className="text-[11px] leading-none">{label}</span>
+                </RailItem>
+              ),
+            )}
             <div aria-hidden className="bg-border mx-2 my-1 h-px" />
           </>
         )}
@@ -284,7 +287,8 @@ export function EpisodeRail({
 
 const PROJECT_DOCS = [
   { key: "outline", label: "大纲", title: "故事大纲", icon: ScrollText },
-  { key: "characters", label: "人物", title: "人物传记", icon: Users },
+  { key: "characters", label: "人物", title: "人物", icon: Users },
+  { key: "locations", label: "地点", title: "地点", icon: MapPin },
 ] as const;
 
 function RailItem({

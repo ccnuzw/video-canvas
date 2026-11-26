@@ -47,10 +47,11 @@ var (
 
 // 画布模块 3xxxx
 var (
-	ErrCanvasNotFound = New(30001, "画布不存在", http.StatusNotFound)
-	ErrCanvasConflict = New(30002, "画布已被修改，请刷新后重试", http.StatusConflict)
-	ErrCanvasPayload  = New(30003, "画布内容必须是 JSON 对象", http.StatusBadRequest)
-	ErrCanvasNoChange = New(30004, "title 和 payload_json 至少传一个", http.StatusBadRequest)
+	ErrCanvasNotFound     = New(30001, "画布不存在", http.StatusNotFound)
+	ErrCanvasConflict     = New(30002, "画布已被修改，请刷新后重试", http.StatusConflict)
+	ErrCanvasDeliveryBusy = New(30009, "画布还有任务或交付进行中，请稍后重试", http.StatusConflict)
+	ErrCanvasPayload      = New(30003, "画布内容必须是 JSON 对象", http.StatusBadRequest)
+	ErrCanvasNoChange     = New(30004, "title 和 payload_json 至少传一个", http.StatusBadRequest)
 	// 画布导入：具体原因用 WithMsg 给出
 	ErrCanvasImportInvalid  = New(30005, "导入文件格式不对", http.StatusBadRequest)
 	ErrCanvasImportTooNew   = New(30006, "导入文件来自更新版本，请升级后再导入", http.StatusBadRequest)
@@ -282,10 +283,27 @@ var (
 	ErrDramaAdaptMissing         = New(67027, "还没有这个格式的转写稿", http.StatusBadRequest)
 	ErrDramaModelCall            = New(67028, "文本模型调用失败", http.StatusBadGateway)     // Msg 换成上游返回的错误原文
 	ErrDramaContentFiltered      = New(67029, "内容触发了模型的安全过滤", http.StatusBadGateway) // 上游按安全策略截断输出；Msg 可点名被过滤的资产
+	ErrDramaScriptInvalid        = New(67043, "剧本结构不合法", http.StatusBadRequest)      // Msg 写明第几场第几行和原因
+	ErrDramaScriptRefs           = New(67044, "人物或地点仍被剧本引用", http.StatusConflict)    // Msg 写明引用它的集号
+	ErrDramaScriptNameTaken      = New(67045, "名字已存在", http.StatusConflict)          // 同一短剧内人物或地点重名（含别名）
 	ErrDramaOutputTruncated      = New(67030, "模型单次输出超过最大输出被截断，请在后台调大该模型的最大输出，或换用输出更长的模型", http.StatusBadGateway)
-	ErrDramaTimelineConflict     = New(67034, "时间线在别处被修改，已载入最新版本", http.StatusConflict)
-	ErrDramaTimelineInvalid      = New(67035, "时间线不合法", http.StatusBadRequest)             // Msg 写明第几段和原因
-	ErrDramaTimelineBroken       = New(67036, "时间线里有素材已失效，请换版本或删掉", http.StatusBadRequest) // Msg 写明第几段
+	ErrDramaPresetChanged        = New(67031, "提示词已移除或更新，请刷新后重新选择", http.StatusConflict)
+	ErrDramaPresetDefault        = New(67032, "请先把另一条已启用的提示词设为默认", http.StatusConflict)
+	ErrDramaPromptPresetNotFound = New(67033, "内置提示词不存在", http.StatusNotFound)
+	ErrDramaPresetInactive       = New(67034, "仅已启用的提示词可以设为默认，已归档的提示词不可修改", http.StatusConflict)
+
+	// 开拍预设（后台维护的题材 / 画风目录）
+	ErrDramaPresetNotFound   = New(67037, "预设不存在", http.StatusNotFound)
+	ErrDramaPresetInvalid    = New(67038, "预设参数不合法", http.StatusBadRequest)             // 具体原因写进 Msg
+	ErrDramaPresetInUse      = New(67039, "预设仍被短剧使用，只能停用", http.StatusConflict)         // 具体条数写进 Msg
+	ErrDramaPresetOrderBad   = New(67040, "排序列表与现有预设不一致，请刷新后重试", http.StatusBadRequest) // 多了、少了或重复了条目
+	ErrDramaPresetFileFormat = New(67041, "预览图仅支持 WebP / PNG / JPEG", http.StatusBadRequest)
+	ErrDramaPresetFileLarge  = New(67042, "预览图不能超过 2MB", http.StatusRequestEntityTooLarge)
+
+	// 成片粗剪时间线
+	ErrDramaTimelineConflict = New(67046, "时间线在别处被修改，已载入最新版本", http.StatusConflict)
+	ErrDramaTimelineInvalid  = New(67047, "时间线不合法", http.StatusBadRequest)             // Msg 写明第几段和原因
+	ErrDramaTimelineBroken   = New(67048, "时间线里有素材已失效，请换版本或删掉", http.StatusBadRequest) // Msg 写明第几段
 )
 
 // 环节协议层（stepkit）与营销工作室 68xxx。68001–68011、68015、68016、68018 由营销业务使用（见 docs/design/营销工作室/接口契约.md §6），

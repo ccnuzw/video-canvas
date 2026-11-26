@@ -15,6 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/admin-ui/sheet";
+import { DialogSession } from "@/components/dialog-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -54,8 +55,9 @@ export function ShowcaseSheet({
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="data-[side=right]:sm:max-w-[460px]">
-        {/* 换一条作品或重新打开就换 key，表单状态整份重置 */}
-        <SheetForm key={item?.id ?? "new"} item={item} onClose={onClose} onSaved={onSaved} />
+        <DialogSession open={open}>
+          <SheetForm key={item?.id ?? "new"} item={item} onClose={onClose} onSaved={onSaved} />
+        </DialogSession>
       </SheetContent>
     </Sheet>
   );

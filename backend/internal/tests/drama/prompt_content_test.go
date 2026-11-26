@@ -36,3 +36,18 @@ func TestPromptContentRequirements(t *testing.T) {
 		})
 	}
 }
+
+// 拆解、资产图提示词、分镜的输入说明里要讲清人物设定和地点描述怎么用。
+func TestPromptsMentionCharacterAndLocationSettings(t *testing.T) {
+	for _, step := range []string{"breakdown", "asset_prompts", "storyboard"} {
+		prompt, err := Prompt(step, map[string]any{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, w := range []string{"characters_md", "locations_md"} {
+			if !strings.Contains(prompt, w) {
+				t.Errorf("%s 提示词的输入说明缺少 %q", step, w)
+			}
+		}
+	}
+}

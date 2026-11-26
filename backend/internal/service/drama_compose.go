@@ -104,7 +104,7 @@ func enqueueCompose(ctx context.Context, tx repository.DramaTx, p *model.DramaPr
 	return job, nil
 }
 
-// composeInput 读时间线并对账后冻结成剪辑清单：待采用占位跳过并记下序号；有失效段整体拒绝（67036），
+// composeInput 读时间线并对账后冻结成剪辑清单：待采用占位跳过并记下序号；有失效段整体拒绝（67048），
 // 不让用户以为合成了时间线上看到的样子。
 func composeInput(ctx context.Context, tx repository.DramaTx, p *model.DramaProject, ep model.DramaEpisode) (*dramaComposeInput, error) {
 	t, err := loadEpisodeTimeline(ctx, tx, p, &ep)

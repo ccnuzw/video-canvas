@@ -9,9 +9,11 @@ import { LoadFailed } from "@/components/admin-ui/load-failed";
 import { ReasonTooltip } from "@/components/admin-ui/reason-tooltip";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/admin-ui/sheet";
 import { UnderlineTab, UnderlineTabs } from "@/components/admin-ui/underline-tabs";
+import { DialogSession } from "@/components/dialog-session";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRemoteModels } from "@/hooks/use-models";
+import { useRetained } from "@/hooks/use-retained";
 import {
   activateState,
   bindingLabel,
@@ -53,12 +55,13 @@ export function StepSheet({
   onClose: () => void;
   onBound: () => void;
 }) {
+  const shown = useRetained(stepKey);
   return (
     <Sheet open={!!stepKey} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="sm:max-w-3xl" showCloseButton>
-        {stepKey && (
-          <SheetBody key={stepKey} stepKey={stepKey} summary={summary} onBound={onBound} />
-        )}
+        <DialogSession open={!!stepKey}>
+          {shown && <SheetBody key={shown} stepKey={shown} summary={summary} onBound={onBound} />}
+        </DialogSession>
       </SheetContent>
     </Sheet>
   );

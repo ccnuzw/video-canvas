@@ -42,6 +42,9 @@ func (c *shareClone) write(ctx context.Context, tx *repository.DramaShareReposit
 		}
 		c.episodeIDs[original] = episode.ID
 	}
+	if err := c.writeScript(ctx, tx, s); err != nil {
+		return err
+	}
 	if err := c.writeTakes(ctx, tx, s); err != nil {
 		return err
 	}
@@ -118,4 +121,52 @@ func (c *shareClone) remapOutputs(source model.GenerationTask) ([]byte, error) {
 		}
 	}
 	return json.Marshal(outputs)
+}
+
+// writeScript 复制结构化剧本：先写人物表、地点表，再写场次、元素，
+// 并把里面的集、人物、地点、场次引用换成新剧自己的行（引用不到的置 0，不留指向别人数据的 ID）。
+func (c *shareClone) writeScript(ctx context.Context, tx *repository.DramaShareRepository, s *repository.DramaSnapshot) error {
+	people := map[uint64]uint64{}
+	for _, row := range s.Characters {
+		original := row.ID
+		row.ID, row.UserID, row.DramaID, row.CreatedAt, row.UpdatedAt = 0, c.user, c.drama, time.Time{}, time.Time{}
+		if err := tx.SaveNew(ctx, &row); err != nil {
+			return err
+		}
+		people[original] = row.ID
+	}
+	places := map[uint64]uint64{}
+	for _, row := range s.Locations {
+		original := row.ID
+		row.ID, row.UserID, row.DramaID, row.CreatedAt, row.UpdatedAt = 0, c.user, c.drama, time.Time{}, time.Time{}
+		if err := tx.SaveNew(ctx, &row); err != nil {
+			return err
+		}
+		places[original] = row.ID
+	}
+	scenes := map[uint64]uint64{}
+	for _, row := range s.Scenes {
+		original := row.ID
+		row.ID, row.UserID, row.DramaID, row.CreatedAt, row.UpdatedAt = 0, c.user, c.drama, time.Time{}, time.Time{}
+		row.EpisodeID, row.LocationID = c.episodeIDs[row.EpisodeID], places[row.LocationID]
+		extra := make([]uint64, 0, len(row.ExtraCharacterIDs))
+		for _, id := range row.ExtraCharacterIDs {
+			if mapped := people[id]; mapped != 0 {
+				extra = append(extra, mapped)
+			}
+		}
+		row.ExtraCharacterIDs = extra
+		if err := tx.SaveNew(ctx, &row); err != nil {
+			return err
+		}
+		scenes[original] = row.ID
+	}
+	for _, row := range s.Elements {
+		row.ID, row.UserID, row.DramaID, row.CreatedAt, row.UpdatedAt = 0, c.user, c.drama, time.Time{}, time.Time{}
+		row.EpisodeID, row.SceneID, row.CharacterID = c.episodeIDs[row.EpisodeID], scenes[row.SceneID], people[row.CharacterID]
+		if err := tx.SaveNew(ctx, &row); err != nil {
+			return err
+		}
+	}
+	return nil
 }

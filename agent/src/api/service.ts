@@ -216,6 +216,21 @@ export class AgentApiService {
   }
 
   /** Go 的门铃：一个 Agent 发起的生成任务结束了。没有对应的等待就是 404，Go 据此不再重试 */
+  async canvasDelivery(user: string, canvas: string, nonce: string, acquire: boolean) {
+    const store = this.#o.store;
+    if (!store.canvasDelivery(canvas, nonce, acquire)) return false;
+    if (!acquire) return true;
+    try {
+      for (const session of store.listSessions(user, canvas)) {
+        if ((await this.#o.engine.watches(user, session.id)).length) throw Err.runActive();
+      }
+      return true;
+    } catch (error) {
+      store.canvasDelivery(canvas, nonce, false);
+      throw error;
+    }
+  }
+
   async taskSettled(runId: string, taskId: string, status: string): Promise<void> {
     if (!(await this.#o.engine.taskSettled(runId, taskId, status))) throw Err.watchMissing();
   }
@@ -335,6 +350,9 @@ export class AgentApiService {
   }
 
   async resume(userId: string, runId: string, addBudget: number): Promise<RunView> {
+    const run = this.#run(userId, runId);
+    if (run.canvasId !== "0")
+      await this.#platform(() => this.#o.platform.checkCanvas(userId, run.canvasId));
     return runView(this.#o.codec, await this.#o.engine.resume(userId, runId, addBudget));
   }
 

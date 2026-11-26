@@ -3,6 +3,7 @@
 ## 输入变量
 
 - `script_md`：该集已经锁定的完整剧本；`episode_no` 为集号。
+- `characters_md`、`locations_md`：人物设定和用户写的地点描述（只列写了描述的地点），写人物外貌、场景布局时与资产清单一起作为依据。
 - `assets`：本集或全集可用的画布资产，包含 `node_id`、`type`、`name`、`look`、`prompt_summary`、`has_voice`（角色配了声音）。
 - `max_seconds`：单个片段时长上限，取值4–60，来自所选视频模型的时长上限（未选模型时为15秒）。
 - `max_audios`：单个片段最多出现几个 `has_voice` 为 true 的角色，来自所选视频模型的参考音频上限；0 表示不限。

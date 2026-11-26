@@ -179,6 +179,13 @@ func (s *DramaService) executeDrama(ctx context.Context, run *dramaRun) (*dramaR
 	selected := selectedEpisodes(run.episodes, run.job.Episodes)
 	result := &dramaResult{}
 	var err error
+	// 拆解、资产图提示词、分镜以人物表、地点表为准：人物小传和地点描述是用户在卡片上维护的设定
+	switch run.job.Step {
+	case "breakdown", "asset_prompts", "storyboard":
+		if vars["characters_md"], vars["locations_md"], err = s.scriptSettings(ctx, run.project.UserID, run.project.ID); err != nil {
+			return nil, err
+		}
+	}
 	switch run.job.Step {
 	case "analyze":
 		result.output, result.cost, err = s.runAnalyze(ctx, run.project, run.job, &run.snapshot)

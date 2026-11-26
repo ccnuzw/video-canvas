@@ -35,18 +35,18 @@ export function resolveStage(
   return !drama.outlineMd && drama.episodeCount === 0 ? "script" : "overview";
 }
 
-/** 剧本页里的项目文档：故事大纲、人物传记（随短剧一起保存，不属于哪一集） */
-export type ScriptDoc = "outline" | "characters";
+/** 剧本页里的项目文档：故事大纲、人物、地点（不属于哪一集） */
+export type ScriptDoc = "outline" | "characters" | "locations";
 
 /** 地址栏 ?doc= 里表示「看当前集剧本」的取值：只有明确选了某一集才写它 */
 export const EPISODE_DOC = "episode";
 
 /**
- * 读地址栏 ?doc=：写了大纲 / 人物传记就打开它；明确选了某一集（doc=episode）且有分集时看分集剧本（返回 null）；
+ * 读地址栏 ?doc=：写了大纲 / 人物 / 地点就打开它；明确选了某一集（doc=episode）且有分集时看分集剧本（返回 null）；
  * 其余——切到剧本页、研读完成后——都默认打开大纲。
  */
 export function parseScriptDoc(raw: string | null, episodeCount: number): ScriptDoc | null {
-  if (raw === "outline" || raw === "characters") return raw;
+  if (raw === "outline" || raw === "characters" || raw === "locations") return raw;
   return raw === EPISODE_DOC && episodeCount > 0 ? null : "outline";
 }
 

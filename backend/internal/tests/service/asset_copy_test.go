@@ -95,3 +95,18 @@ func TestAssetService_CopyBySha256_ServerCopyFailureFallsBackToStream(t *testing
 		t.Fatalf("应退回读写复制：open=%d", base.openCalls)
 	}
 }
+
+func TestCanvasStageCopiesIndependentBytes(t *testing.T) {
+	svc, repo, base := newAssetTestService(config.Storage{})
+	data := []byte("saved frame")
+	seedHashedAsset(repo, base, 8, 1, "u1/frame.png", data, true)
+	var staged string
+	target, err := svc.StageCanvasAsset(context.Background(), repo.rows[8], 2, func(_ uint64, key string) error { staged = key; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(base.objects, "u1/frame.png")
+	if staged == "" || target.StorageKey != staged || target.UserID != 2 || target.TaskID != nil || !bytes.Equal(base.objects[staged], data) {
+		t.Fatalf("独立素材交付错误: %+v", target)
+	}
+}

@@ -3,7 +3,12 @@ import { useDropzone, type FileRejection } from "react-dropzone";
 import { ChevronRight, Upload } from "lucide-react";
 import { toast } from "sonner";
 
-import { addToLibrary, moveLibraryItem, removeLibraryItem } from "@/api/asset-library";
+import {
+  addToLibrary,
+  moveLibraryItem,
+  removeLibraryItem,
+  renameLibraryItem,
+} from "@/api/asset-library";
 import type { FolderDto, LibraryItemDto } from "@/api/asset-library/type";
 import { LibraryAssetCard } from "@/components/assets/asset-card";
 import { AssetGridSkeleton, AssetMasonry, LoadMoreFooter } from "@/components/assets/asset-grid";
@@ -73,6 +78,7 @@ export function LibraryView({
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<FolderDto | null>(null);
   const [deleting, setDeleting] = useState<FolderDto | null>(null);
+  const [renamingItem, setRenamingItem] = useState<LibraryItemDto | null>(null);
   const [moving, setMoving] = useState<LibraryItemDto | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState<AssetDto | null>(null);
@@ -118,7 +124,7 @@ export function LibraryView({
       items.map((item) => ({
         id: item.asset.id,
         asset: item.asset,
-        label: item.asset.fileName ?? "素材",
+        label: item.name || item.asset.fileName || "素材",
       })),
     [items],
   );
@@ -150,6 +156,16 @@ export function LibraryView({
     if (!ok) throw new Error("move failed");
     folders.reload();
     toast.success("已移动");
+  };
+
+  const renameItem = async (item: LibraryItemDto, name: string) => {
+    const saved = await renameLibraryItem(item.id, name);
+    if (searching) list.load();
+    else
+      list.update((items) =>
+        items.map((entry) => (entry.id === item.id ? { ...entry, name: saved } : entry)),
+      );
+    toast.success("已重命名");
   };
 
   const confirmDelete = async () => {
@@ -202,7 +218,7 @@ export function LibraryView({
           )}
         </nav>
         <div className="ml-auto flex items-center gap-1">
-          <AssetSearch value={input} onChange={setInput} placeholder="搜索文件名" />
+          <AssetSearch value={input} onChange={setInput} placeholder="搜索素材名称" />
           <NewMenu
             canCreateFolder={folder === null}
             onCreateFolder={() => setCreating(true)}
@@ -261,6 +277,7 @@ export function LibraryView({
                 item={item}
                 natural
                 onPreview={() => setPreviewId(item.asset.id)}
+                onRename={() => setRenamingItem(item)}
                 onMove={() => setMoving(item)}
                 onRemove={() => void remove(item)}
                 humanName={ownerOf.get(item.asset.id)?.name ?? null}
@@ -312,6 +329,15 @@ export function LibraryView({
         initial={renaming?.name}
         onClose={() => setRenaming(null)}
         onSubmit={(name) => (renaming ? folders.rename(renaming.id, name) : Promise.resolve())}
+      />
+
+      <FolderNameDialog
+        open={renamingItem !== null}
+        mode="rename"
+        target="asset"
+        initial={renamingItem?.name || renamingItem?.asset.fileName || ""}
+        onClose={() => setRenamingItem(null)}
+        onSubmit={(name) => (renamingItem ? renameItem(renamingItem, name) : Promise.resolve())}
       />
 
       <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>

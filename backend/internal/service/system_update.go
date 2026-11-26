@@ -88,7 +88,7 @@ func (s *SystemUpdateService) Migrations(ctx context.Context) ([]model.Migration
 // CheckUpdate 检查有没有新版本。永不返回错误：检查失败时把原因放进 Warning，有旧结果就带上旧结果。
 //
 // 逻辑：
-//  1. 关闭了检查、或当前是开发构建（版本号不是 x.y.z），直接返回，不请求 GitHub；
+//  1. 关闭了检查、或当前是开发构建（版本号没有 x.y.z 主体），直接返回，不请求 GitHub；
 //  2. 决定要不要请求：没有缓存、缓存超过 1 小时、或 force 且距上次请求超过 30 秒时请求；
 //     但上次请求失败后 5 分钟内不重试；
 //  3. 请求成功就更新缓存；失败就记下原因，返回旧缓存（没有旧缓存时只返回当前版本）。
@@ -153,7 +153,7 @@ func buildUpdateView(current string, rel *model.ReleaseInfo, now time.Time) *mod
 	}
 }
 
-// parseSemver 解析 x.y.z（允许 -后缀，比较时忽略后缀）；不是这种格式返回 false。
+// parseSemver 提取版本号的三段数字，允许带预发布后缀。
 func parseSemver(v string) ([3]int, bool) {
 	var out [3]int
 	core, _, _ := strings.Cut(strings.TrimPrefix(v, "v"), "-")
@@ -171,7 +171,7 @@ func parseSemver(v string) ([3]int, bool) {
 	return out, true
 }
 
-// semverGreater 判断 a 是否比 b 新；任一方解析失败时返回 false。
+// semverGreater 判断 a 是否比 b 新。同一组三段数字下，正式版优先于预发布版。
 func semverGreater(a, b string) bool {
 	va, okA := parseSemver(a)
 	vb, okB := parseSemver(b)
@@ -183,5 +183,7 @@ func semverGreater(a, b string) bool {
 			return va[i] > vb[i]
 		}
 	}
-	return false
+	_, _, aPrerelease := strings.Cut(a, "-")
+	_, _, bPrerelease := strings.Cut(b, "-")
+	return !aPrerelease && bPrerelease
 }

@@ -17,7 +17,13 @@ import (
 
 func splitTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	return isolatedDB(t, &model.User{}, &model.UserCredit{}, &model.CreditLedger{}, &model.CanvasProject{}, &model.StoryboardSplitJob{})
+	db := isolatedDB(t, &model.User{}, &model.UserCredit{}, &model.CreditLedger{}, &model.CanvasProject{}, &model.StoryboardSplitJob{})
+	for _, id := range []uint64{1, 2} {
+		if err := db.Create(&model.CanvasProject{BaseModel: model.BaseModel{ID: id}, UserID: 7, Title: "test", PayloadJSON: []byte(`{"nodes":[],"edges":[],"viewport":{"x":0,"y":0,"zoom":1}}`)}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	return db
 }
 
 // splitEnqueuer 记录入队的任务 id；fail 非空时入队失败，用来验证事务整体回滚。

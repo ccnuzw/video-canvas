@@ -56,7 +56,7 @@ export type DramaSourceKind = "script" | "novel" | "";
 export type StartRatio = "9:16" | "16:9" | "4:3";
 
 /** 提示词来源：内置 / 我的提示词 / 后台技能 */
-export type PromptSource = "builtin" | "mine" | "skill";
+export type PromptSource = "builtin" | "mine" | "skill" | "preset";
 
 /** 一个环节的提示词选择（提交给后端的结构）：mine 带 id，skill 带技能 name */
 export interface PromptChoice {
@@ -66,6 +66,20 @@ export interface PromptChoice {
   id?: string;
   /** source = skill 时的技能 name */
   skill?: string;
+  revision?: number;
+}
+
+export interface PromptPreset {
+  id: string;
+  name: string;
+  description: string;
+  revision: number;
+}
+
+export interface PromptPresetGroup {
+  step: PromptStep;
+  default_id: string;
+  items: PromptPreset[];
 }
 
 /** 各环节的提示词选择；省略的环节等于内置 */
@@ -73,6 +87,8 @@ export type PromptChoices = Partial<Record<PromptStep, PromptChoice>>;
 
 /** 已建剧的一个环节提示词设置（快照来源与展示名） */
 export interface PromptSetting extends PromptChoice {
+  version?: number;
+  update_available?: boolean;
   /** 展示名，如「内置」「我的 · 古风资产」「技能 · 跨集连续性」 */
   label: string;
   /** true 表示快照来源（我的提示词 / 技能）已被删或停用：快照照常可用，界面标红提示 */
@@ -210,7 +226,11 @@ export interface BackendDramaView {
 
 export interface BackendDramaStyles {
   genres: { key: string; name: string }[] | null;
-  styles: { key: string; name: string; prompt: string }[] | null;
+  /**
+   * 画风清单。preview_url 由后台维护：内置画风是前端静态相对路径（/drama-styles/<key>.webp），
+   * 后台上传的是公开预览路由地址（/api/v1/drama-presets/previews/<uuid>.webp）。
+   */
+  styles: { key: string; name: string; prompt: string; preview_url?: string | null }[] | null;
 }
 
 /** 列表项 */
@@ -355,7 +375,8 @@ export interface DramaEta {
 
 export interface DramaStyles {
   genres: { key: string; name: string }[];
-  styles: { key: string; name: string; prompt: string }[];
+  /** previewUrl 为空表示这条画风还没有预览图，选择器用渐变占位 */
+  styles: { key: string; name: string; prompt: string; previewUrl: string }[];
 }
 
 /** 分页列表（沿用 OKPage） */
@@ -424,7 +445,6 @@ export interface UpdateEpisodeInput {
   revision: number;
   title?: string;
   synopsis?: string;
-  scriptMd?: string;
   /** 开场钩子 */
   hook?: string;
   /** 结尾悬念 */
@@ -674,6 +694,7 @@ export interface SourceEstimateInput {
   episodeSeconds: number;
   /** 文本模型 key，空串 = 默认模型 */
   textModel: string;
+  planPrompt?: PromptChoice;
 }
 
 /** 内置提示词的一页（现在每个环节一页） */
@@ -868,4 +889,143 @@ export interface TimelineView extends Timeline {
   invalidClipIds: string[];
   /** 素材段和「已导入」引用的素材 */
   assets: AssetDto[];
+}
+
+/** 剧本元素类型 */
+export type ScriptElementType =
+  /** 动作与画面 */
+  | "action"
+  /** 说话人（只带人物，不带正文） */
+  | "character"
+  /** 语气或同时发生的动作 */
+  | "parenthetical"
+  /** 台词 */
+  | "dialogue"
+  /** 转场 */
+  | "transition"
+  /** 字幕 */
+  | "subtitle"
+  /** 空镜 */
+  | "shot"
+  /** 闪回开始 */
+  | "flashback_start"
+  /** 闪回结束 */
+  | "flashback_end"
+  /** 作者备注，不进入拍摄，也不渲染进 script_md */
+  | "note";
+
+/** 内外景：空串表示没填 */
+export type ScriptIntExt = "" | "interior" | "exterior" | "interior_exterior";
+
+/** 后端原始的剧本元素 */
+export interface BackendScriptElementDto {
+  /** 元素 ID；新增时为 null */
+  id: string | null;
+  type: ScriptElementType;
+  text: string;
+  /** 仅 character 类型有值 */
+  character_id: string | null;
+  /** 仅 character 类型：空 / OS / VO */
+  extension: string;
+}
+
+/** 后端原始的场次 */
+export interface BackendScriptSceneDto {
+  /** 场次 ID；新增时为 null */
+  id: string | null;
+  int_ext: string;
+  time_label: string;
+  location_id: string | null;
+  title: string;
+  summary: string;
+  emotions: string[] | null;
+  extra_character_ids: string[] | null;
+  props: string[] | null;
+  elements: BackendScriptElementDto[] | null;
+}
+
+/** 后端原始的一集剧本 */
+export interface BackendScriptViewDto {
+  revision: number;
+  locked: boolean;
+  warnings: { line: number; message: string }[] | null;
+  scenes: BackendScriptSceneDto[] | null;
+}
+
+/** 剧本的一行 */
+export interface ScriptElementDto {
+  /** 元素 ID；null 表示还没保存过 */
+  id: string | null;
+  type: ScriptElementType;
+  /** 正文；character 类型恒为空串 */
+  text: string;
+  /** 说话人的人物 ID，仅 character 类型有值 */
+  characterId: string | null;
+  /** 画外音标记：空串 / OS（内心独白）/ VO（画外音、电话） */
+  extension: "" | "OS" | "VO";
+}
+
+/** 一集里的一场；场号由顺序推出 */
+export interface ScriptSceneDto {
+  /** 场次 ID；null 表示还没保存过 */
+  id: string | null;
+  intExt: ScriptIntExt;
+  /** 日 / 夜，或自由文本；空串表示没填 */
+  timeLabel: string;
+  /** 地点 ID，null 表示没选 */
+  locationId: string | null;
+  /** 场次短标题 */
+  title: string;
+  /** 场次梗概 */
+  summary: string;
+  /** 情绪标签 */
+  emotions: string[];
+  /** 出场但不说话的人物 ID */
+  extraCharacterIds: string[];
+  /** 本场道具名 */
+  props: string[];
+  elements: ScriptElementDto[];
+}
+
+/** 一集的结构化剧本 */
+export interface ScriptDto {
+  /** 集级乐观锁版本号，整集保存时带上 */
+  revision: number;
+  /** 已锁定：只读 */
+  locked: boolean;
+  /** 解析时的提示（只有粘贴解析会有） */
+  warnings: { line: number; message: string }[];
+  scenes: ScriptSceneDto[];
+}
+
+/** 人物或地点表里的一项 */
+export interface ScriptEntityDto {
+  id: string;
+  name: string;
+  aliases: string[];
+  /** 备注，只有人物有 */
+  note: string;
+  /** 拆解后关联的画布节点 ID，null 表示还没有 */
+  canvasNodeId: string | null;
+  /** false 表示解析剧本时自动登记、等用户确认 */
+  confirmed: boolean;
+  /** 出现的集号，升序 */
+  episodes: number[];
+  /** 人物的发言次数（角色行条数）；地点恒为 0 */
+  lines: number;
+}
+
+/** 剧本人物表或地点表 */
+export type ScriptEntityKind = "character" | "location";
+
+/** 后端原始的人物或地点 */
+export interface BackendScriptEntityDto {
+  id: string;
+  name: string;
+  aliases: string[] | null;
+  note: string;
+  canvas_node_id: string;
+  confirmed: boolean;
+  episodes: number[] | null;
+  lines: number;
 }

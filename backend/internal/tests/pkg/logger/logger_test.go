@@ -178,14 +178,14 @@ func TestPayloadRedactsAuthHeadersAndBase64AndTruncates(t *testing.T) {
 	huge := strings.Repeat("字", logger.MaxPayloadField)           // 远超 4MB（每个字 3 字节）
 	logger.Payload(context.Background(), logger.PayloadRecord{CallID: "c1", Kind: "http",
 		Request: &logger.PayloadRequest{Method: "POST", URL: "https://x",
-			Headers: map[string]string{"Authorization": "Bearer sk-secret", "X-Api-Key": "k1", "api-key": "k2", "x-goog-api-key": "k3", "Content-Type": "application/json"},
+			Headers: map[string]string{"Authorization": "Bearer sk-secret", "X-Agent-Service-Token": "internal-test-secret", "X-Api-Key": "k1", "api-key": "k2", "x-goog-api-key": "k3", "Content-Type": "application/json"},
 			Body:    `{"image":"` + img + `","small":"data:image/png;base64,QUJD"}`},
 		Response: &logger.PayloadResponse{Status: 200, Body: huge}})
 
 	p := readPayload()[0]
 	req := p["request"].(map[string]any)
 	headers := req["headers"].(map[string]any)
-	for _, k := range []string{"Authorization", "X-Api-Key", "api-key", "x-goog-api-key"} {
+	for _, k := range []string{"Authorization", "X-Agent-Service-Token", "X-Api-Key", "api-key", "x-goog-api-key"} {
 		if headers[k] != "***" {
 			t.Errorf("鉴权头 %s 应遮成 ***，实际 %v", k, headers[k])
 		}

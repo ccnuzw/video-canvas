@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>结构化剧本编辑器演示</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+    <style>
+      :root {
+        --radius: 0.625rem;
+        --background: 0 0% 100%;
+        --foreground: 240 10% 3.9%;
+        --card: 0 0% 100%;
+        --muted: 240 4.8% 95.9%;
+        --muted-foreground: 240 3.8% 46.1%;
+        --primary: 240 5.9% 10%;
+        --primary-foreground: 0 0% 98%;
+        --accent: 240 4.8% 95.9%;
+        --border: 240 5.9% 90%;
+        --ok: 5 150 105;
+        --bad: 220 38 38;
+        --warn: 180 83 9;
+        --info: 2 132 199;
+        --violet: 124 58 237;
+        color-scheme: light;
+      }
+      .dark {
+        --background: 240 10% 3.9%;
+        --foreground: 0 0% 98%;
+        --card: 240 10% 5.5%;
+        --muted: 240 3.7% 15.9%;
+        --muted-foreground: 240 5% 64.9%;
+        --primary: 0 0% 98%;
+        --primary-foreground: 240 5.9% 10%;
+        --accent: 240 3.7% 15.9%;
+        --border: 240 3.7% 17%;
+        --ok: 52 211 153;
+        --bad: 248 113 113;
+        --warn: 251 191 36;
+        --info: 56 189 248;
+        --violet: 167 139 250;
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        font-family: Geist, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.55;
+      }
+      code, .mono { font-family: "Geist Mono", "SF Mono", Consolas, monospace; }
+      code { font-size: 0.92em; background: hsl(var(--muted)); padding: 1px 5px; border-radius: 5px; }
+      [data-lucide] { width: 1em; height: 1em; flex: none; }
+      h1, h2, h3, h4, p { margin: 0; }
+      button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+      table { border-collapse: collapse; width: 100%; }
+      th { font-weight: 500; text-align: left; }
+      [hidden] { display: none !important; }
+      .muted { color: hsl(var(--muted-foreground)); }
+      .row { display: flex; align-items: center; gap: 8px; }
+      .wrapflex { flex-wrap: wrap; }
+      .spacer { margin-left: auto; }
+
+      .top { position: sticky; top: 0; z-index: 30; background: hsl(var(--background) / 0.92); backdrop-filter: blur(8px); border-bottom: 1px solid hsl(var(--border)); }
+      .top-in { max-width: 1240px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; gap: 16px; height: 56px; }
+      .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; white-space: nowrap; }
+      .logo { width: 28px; height: 28px; border-radius: 8px; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); display: grid; place-items: center; }
+      .tabs { display: flex; gap: 2px; margin-left: 8px; overflow-x: auto; }
+      .tab { height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 500; color: hsl(var(--muted-foreground)); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s, color 0.15s; }
+      .tab:hover { background: hsl(var(--accent)); color: hsl(var(--foreground)); }
+      .tab[aria-selected="true"] { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+      .btn { height: 32px; padding: 0 10px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; text-decoration: none; color: inherit; white-space: nowrap; }
+      .btn:hover { background: hsl(var(--accent)); }
+      .btn-primary { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+      .btn-primary:hover { background: hsl(var(--primary) / 0.9); }
+      .btn-outline { border: 1px solid hsl(var(--border)); }
+      .switch { width: 34px; height: 20px; border-radius: 999px; background: hsl(var(--border)); position: relative; transition: background 0.15s; }
+      .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+      .switch[aria-checked="true"] { background: rgb(var(--violet)); }
+      .switch[aria-checked="true"]::after { transform: translateX(14px); }
+
+      .wrap { max-width: 1240px; margin: 0 auto; padding: 32px 20px 80px; }
+      .h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+      .lead { margin-top: 10px; max-width: 860px; font-size: 15px; color: hsl(var(--muted-foreground)); }
+      .lead b { color: hsl(var(--foreground)); }
+      .sec { margin-top: 36px; }
+      .sec > h2 { font-size: 18px; font-weight: 600; }
+      .sec > .sub { margin: 4px 0 14px; max-width: 860px; font-size: 13.5px; color: hsl(var(--muted-foreground)); }
+      .card { border: 1px solid hsl(var(--border)); background: hsl(var(--card)); border-radius: var(--radius); padding: 16px; }
+      .grid { display: grid; gap: 12px; }
+      .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      @media (max-width: 860px) { .g2, .g3 { grid-template-columns: 1fr; } .top-in { padding: 0 12px; } .wrap { padding: 24px 16px 64px; } .brand span.t { display: none; } }
+      ul.list { margin: 0; padding-left: 18px; font-size: 13.5px; }
+
+      .tag { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+      .t-ok { background: rgb(var(--ok) / 0.12); color: rgb(var(--ok)); }
+      .t-bad { background: rgb(var(--bad) / 0.12); color: rgb(var(--bad)); }
+      .t-warn { background: rgb(var(--warn) / 0.12); color: rgb(var(--warn)); }
+      .t-info { background: rgb(var(--info) / 0.12); color: rgb(var(--info)); }
+      .t-vio { background: rgb(var(--violet) / 0.12); color: rgb(var(--violet)); }
+      .t-mute { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+
+      .callout { display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--radius); font-size: 13.5px; border: 1px solid; }
+      .callout > i { margin-top: 3px; }
+      .c-info { background: rgb(var(--info) / 0.07); border-color: rgb(var(--info) / 0.3); }
+      .c-info > i { color: rgb(var(--info)); }
+      .c-warn { background: rgb(var(--warn) / 0.07); border-color: rgb(var(--warn) / 0.3); }
+      .c-warn > i { color: rgb(var(--warn)); }
+      .c-bad { background: rgb(var(--bad) / 0.07); border-color: rgb(var(--bad) / 0.3); }
+      .c-bad > i { color: rgb(var(--bad)); }
+      .c-ok { background: rgb(var(--ok) / 0.07); border-color: rgb(var(--ok) / 0.3); }
+      .c-ok > i { color: rgb(var(--ok)); }
+
+      .flow { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; padding: 14px; border-radius: var(--radius); }
+      .flow .node { flex: 1 1 150px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+      .flow .node b { display: block; font-size: 13px; margin-bottom: 2px; }
+      .flow .node.hl { border-color: hsl(var(--primary)); box-shadow: 0 0 0 1px hsl(var(--primary)); }
+      .flow .arrow { display: grid; place-items: center; color: hsl(var(--muted-foreground)); }
+
+      .cmp-wrap { overflow-x: auto; border: 1px solid hsl(var(--border)); border-radius: var(--radius); }
+      .cmp th, .cmp td { padding: 9px 12px; font-size: 13px; vertical-align: top; border-bottom: 1px solid hsl(var(--border)); }
+      .cmp tr:last-child th, .cmp tr:last-child td { border-bottom: 0; }
+      .cmp thead th { background: hsl(var(--muted)); font-size: 12.5px; white-space: nowrap; }
+      .cmp tbody th { width: 150px; color: hsl(var(--muted-foreground)); font-weight: 500; }
+      .cmp .y { color: rgb(var(--ok)); }
+      .cmp .m { color: rgb(var(--warn)); font-weight: 500; }
+
+      .steps { list-style: none; counter-reset: s; display: grid; gap: 12px; }
+      .steps li { counter-increment: s; position: relative; padding-left: 32px; font-size: 13.5px; }
+      .steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+      .steps li small { display: block; color: hsl(var(--muted-foreground)); font-size: 12.5px; }
+
+      .codeblock { background: hsl(var(--muted)); border-radius: var(--radius); padding: 14px; font-family: "Geist Mono", "SF Mono", Consolas, monospace; font-size: 12.5px; overflow-x: auto; }
+      .codeblock pre { margin: 0; font: inherit; white-space: pre-wrap; }
+
+      .note { outline: 1.5px dashed rgb(var(--violet)); outline-offset: 3px; position: relative; }
+      .note-txt { display: none; margin-top: 8px; font-size: 11.5px; line-height: 1.5; color: rgb(var(--violet)); }
+      .show-notes .note-txt { display: block; }
+      body:not(.show-notes) .note { outline: none; }
+
+      .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 60; pointer-events: none; }
+      .toast > div { display: flex; align-items: center; gap: 8px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); border-radius: 10px; padding: 10px 14px; font-size: 13px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.12); }
+
+      /* ---- 合并演示 ---- */
+      .opt { text-align: left; border: 1px solid hsl(var(--border)); border-radius: 10px; padding: 10px 12px; font-size: 13px; background: hsl(var(--card)); }
+      .opt:hover { background: hsl(var(--accent)); }
+      .opt[aria-pressed="true"] { border-color: hsl(var(--primary)); box-shadow: 0 0 0 1px hsl(var(--primary)); }
+      .opt small { display: block; color: hsl(var(--muted-foreground)); font-size: 12px; margin-top: 2px; }
+      .mcol h3 { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+      .scn { border: 1px solid hsl(var(--border)); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+      .scn-h { background: hsl(var(--muted)); padding: 6px 10px; font-size: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+      .scn-h b { font-weight: 600; }
+      .elr { display: flex; gap: 6px; align-items: baseline; padding: 4px 10px; font-size: 12.5px; border-top: 1px solid hsl(var(--border) / 0.6); }
+      .elr .ty { flex: none; width: 46px; font-size: 11px; color: hsl(var(--muted-foreground)); }
+      .elr .tx { flex: 1; min-width: 0; word-break: break-all; }
+      .elr .id { flex: none; font-family: "Geist Mono", monospace; font-size: 10.5px; color: hsl(var(--muted-foreground)); }
+      .elr.note-el .tx { color: rgb(var(--violet)); }
+      .elr.del .tx { text-decoration: line-through; color: hsl(var(--muted-foreground)); }
+      textarea.src { width: 100%; min-height: 420px; resize: vertical; border: 1px solid hsl(var(--border)); border-radius: 8px; padding: 10px; background: hsl(var(--background)); color: inherit; font: 12.5px/1.6 "Geist Mono", "PingFang SC", monospace; }
+      .stat { display: flex; gap: 6px; flex-wrap: wrap; }
+    </style>
+  </head>
+
+  <body class="show-notes">
+    <header class="top">
+      <div class="top-in">
+        <div class="brand"><span class="logo"><i data-lucide="clapperboard"></i></span><span class="t">结构化剧本编辑器</span></div>
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" data-tab="overview" aria-selected="true"><i data-lucide="map"></i>总览</button>
+          <button class="tab" role="tab" data-tab="demo" aria-selected="false"><i data-lucide="git-merge"></i>解析与合并</button>
+          <button class="tab" role="tab" data-tab="impl" aria-selected="false"><i data-lucide="database"></i>数据与接口</button>
+        </div>
+        <div class="spacer row">
+          <a class="btn btn-outline" href="结构化剧本编辑器-原型.html"><i data-lucide="layout-dashboard"></i>原型稿</a>
+          <label class="row muted" style="font-size: 12px">设计标注<button class="switch" id="notesSw" role="switch" aria-checked="true" onclick="toggleNotes()"></button></label>
+          <button class="btn" onclick="document.documentElement.classList.toggle('dark')" aria-label="切换明暗主题"><i data-lucide="sun-moon"></i></button>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <!-- ============ 1. 总览 ============ -->
+      <section id="tab-overview">
+        <h1 class="h1">把剧本从一段 Markdown 变成「场次 + 元素」</h1>
+        <p class="lead">
+          现在每集剧本是一整段 Markdown，对白、人物名、括号全靠手打符号，改几下就乱。这次把剧本拆成<b>场次</b>和<b>元素</b>（动作、角色、括号、对白、转场……）分行存进数据库，人物和地点有自己的表和 ID。
+          <b>拆解、分镜、上集衔接这些下游本期一行不改</b>：每次写结构时顺手渲染一份和今天格式一样的 <code>script_md</code> 给它们读。
+        </p>
+
+        <div class="callout c-info" style="margin-top: 16px">
+          <i data-lucide="info"></i>
+          <div>
+            <b>阅读说明。</b>现状来自 2026-11-21 对仓库代码的核对；新设计都是提案，尚未实现。准绳是同目录的 <code>结构化剧本编辑器.md</code>，这里的每个决定都能在那里找到。界面长什么样看右上角「原型稿」。<br />
+            <span class="muted">图例：</span>
+            <span class="tag t-ok">已核对代码</span>
+            <span class="tag t-vio">提案</span>
+            <span class="tag t-mute">示意</span>
+            <span class="tag t-warn">未验证 · 需实测</span>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>一次写入怎么走</h2>
+          <p class="sub">不管是用户在编辑器里改、模型生成、Agent 修改还是粘贴，最后都落到同一个事务里。</p>
+          <div class="flow note">
+            <div class="node"><b>写入来源</b>编辑器直接给结构；模型 / Agent / 粘贴给的是文本</div>
+            <div class="arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="node"><b>解析（只对文本）</b>Go 里唯一一个解析器，认不出的行当「动作」保存</div>
+            <div class="arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="node hl"><b>与旧结构合并</b>同一场保留短标题、梗概、情绪；没改的行沿用原 ID；备注跟着相邻行走</div>
+            <div class="arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="node"><b>校验</b>对白必须有说话人、闪回成对；不合法整集不写（67043）</div>
+            <div class="arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="node hl"><b>一个事务落库</b>增改删场次 / 元素 → 渲染 <code>script_md</code> → <code>revision+1</code></div>
+            <div class="arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="node"><b>下游照旧</b>拆解、分镜、上集衔接、字数估价仍读 <code>script_md</code></div>
+          </div>
+          <div class="note-txt">设计：结构是唯一真源，<code>script_md</code> 降为派生列。这样选了行级表（用户定），又不用一次改 7 处下游；解析器只在 Go 里写一份，前端粘贴也调后端，避免两套规则越改越不一样。</div>
+          <div class="callout c-warn" style="margin-top: 10px">
+            <i data-lucide="corner-down-right"></i>
+            <div>
+              <b>兜底：</b>
+              <ul class="list" style="margin-top: 4px">
+                <li><b>格式认不出</b>（比如自定义提示词让模型写成了散文）：每行都当「动作」存下，不失败，编辑器顶部提示「有 N 行未识别」。</li>
+                <li><b>已锁定集</b>：结构只读；<code>script_md</code> 冻结在锁定那一刻，人物改名也不重渲染，分镜里的 <code>@资产名</code> 不会失配。</li>
+                <li><b>老剧本</b>：第一次打开剧本页时整部剧一次转换，锁定集只补建结构、原文不动。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>三种写入方式</h2>
+          <p class="sub">差别在于有没有解析和合并这一步。</p>
+          <div class="grid g3">
+            <div class="card">
+              <div class="row"><i data-lucide="pen-line"></i><b>编辑器直接写结构</b></div>
+              <div class="row wrapflex" style="margin-top: 6px"><span class="tag t-vio">PUT …/script</span><span class="tag t-mute">最常用</span></div>
+              <p class="muted" style="font-size: 13px; margin-top: 8px"><b>不经过解析。</b>前端提交整集场次和元素，带 ID 的是已有、不带的是新增、没出现的就是删除；服务端比对后增改删。</p>
+            </div>
+            <div class="card">
+              <div class="row"><i data-lucide="bot"></i><b>文本写入</b></div>
+              <div class="row wrapflex" style="margin-top: 6px"><span class="tag t-vio">解析 + 合并</span></div>
+              <p class="muted" style="font-size: 13px; margin-top: 8px"><b>重新生成剧本、Agent 的 <code>drama_update_episode</code>、多行粘贴。</b>文本先解析，再和旧结构合并，手动加的场次信息和备注尽量保留。</p>
+            </div>
+            <div class="card">
+              <div class="row"><i data-lucide="history"></i><b>存量转换</b></div>
+              <div class="row wrapflex" style="margin-top: 6px"><span class="tag t-vio">整部剧一次</span><span class="tag t-mute">自动</span></div>
+              <p class="muted" style="font-size: 13px; margin-top: 8px"><b>项目上 <code>script_structured=false</code> 时触发。</b>全部集一个事务转换。未锁定集换成渲染结果，锁定集只建结构。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>现在 vs 改造后</h2>
+          <p class="sub">用户说的两个痛点：「改对白格式容易乱」「编辑器太单薄」。</p>
+          <div class="cmp-wrap">
+            <table class="cmp">
+              <thead><tr><th></th><th>现在</th><th>改造后</th></tr></thead>
+              <tbody>
+                <tr><th>存储</th><td><code>drama_episodes.script_md</code> 一段文本</td><td class="y">场次表 + 元素表，一元素一行；<code>script_md</code> 变派生列</td></tr>
+                <tr><th>改对白</th><td class="m">手打 <code>人物（语气）：台词</code>，符号错了拆解就认不出</td><td class="y">角色、括号、对白各是一行；Enter 自动接下一种，不用打任何符号</td></tr>
+                <tr><th>人物</th><td class="m">只是字符串；角色卡要等拆解后才有</td><td class="y">剧本自带人物表，角色行绑 ID；拆解后回填画布节点 ID</td></tr>
+                <tr><th>改名</th><td class="m">手动全文替换</td><td class="y">人物表改一次，旧名进别名，未锁定集全部重渲染</td></tr>
+                <tr><th>场次目录</th><td class="m">正则从标题里猜（<code>utils/drama/scenes.ts</code>）</td><td class="y">真实场次，带短标题、梗概、情绪，可拖动排序</td></tr>
+                <tr><th>统计</th><td>无</td><td class="y">场次数、字数、对白占比、预估时长 vs 单集目标</td></tr>
+                <tr><th>原著对照</th><td>无（原文在 <code>drama_units</code>，接口已有）</td><td class="y">左右分栏，左边只读显示本集对应原文</td></tr>
+                <tr><th>Agent 改剧本</th><td>整段替换 <code>script_md</code></td><td><span class="m">入参不变</span>，审批后解析 + 合并；审批预览改成合并后的渲染文本</td></tr>
+                <tr><th>资产拆解</th><td class="m">模型读剧本重新提取人物、场景、道具，可能和剧本对不上</td><td class="y">第⑤步：直接按人物表、地点表、每场道具建资产，出现集数从结构统计；模型只补造型、外貌、音色</td></tr>
+                <tr><th>分镜</th><td>读 <code>script_md</code></td><td>仍读 <code>script_md</code>，不改</td></tr>
+                <tr><th>核实度</th><td><span class="tag t-ok">已核对代码</span></td><td><span class="tag t-vio">提案</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>剧本写好后点「资产拆解」，会发生什么（第⑤步）</h2>
+          <p class="sub">剧本解析成结构后，人物、地点、道具和出现集数都已经有了，拆解不再让模型读一遍剧本重新提取，否则两边会对不上。</p>
+          <div class="grid g2">
+            <div class="card note">
+              <ol class="steps" style="margin: 0; padding: 0">
+                <li><b>按人物表建角色卡</b><small>所选集里出现过的人，已有节点就复用并补集数，没有就新建，回填 <code>canvas_node_id</code>。</small></li>
+                <li><b>按地点表建场景、按每场 <code>props</code> 建道具</b><small>道具按名字去重，和画布上已有的道具合并。</small></li>
+                <li><b>出现集数从结构统计</b><small>哪集有这人的角色行、哪集有这个地点的场次，直接算出来。</small></li>
+                <li><b>一次轻量模型调用补充造型、外貌、音色</b><small>只能引用已有人物和地点的 ID，冒出新名字的条目丢弃并记警告；一个人多个造型就建多个角色节点，都认回同一个人。</small></li>
+                <li><b>锁定所选集，接着写资产提示词</b><small>和现在一样。</small></li>
+              </ol>
+            </div>
+            <div class="card">
+              <div class="callout c-warn">
+                <i data-lucide="triangle-alert"></i>
+                <div>
+                  <b>边界：</b>
+                  <ul class="list" style="margin-top: 6px">
+                    <li>模型补充失败时，资产仍以默认造型、空描述建好，任务标警告，可重跑补充，不卡住拆解。</li>
+                    <li>拆出来的身份只来自两张表：剧本里没出现的人不会凭空多出一张角色卡。</li>
+                    <li>它是第⑤步，编辑器上线后单独发版；在那之前拆解照旧，拆完按名字回填 <code>canvas_node_id</code>。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="note-txt">用户选的方案 1。放弃了「完全不调模型」（会丢掉按剧本识别戏服变化的能力）和「剧本角色行可选造型」（写剧本时多一道选择，编辑器和表都要再加一层）。</div>
+        </div>
+
+        <div class="sec">
+          <h2>把「林川」改名「林骁」时，会发生什么</h2>
+          <p class="sub">名字是身份，不是正文，所以已锁定的集也允许改名，但它们的文本不动。</p>
+          <div class="grid g2">
+            <div class="card">
+              <ol class="steps" style="margin: 0; padding: 0">
+                <li><b>在人物表里改名</b><small>重名返回 67045；「林川」自动进别名，以后模型再写「林川」也能认回同一个人。</small></li>
+                <li><b>所有角色行即时显示「林骁」</b><small>元素存的是人物 ID，不存名字，所以不用改元素。</small></li>
+                <li><b>未锁定集重渲染 <code>script_md</code></b><small>这些集 <code>revision+1</code> 并逐集推送更新；发起改名的页面自己重读当前集，不弹冲突。</small></li>
+                <li><b>锁定集 <code>script_md</code> 不变</b><small>它们已经拆过资产、可能已出分镜，文本和画布资产名得保持一致。</small></li>
+              </ol>
+            </div>
+            <div class="card">
+              <div class="callout c-warn">
+                <i data-lucide="triangle-alert"></i>
+                <div>
+                  <b>边界：画布资产不跟着改名。</b>
+                  <ul class="list" style="margin-top: 6px">
+                    <li>人物表和画布角色节点靠 <code>canvas_node_id</code> 关联，资产名要在资产管理里自己改。</li>
+                    <li>锁定集的剧本文本仍写「林川」，编辑器里显示「林骁」，两者在锁定集上会不一致。</li>
+                    <li>前提：这部剧必须已整部转换，否则没转换的集里旧名是纯文本，改不到。改名前会先触发转换。</li>
+                  </ul>
+                </div>
+              </div>
+              <p class="muted" style="font-size: 12.5px; margin-top: 10px">上线说明里要写清：改名不改画布资产名，也不改已锁定集的剧本文本。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>第一次打开一部老剧时，会发生什么</h2>
+          <p class="sub">不做一次性回填：迁移里不能跑 Go 逻辑，单独的回填命令又要运维执行。</p>
+          <div class="grid g2">
+            <div class="card">
+              <ol class="steps" style="margin: 0; padding: 0">
+                <li><b>打开剧本页，读结构</b><small>发现项目 <code>script_structured=false</code>。</small></li>
+                <li><b>一个事务里转换全部集</b><small>逐集解析 <code>script_md</code>，说话人和地点按名字、别名登记进两张表（标「待确认」）。</small></li>
+                <li><b>未锁定集：<code>script_md</code> 换成渲染结果，<code>revision</code> 不变</b><small>只是格式归一，不算内容变化；升了的话，用户手里的旧 revision 会让随后改标题、钩子白白 409。</small></li>
+                <li><b>锁定集：只建结构</b><small><code>script_md</code> 原样保留，<code>revision</code> 不变。</small></li>
+                <li><b>置 <code>script_structured=true</code></b><small>以后不再转换。</small></li>
+              </ol>
+            </div>
+            <div class="card">
+              <div class="callout c-ok">
+                <i data-lucide="badge-check"></i>
+                <div>
+                  <b>验收口径（可自动断言）：</b>转换前文本和渲染结果各自解析成「(场次标题, 元素类型, 说话人, 文本)」序列，两边逐项相等；空白、全半角标点差异不算。用开发库里现有短剧剧本全部跑一遍。
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 2. 解析与合并 ============ -->
+      <section id="tab-demo" hidden>
+        <h1 class="h1">整集被重新写入时，保留什么、丢什么</h1>
+        <p class="lead">
+          选一个场景：左边是数据库里的旧结构（含用户手写的场次短标题、梗概、情绪和<span style="color: rgb(var(--violet))">紫色备注</span>），中间是模型或 Agent 新写的文本（<b>可以直接改</b>），右边实时显示合并结果。
+          这里的解析和合并在浏览器里模拟，规则与设计文档 §7.1、§7.4 一致；<b>真实实现在 Go 后端</b>。
+        </p>
+        <div class="grid" style="margin-top: 20px; grid-template-columns: 230px minmax(0, 1fr)" id="demoGrid">
+          <div id="optList" class="grid" style="align-content: start"></div>
+          <div class="grid" style="align-content: start">
+            <div class="card" id="demoHead"></div>
+            <div class="grid g3 note">
+              <div class="card mcol"><h3><i data-lucide="database"></i>旧结构（数据库）</h3><div id="oldView"></div></div>
+              <div class="card mcol"><h3><i data-lucide="file-text"></i>新文本（可编辑）</h3><textarea class="src" id="newText" spellcheck="false"></textarea></div>
+              <div class="card mcol"><h3><i data-lucide="git-merge"></i>合并结果</h3><div id="mergeView"></div></div>
+            </div>
+            <div class="note-txt">合并规则：场次以「内/外 + 时间 + 地点 ID」为键配对，不要求顺序（调换场次也能保留梗概）；场内元素按 (类型, 说话人, 文本) 做最长公共子序列，没对上的同类型同说话人按顺序配成「修改」；备注不在文本里，挂回原来前一个元素后面。放弃了「整集替换」——那样 Agent 改一个字，用户手写的场次梗概就全没了。</div>
+            <div class="card">
+              <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 8px" class="row"><i data-lucide="scroll-text"></i>渲染出的 <code>script_md</code><span class="tag t-mute">也是 Agent 审批预览</span><span class="tag t-mute">备注不渲染</span></h3>
+              <div class="codeblock"><pre id="mdOut"></pre></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 3. 数据与接口 ============ -->
+      <section id="tab-impl" hidden>
+        <h1 class="h1">数据与接口（提案）</h1>
+        <p class="lead">下面都是提案，尚未实现，对应设计文档 §5–§7、§11。迁移编号取实现时最新（当前应为 <code>0045</code>）；所有新表带 <code>user_id</code> 隔离，别人的 ID 一律返回 67001。</p>
+
+        <div class="sec">
+          <h2>关系</h2>
+          <p class="sub">谁引用谁，为什么。</p>
+          <div class="cmp-wrap">
+            <table class="cmp">
+              <thead><tr><th>对象</th><th>引用</th><th>为什么</th></tr></thead>
+              <tbody>
+                <tr><th>场次</th><td><code>episode_id</code>；可选 <code>location_id</code> → 地点表</td><td>一集多场；地点有身份才能改名、对齐场次</td></tr>
+                <tr><th>元素</th><td><code>scene_id</code>；<code>character</code> 类型必填 <code>character_id</code> → 人物表</td><td>对白通过前面的角色行知道是谁说的</td></tr>
+                <tr><th>人物 / 地点</th><td><code>drama_id</code>；可选 <code>canvas_node_id</code> → 短剧画布的主造型 / 场景节点</td><td>写剧本时资产还不存在，拆解按表建资产后回填（用户定）</td></tr>
+                <tr><th>画布资产节点</th><td><code>data.drama.script_character_id</code> / <code>script_location_id</code>（第⑤步新增）</td><td>一个人的多个造型节点都能认回同一个人物</td></tr>
+                <tr><th>集</th><td><code>revision</code> 覆盖本集全部场次和元素</td><td>沿用现有乐观锁和自动保存，保存是整集一次事务</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>数据模型</h2>
+          <p class="sub">沿用 <code>backend/migrations/</code> 的嵌入迁移；数据转换不写在 SQL 里（开发环境迁移热执行，改已执行的迁移会 checksum 报错）。</p>
+          <div class="grid g2">
+            <div class="cmp-wrap">
+              <table class="cmp">
+                <thead><tr><th colspan="2"><code>drama_script_characters</code> 人物表</th></tr></thead>
+                <tbody>
+                  <tr><th><code>id</code></th><td>主键</td></tr>
+                  <tr><th><code>user_id</code> / <code>drama_id</code></th><td>归属；索引</td></tr>
+                  <tr><th><code>name</code></th><td>varchar(64)，正式名；<b>同一短剧内忽略大小写和首尾空白唯一</b></td></tr>
+                  <tr><th><code>aliases</code></th><td>jsonb 字符串数组；改名时旧名自动追加</td></tr>
+                  <tr><th><code>note</code></th><td>text，一句话备注，可空</td></tr>
+                  <tr><th><code>canvas_node_id</code></th><td>varchar，可空；拆解后回填角色节点 ID</td></tr>
+                  <tr><th><code>confirmed</code></th><td>bool；解析自动登记为 false，用户点「确认」或编辑过为 true，手动新建直接 true</td></tr>
+                  <tr><th><code>position</code></th><td>int，列表顺序</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="cmp-wrap">
+              <table class="cmp">
+                <thead><tr><th colspan="2"><code>drama_script_locations</code> 地点表</th></tr></thead>
+                <tbody>
+                  <tr><th>字段</th><td>与人物表相同，去掉 <code>note</code>：<code>id / user_id / drama_id / name / aliases / canvas_node_id / confirmed / position</code></td></tr>
+                  <tr><th><code>name</code></th><td>同一短剧内唯一（规则同人物表）</td></tr>
+                  <tr><th><code>canvas_node_id</code></th><td>拆解后回填场景节点 ID</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="cmp-wrap">
+              <table class="cmp">
+                <thead><tr><th colspan="2"><code>drama_scenes</code> 场次</th></tr></thead>
+                <tbody>
+                  <tr><th><code>id</code> / <code>user_id</code> / <code>drama_id</code> / <code>episode_id</code></th><td>归属；<code>(episode_id, position)</code> 索引</td></tr>
+                  <tr><th><code>position</code></th><td>int，集内顺序从 0 起；场号显示为「集号-(position+1)」，不单独存</td></tr>
+                  <tr><th><code>int_ext</code></th><td><code>interior</code> / <code>exterior</code> / <code>interior_exterior</code> / 空</td></tr>
+                  <tr><th><code>time_label</code></th><td>varchar(16)：日 / 夜或自由文本，可空</td></tr>
+                  <tr><th><code>location_id</code></th><td>→ 地点表，可空</td></tr>
+                  <tr><th><code>title</code> / <code>summary</code></th><td>场次短标题、梗概，可空</td></tr>
+                  <tr><th><code>emotions</code></th><td>jsonb 字符串数组</td></tr>
+                  <tr><th><code>extra_character_ids</code></th><td>jsonb，出场但不说话的人物 ID；渲染「人物：」行时与说话人合并</td></tr>
+                  <tr><th><code>props</code></th><td>jsonb 字符串数组，对应「道具：」行，原样渲染</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="cmp-wrap">
+              <table class="cmp">
+                <thead><tr><th colspan="2"><code>drama_script_elements</code> 元素</th></tr></thead>
+                <tbody>
+                  <tr><th><code>id</code> / <code>user_id</code> / <code>drama_id</code> / <code>episode_id</code> / <code>scene_id</code></th><td>归属；<code>(scene_id, position)</code> 索引；<code>(drama_id, character_id)</code> 索引用于引用检查</td></tr>
+                  <tr><th><code>position</code></th><td>int，场内顺序</td></tr>
+                  <tr><th><code>type</code></th><td><code>action</code> 动作 · <code>character</code> 角色 · <code>parenthetical</code> 括号 · <code>dialogue</code> 对白 · <code>transition</code> 转场 · <code>subtitle</code> 字幕 · <code>shot</code> 空镜 · <code>flashback_start</code> / <code>flashback_end</code> 闪回 · <code>note</code> 备注</td></tr>
+                  <tr><th><code>text</code></th><td>text；<code>character</code> 必须为空</td></tr>
+                  <tr><th><code>character_id</code></th><td>仅 <code>character</code> 必填</td></tr>
+                  <tr><th><code>extension</code></th><td>仅 <code>character</code>：空 / <code>OS</code> / <code>VO</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="cmp-wrap" style="margin-top: 12px">
+            <table class="cmp">
+              <thead><tr><th>已有表的变化</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><th><code>drama_episodes.script_md</code></th><td>保留，改为派生：结构每次写入时同一事务重渲染。<b>已锁定集冻结</b>，不再重渲染</td></tr>
+                <tr><th><code>drama_projects.script_structured</code></th><td>新增 bool，默认 false；整部剧转换完成后置 true</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>场内顺序约束</h2>
+          <p class="sub">保存时服务端校验，不合法整集不写，返回 67043 并带出第几场第几个元素；编辑器里提前拦截，正常不会触发。</p>
+          <div class="card">
+            <ul class="list">
+              <li><code>parenthetical</code>、<code>dialogue</code> 紧挨着的前一个元素必须是 <code>character</code> / <code>parenthetical</code> / <code>dialogue</code>，且往前能找到 <code>character</code>。</li>
+              <li><code>character</code> 后面至少一条 <code>dialogue</code>（中间允许夹 <code>parenthetical</code>），且必须选了人物。</li>
+              <li><code>flashback_start</code> / <code>flashback_end</code> 在同一场内成对、不嵌套。</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>接口</h2>
+          <div class="cmp-wrap">
+            <table class="cmp">
+              <thead><tr><th>方法与路径</th><th>说明</th><th>业务错误</th></tr></thead>
+              <tbody>
+                <tr><th><code>GET /dramas/:id/episodes/:no/script</code></th><td>返回 <code>revision</code>、<code>locked</code>、<code>warnings</code>、<code>scenes[]</code>（每场带 <code>elements[]</code>）；整部剧未转换时先转换</td><td>67001</td></tr>
+                <tr><th><code>PUT /dramas/:id/episodes/:no/script</code></th><td>请求 <code>revision</code> + <code>scenes[]</code>；带 <code>id</code> 是已有、空是新增、没出现的删除。一个事务增改删 → 渲染 <code>script_md</code> → <code>revision+1</code>。响应按提交顺序返回全部新 ID</td><td>409 冲突、67005 已锁定、67043 结构不合法</td></tr>
+                <tr><th><code>POST /dramas/:id/script/parse</code></th><td>纯文本 → 场次 / 元素，不保存剧本（粘贴用）；新出现的人物、地点会登记为「待确认」，所以响应里的 ID 都能直接用</td><td>—</td></tr>
+                <tr><th><code>GET /dramas/:id/script-characters</code></th><td>人物表，带每人出现的集号和台词条数（实时统计）</td><td>67001</td></tr>
+                <tr><th><code>POST · PATCH · DELETE /dramas/:id/script-characters[/:cid]</code></th><td>增改删；改名旧名进别名，未锁定集重渲染并推送；锁定集不动</td><td>67045 重名、67044 仍被引用（带集号）</td></tr>
+                <tr><th><code>GET · POST · PATCH · DELETE /dramas/:id/script-locations[/:lid]</code></th><td>地点表，规则同上</td><td>67045、67044</td></tr>
+                <tr><th><code>PATCH /dramas/:id/episodes/:no</code></th><td><b>HTTP 入参去掉 <code>script_md</code></b>，其余字段不变</td><td>—</td></tr>
+                <tr><th>Agent <code>drama_update_episode</code></th><td>入参不变；审批执行改为「解析 → 合并 → 写结构」；防重复判定改为比对合并后的渲染结果；审批预览显示合并后渲染文本</td><td>同 PUT</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>写入路径伪代码</h2>
+          <div class="codeblock"><pre>// 所有写入最终都走这里（提案）
+func writeEpisodeScript(tx, drama, ep, next Structure, baseRevision) error {
+  ensureStructured(tx, drama)                 // 整部剧未转换就先转换
+  if ep.Locked            { return ErrDramaEpisodeLocked }   // 67005
+  if ep.Revision != baseRevision { return ErrCanvasConflict } // 409
+  if err := validate(next); err != nil { return ErrScriptInvalid(err.Scene, err.Index) } // 67043
+  diffAndApply(tx, ep, next)                  // 按 ID 增、改、删场次和元素，重排 position
+  ep.ScriptMD = render(next, roster, locations)   // note 不渲染
+  ep.Revision++
+  return tx.SaveEpisode(ep)
+}
+
+// 文本写入：重新生成、Agent、粘贴覆盖整集
+func writeEpisodeText(tx, drama, ep, text) (Stats, error) {
+  parsed, warnings, newPeople := parse(text, roster, locations)  // 认不出的行 → action + warning
+  registerUnconfirmed(tx, newPeople)          // confirmed=false
+  merged, stats := merge(loadStructure(ep), parsed)
+  return stats, writeEpisodeScript(tx, drama, ep, merged, ep.Revision)
+}
+
+// 合并（§7.4）
+func merge(old, neu) {
+  for s in neu.scenes:                        // 键 = 内外 + 时间 + 地点ID，不要求顺序
+    o = first unused old scene with key(s)
+    if o: s.id, s.title, s.summary, s.emotions = o...; s.elements = mergeElements(o.nonNote, s.elements)
+  mergeElements: LCS on (type, character_id, text) → 保留原 ID
+                 未匹配区间里 type+character_id 相同的按顺序配对 → 修改，保留原 ID
+  notes: 挂到原前一个元素后；它没了就往前找同场仍保留的元素；整场删了 → 第一场开头 + 警告
+         插入点后紧跟括号 / 对白时往后挪到这段说话结束（不能夹在角色行和对白之间）
+  extra_character_ids、props 以新文本为准
+}</pre></div>
+        </div>
+
+        <div class="sec">
+          <h2>已确认的决定</h2>
+          <div class="card">
+            <ol class="list" style="padding-left: 18px; display: grid; gap: 4px">
+              <li><b>A、B、C 和剧本编辑器都要做</b>：先做编辑器，A、B、C 之后各自单独设计。</li>
+              <li><b>编辑器要补四样</b>：元素化编辑手感、角色与场次绑定、场次级信息与状态、原著对照分栏；起因是「改对白时格式容易乱，想要结构化存储，而且过于单薄」。</li>
+              <li><b>存储用行级表</b>（用户选方案 1），而不是整集一个 JSON 列。</li>
+              <li><b>剧本自带人物表 / 地点表</b>（用户选方案 1）：拆解后回填画布节点 ID，而不是只存名字或拆解前禁止编辑。</li>
+              <li><b>整集重写时智能匹配保留</b>（用户选方案 1）：而不是让 Agent 读写全部信息，或接受丢失。</li>
+              <li><b>拆解直接用剧本结构里的人物、地点、道具</b>：不再让模型重新提取，「否则就对不上了」；造型、外貌、音色保留一次轻量模型补充，只能挂在已有人物下（用户选方案 1）。作为第⑤步，编辑器上线后做。<b>主文档 §7.6 已回写</b>。</li>
+              <li><b>撤回「大纲阶段先出人物表」</b>：用户澄清本意不是改写剧本的流程。</li>
+              <li><b>在新分支上做</b>：<code>feat/structured-script-editor</code>。</li>
+              <li><b>Reveric 只借思路</b>：它是 AGPL-3.0，不复制代码、提示词或文案。</li>
+            </ol>
+            <p class="muted" style="font-size: 12.5px; margin-top: 12px">
+              以下是设计者替用户做的决定，可推翻，详见主文档：<code>script_md</code> 降为派生列；锁定集冻结 <code>script_md</code>；整部剧惰性转换；解析器只在 Go；备注不渲染；Tab 循环切类型；场次对齐不要求顺序（<b>主文档 §7.4 已回写</b>）；改名不同步画布节点；预估时长公式（对白 4 字/秒，动作、空镜、字幕各 2 秒，待用真实剧本校准）。
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const $ = (s, r = document) => r.querySelector(s);
+      const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+      const icons = () => { if (window.lucide) lucide.createIcons(); };
+      function toggleNotes() {
+        const on = document.body.classList.toggle("show-notes");
+        $("#notesSw").setAttribute("aria-checked", String(on));
+      }
+      let toastTimer;
+      function toast(msg, kind = "ok") {
+        const icon = { ok: "circle-check", bad: "circle-x", warn: "triangle-alert" }[kind] || "info";
+        $("#toast").innerHTML = `<div><i data-lucide="${icon}" style="color: rgb(var(--${kind}))"></i>${esc(msg)}</div>`;
+        icons();
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => ($("#toast").innerHTML = ""), 2200);
+      }
+      function showTab(id) {
+        document.querySelectorAll("main > section").forEach((s) => (s.hidden = s.id !== "tab-" + id));
+        document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tab === id)));
+        window.scrollTo(0, 0);
+      }
+      document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+
+      /* ================= 解析 / 渲染 / 合并（浏览器模拟，规则同设计文档 §7） ================= */
+      const IE = { 内: "interior", 外: "exterior", 内外: "interior_exterior" };
+      const IE_TXT = { interior: "内", exterior: "外", interior_exterior: "内外" };
+      const TYPE_TXT = { action: "动作", character: "角色", parenthetical: "括号", dialogue: "对白", transition: "转场", subtitle: "字幕", shot: "空镜", flashback_start: "闪回", flashback_end: "闪回止", note: "备注" };
+      let seq = 0;
+      const nid = (p) => p + (++seq).toString(36);
+
+      function findOrAdd(list, name, prefix, fresh) {
+        const n = name.trim();
+        let hit = list.find((x) => x.name.toLowerCase() === n.toLowerCase() || x.aliases.some((a) => a.toLowerCase() === n.toLowerCase()));
+        if (!hit) {
+          hit = { id: nid(prefix), name: n, aliases: [], confirmed: false };
+          list.push(hit);
+          fresh.push(n);
+        }
+        return hit;
+      }
+
+      function parseHeading(line) {
+        let m = /^(\d+)\s*[-–]\s*(\d+)\s+(.+?)\s*[·•]\s*(.+)$/.exec(line);
+        if (m) {
+          let ie = null, time = null;
+          for (const p of m[3].split(/[\/／\s]+/).filter(Boolean)) { if (IE[p]) ie = IE[p]; else time = p; }
+          return { ie, time, loc: m[4].trim() };
+        }
+        m = /^(INT|EXT)\.\s*(.+?)\s*[-–]\s*(DAY|NIGHT)$/i.exec(line);
+        if (m) return { ie: m[1].toUpperCase() === "INT" ? "interior" : "exterior", time: m[3].toUpperCase() === "DAY" ? "日" : "夜", loc: m[2].trim() };
+        return null;
+      }
+
+      /** 纯文本 → { scenes, warnings, newChars, newLocs }；roster / locs 会被追加新登记的项 */
+      function parse(text, roster, locs) {
+        const scenes = [], warnings = [], newChars = [], newLocs = [];
+        let cur = null;
+        const startScene = (h) => {
+          cur = { ie: h ? h.ie : null, time: h ? h.time : null, locId: h ? findOrAdd(locs, h.loc, "l", newLocs).id : null, extraNames: [], props: [], els: [] };
+          scenes.push(cur);
+        };
+        text.split(/\r?\n/).forEach((raw, idx) => {
+          const line = raw.trim().replace(/^#{1,6}\s+/, "").replace(/^\*\*(.+)\*\*$/, "$1").trim();
+          if (!line || /^第\s*[\d一二三四五六七八九十百]+\s*集/.test(line)) return;
+          const h = parseHeading(line);
+          if (h) return startScene(h);
+          if (!cur) { startScene(null); warnings.push(`第 ${idx + 1} 行之前没有场次标题，已放进一个无地点的场次`); }
+          let m;
+          if ((m = /^人物[:：]\s*(.+)$/.exec(line))) { cur.extraNames.push(...m[1].split(/[、，,\s]+/).filter(Boolean)); return; }
+          if ((m = /^道具[:：]\s*(.+)$/.exec(line))) { cur.props.push(...m[1].split(/[、，,]+/).map((x) => x.trim()).filter(Boolean)); return; }
+          if (/^【闪回】$/.test(line)) return cur.els.push({ type: "flashback_start", text: "" });
+          if (/^【闪回结束】$/.test(line)) return cur.els.push({ type: "flashback_end", text: "" });
+          if ((m = /^【字幕[:：](.+)】$/.exec(line))) return cur.els.push({ type: "subtitle", text: m[1].trim() });
+          if ((m = /^【空镜】(.*)$/.exec(line))) return cur.els.push({ type: "shot", text: m[1].trim() });
+          if ((m = /^【备注[:：](.+)】$/.exec(line))) return cur.els.push({ type: "note", text: m[1].trim() });
+          if ((m = /^△\s*(.+)$/.exec(line))) return cur.els.push({ type: "action", text: m[1].trim() });
+          if (/^(切至|切回|淡入|淡出|叠化|黑场)/.test(line)) return cur.els.push({ type: "transition", text: line });
+          if ((m = /^([一-龥A-Za-z·]{1,8})\s*(?:[（(]([^）)]*)[）)])?\s*[:：]\s*(.+)$/.exec(line))) {
+            const who = findOrAdd(roster, m[1], "c", newChars);
+            const tags = (m[2] || "").split(/[，,]/).map((x) => x.trim()).filter(Boolean);
+            const ext = tags.find((t) => /^(OS|VO)$/i.test(t)) || "";
+            const paren = tags.filter((t) => !/^(OS|VO)$/i.test(t)).join("，");
+            cur.els.push({ type: "character", text: "", cid: who.id, ext: ext.toUpperCase() });
+            if (paren) cur.els.push({ type: "parenthetical", text: paren });
+            cur.els.push({ type: "dialogue", text: m[3].trim() });
+            return;
+          }
+          cur.els.push({ type: "action", text: line });
+          warnings.push(`第 ${idx + 1} 行未识别，已作为动作保存`);
+        });
+        for (const s of scenes) {
+          const speakers = new Set(s.els.filter((e) => e.type === "character").map((e) => e.cid));
+          s.extra = s.extraNames.map((n) => findOrAdd(roster, n, "c", newChars).id).filter((id) => !speakers.has(id));
+          delete s.extraNames;
+        }
+        return { scenes, warnings, newChars, newLocs };
+      }
+
+      /** 结构 → 内置格式文本；note 默认不渲染 */
+      function render(scenes, roster, locs, no) {
+        const nm = (id, list) => (list.find((x) => x.id === id) || { name: "?" }).name;
+        const out = [`第${no}集`];
+        scenes.forEach((s, i) => {
+          out.push("");
+          const tl = [s.time, IE_TXT[s.ie]].filter(Boolean).join("/");
+          out.push(`${no}-${i + 1} ${tl}${s.locId ? " · " + nm(s.locId, locs) : ""}`.replace(/\s+$/, ""));
+          const cast = [];
+          s.els.forEach((e) => { if (e.type === "character" && !cast.includes(e.cid)) cast.push(e.cid); });
+          (s.extra || []).forEach((id) => { if (!cast.includes(id)) cast.push(id); });
+          if (cast.length) out.push("人物：" + cast.map((id) => nm(id, roster)).join("、"));
+          if (s.props && s.props.length) out.push("道具：" + s.props.join("、"));
+          let who = null, paren = [];
+          for (const e of s.els) {
+            if (e.type === "character") { who = e; paren = []; }
+            else if (e.type === "parenthetical") paren.push(e.text);
+            else if (e.type === "dialogue") {
+              const tags = [who && who.ext, ...paren].filter(Boolean);
+              out.push(`${who ? nm(who.cid, roster) : "?"}${tags.length ? "（" + tags.join("，") + "）" : ""}：${e.text}`);
+              paren = [];
+            } else if (e.type === "action") out.push("△ " + e.text);
+            else if (e.type === "subtitle") out.push(`【字幕：${e.text}】`);
+            else if (e.type === "shot") out.push(`【空镜】${e.text}`);
+            else if (e.type === "flashback_start") out.push("【闪回】");
+            else if (e.type === "flashback_end") out.push("【闪回结束】");
+            else if (e.type === "transition") out.push(e.text);
+          }
+        });
+        return out.join("\n");
+      }
+
+      const sceneKey = (s) => [s.ie || "", s.time || "", s.locId || ""].join("|");
+      const elKey = (e) => [e.type, e.cid || "", e.text].join("|");
+
+      function mergeEls(oldEls, newEls, stats) {
+        const n = oldEls.length, m = newEls.length;
+        const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+        for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+          dp[i][j] = elKey(oldEls[i]) === elKey(newEls[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+        const pairs = [];
+        for (let i = 0, j = 0; i < n && j < m; ) {
+          if (elKey(oldEls[i]) === elKey(newEls[j])) { pairs.push([i, j]); i++; j++; }
+          else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+          else j++;
+        }
+        const out = newEls.map((e) => ({ ...e }));
+        const usedOld = new Set();
+        pairs.forEach(([i, j]) => { out[j].id = oldEls[i].id; out[j].st = "kept"; usedOld.add(i); });
+        const bounds = [[-1, -1], ...pairs, [n, m]];
+        for (let k = 0; k < bounds.length - 1; k++) {
+          const [oi, nj] = bounds[k], [oi2, nj2] = bounds[k + 1];
+          for (let j = nj + 1; j < nj2; j++) {
+            for (let i = oi + 1; i < oi2; i++) {
+              if (usedOld.has(i)) continue;
+              if (oldEls[i].type === out[j].type && (oldEls[i].cid || "") === (out[j].cid || "")) {
+                out[j].id = oldEls[i].id; out[j].st = "mod"; out[j].was = oldEls[i].text; usedOld.add(i); break;
+              }
+            }
+          }
+        }
+        out.forEach((e) => { if (!e.st) { e.id = nid("e"); e.st = "add"; } });
+        stats.kept += out.filter((e) => e.st === "kept").length;
+        stats.mod += out.filter((e) => e.st === "mod").length;
+        stats.add += out.filter((e) => e.st === "add").length;
+        const deleted = oldEls.filter((_, i) => !usedOld.has(i));
+        stats.del += deleted.length;
+        return { els: out, deleted };
+      }
+
+      function merge(old, neu) {
+        const stats = { kept: 0, mod: 0, add: 0, del: 0 }, warnings = [];
+        const used = new Set();
+        const deletedEls = [];
+        const scenes = neu.scenes.map((ns) => {
+          const os = old.scenes.find((o) => !used.has(o.id) && sceneKey(o) === sceneKey(ns));
+          if (os) {
+            used.add(os.id);
+            const r = mergeEls(os.els.filter((e) => e.type !== "note"), ns.els, stats);
+            deletedEls.push(...r.deleted);
+            return { ...ns, id: os.id, title: os.title, summary: os.summary, emotions: os.emotions, matched: true, els: r.els };
+          }
+          const els = ns.els.map((e) => ({ ...e, id: nid("e"), st: "add" }));
+          stats.add += els.length;
+          return { ...ns, id: nid("s"), title: "", summary: "", emotions: [], matched: false, els };
+        });
+        const deletedScenes = old.scenes.filter((o) => !used.has(o.id));
+        deletedScenes.forEach((o) => { const d = o.els.filter((e) => e.type !== "note"); stats.del += d.length; deletedEls.push(...d); });
+        // 备注挂回
+        let lost = 0;
+        old.scenes.forEach((os) => {
+          os.els.forEach((note, idx) => {
+            if (note.type !== "note") return;
+            const ns = scenes.find((s) => s.id === os.id);
+            let placed = false;
+            for (let k = idx - 1; k >= 0 && ns; k--) {
+              const anchor = os.els[k];
+              if (anchor.type === "note") continue;
+              const at = ns.els.findIndex((e) => e.id === anchor.id);
+              if (at >= 0) {
+                // 插入点后面紧跟括号或对白时，挪到这段说话结束，避免把备注夹进角色行和对白之间
+                let pos = at + 1;
+                while (pos < ns.els.length && (ns.els[pos].type === "parenthetical" || ns.els[pos].type === "dialogue")) pos++;
+                ns.els.splice(pos, 0, { ...note, st: "kept" });
+                placed = true;
+                break;
+              }
+            }
+            if (!placed && ns) { ns.els.unshift({ ...note, st: "kept" }); placed = true; }
+            if (!placed && scenes.length) { scenes[0].els.unshift({ ...note, st: "moved" }); lost++; }
+          });
+        });
+        if (lost) warnings.push(`${lost} 条备注的原位置已删除，已移到第一场开头`);
+        return { scenes, stats, warnings, deletedScenes, deletedEls };
+      }
+
+      /* ================= 场景数据 ================= */
+      const ROSTER = () => [
+        { id: "c1", name: "林骁", aliases: ["林川"], confirmed: true },
+        { id: "c2", name: "苏晚", aliases: [], confirmed: true },
+        { id: "c3", name: "老周", aliases: [], confirmed: true },
+      ];
+      const LOCS = () => [
+        { id: "l1", name: "城西老码头", aliases: [], confirmed: true },
+        { id: "l2", name: "林家老宅客厅", aliases: ["老宅客厅"], confirmed: true },
+        { id: "l3", name: "医院走廊", aliases: [], confirmed: true },
+      ];
+      const S1 = `3-1 夜/外 · 城西老码头
+人物：林骁、苏晚
+道具：信封
+△ 雨砸在铁皮棚上，林骁攥着一只湿透的信封。
+苏晚：你到底瞒了我什么？
+林骁（压低声音）：这事别让她知道。
+△ 远处传来汽笛声。`;
+      const S2 = `3-2 日/内 · 林家老宅客厅
+人物：林骁、老周
+老周：少爷，老爷子醒了。
+林骁：我这就去。
+林骁（OS）：他醒得太巧了。`;
+      const OLD_TEXT = `第3集\n${S1}\n\n${S2}`;
+      const META = [
+        { title: "码头对峙", summary: "苏晚逼问信封来历，林骁不肯说", emotions: ["紧张", "压抑"] },
+        { title: "老爷子苏醒", summary: "老周报信，林骁起疑", emotions: ["紧迫"] },
+      ];
+      const NOTES = [{ scene: 0, after: 2, text: "苏晚这句可以更冷一点" }, { scene: 1, after: 5, text: "OS 留给配音，别上字幕" }];
+
+      const CASES = [
+        { key: "edit", name: "Agent 改一句对白", desc: "最常见的情况：只动了林骁的一句台词。", text: OLD_TEXT.replace("这事别让她知道。", "这事，别让任何人知道。") },
+        { key: "drop", name: "删掉一场", desc: "新文本里没有码头那场，它上面挂的备注会移到第一场开头并警告。", text: `第3集\n${S2.replace("3-2", "3-1")}` },
+        { key: "swap", name: "调换两场顺序", desc: "场次按「内外 + 时间 + 地点」配对，不看顺序，所以两场的短标题和梗概都保留。", text: `第3集\n${S2.replace("3-2", "3-1")}\n\n${S1.replace("3-1", "3-2")}` },
+        { key: "new", name: "出现新人物和新地点", desc: "「护士」和「天台」不在表里，自动登记为待确认。", text: `${OLD_TEXT}\n\n3-3 夜/外 · 天台\n人物：林骁\n△ 风很大，林骁站在栏杆边。\n护士（喊）：林先生！医生找您！` },
+        { key: "mess", name: "自定义提示词写成散文", desc: "模型没按格式写。认不出的行全当动作，不失败，只提示。", text: `夜里的码头下着雨，林骁攥着信封站在铁皮棚下。\n苏晚走过来，问他到底瞒了什么。\n他没有回答，只说这事别让她知道。` },
+      ];
+
+      let current = CASES[0];
+      let oldState = null;
+
+      function buildOld() {
+        seq = 0;
+        const roster = ROSTER(), locs = LOCS();
+        const p = parse(OLD_TEXT, roster, locs);
+        p.scenes.forEach((s, i) => {
+          s.id = "s" + (i + 1);
+          Object.assign(s, META[i]);
+          s.els.forEach((e, j) => (e.id = `e${i + 1}${String(j + 1).padStart(2, "0")}`));
+        });
+        NOTES.slice().reverse().forEach((n) => p.scenes[n.scene].els.splice(n.after + 1, 0, { type: "note", text: n.text, id: `n${n.scene + 1}` }));
+        return { scenes: p.scenes, roster, locs };
+      }
+
+      const nameOf = (id, list) => (list.find((x) => x.id === id) || { name: "?" }).name;
+      function headOf(s, locs, no, i) {
+        const tl = [s.time, IE_TXT[s.ie]].filter(Boolean).join("/");
+        return `${no}-${i + 1} ${esc(tl)}${s.locId ? " · " + esc(nameOf(s.locId, locs)) : " · <span class='tag t-warn'>无地点</span>"}`;
+      }
+      function elRow(e, roster, extra = "") {
+        const tx = e.type === "character" ? `<b>${esc(nameOf(e.cid, roster))}</b>${e.ext ? " · " + esc(e.ext) : ""}` : esc(e.text) || "—";
+        return `<div class="elr ${e.type === "note" ? "note-el" : ""} ${extra}"><span class="ty">${TYPE_TXT[e.type]}</span><span class="tx">${tx}</span>${e.id ? `<span class="id">${esc(e.id)}</span>` : ""}</div>`;
+      }
+      function metaLine(s) {
+        if (!s.title && !s.summary && !(s.emotions || []).length) return `<span class="muted">（无场次信息）</span>`;
+        return `<b>${esc(s.title || "")}</b><span class="muted">${esc(s.summary || "")}</span>${(s.emotions || []).map((x) => `<span class="tag t-mute">${esc(x)}</span>`).join("")}`;
+      }
+
+      function renderOld() {
+        oldState = buildOld();
+        $("#oldView").innerHTML = oldState.scenes
+          .map((s, i) => `<div class="scn"><div class="scn-h">${headOf(s, oldState.locs, 3, i)}<span class="id mono muted" style="font-size:10.5px">${s.id}</span></div><div class="scn-h" style="background:none">${metaLine(s)}</div>${s.els.map((e) => elRow(e, oldState.roster)).join("")}</div>`)
+          .join("");
+      }
+
+      const ST = { kept: '<span class="tag t-mute">保留</span>', mod: '<span class="tag t-warn">修改</span>', add: '<span class="tag t-ok">新增</span>', moved: '<span class="tag t-bad">移位</span>' };
+      function renderMerge() {
+        const base = buildOld();
+        const roster = base.roster, locs = base.locs;
+        const p = parse($("#newText").value, roster, locs);
+        const r = merge(base, p);
+        const s = r.stats;
+        $("#demoHead").innerHTML = `
+          <div class="row wrapflex"><b>${esc(current.name)}</b><span class="muted" style="font-size:13px">${esc(current.desc)}</span></div>
+          <div class="stat" style="margin-top:8px">
+            <span class="tag t-mute">保留 ${s.kept}</span><span class="tag t-warn">修改 ${s.mod}</span><span class="tag t-ok">新增 ${s.add}</span><span class="tag t-bad">删除 ${s.del}</span>
+            ${p.newChars.map((n) => `<span class="tag t-info">新人物 ${esc(n)} · 待确认</span>`).join("")}
+            ${p.newLocs.map((n) => `<span class="tag t-info">新地点 ${esc(n)} · 待确认</span>`).join("")}
+          </div>
+          ${[...p.warnings, ...r.warnings].length ? `<div class="callout c-warn" style="margin-top:10px"><i data-lucide="triangle-alert"></i><div>${[...p.warnings, ...r.warnings].map(esc).join("<br>")}</div></div>` : ""}`;
+        $("#mergeView").innerHTML =
+          r.scenes
+            .map((sc, i) => `<div class="scn"><div class="scn-h">${headOf(sc, locs, 3, i)}${sc.matched ? `<span class="tag t-mute">沿用 ${sc.id}</span>` : '<span class="tag t-ok">新场次</span>'}</div><div class="scn-h" style="background:none">${metaLine(sc)}</div>${sc.els.map((e) => elRow(e, roster).replace('<span class="ty">', (ST[e.st] || "") + '<span class="ty">')).join("")}</div>`)
+            .join("") +
+          (r.deletedScenes.length || r.deletedEls.length
+            ? `<div class="scn"><div class="scn-h"><b>删除</b></div>${r.deletedScenes.map((d) => `<div class="elr del"><span class="ty">场次</span><span class="tx">${esc(d.title || d.id)}</span><span class="id">${d.id}</span></div>`).join("")}${r.deletedEls.map((e) => elRow(e, roster, "del")).join("")}</div>`
+            : "");
+        $("#mdOut").textContent = render(r.scenes, roster, locs, 3);
+        icons();
+      }
+
+      function pickCase(c) {
+        current = c;
+        document.querySelectorAll("#optList .opt").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === c.key)));
+        $("#newText").value = c.text;
+        renderMerge();
+      }
+
+      $("#optList").innerHTML = CASES.map((c) => `<button class="opt" data-key="${c.key}" aria-pressed="false">${esc(c.name)}<small>${esc(c.desc)}</small></button>`).join("");
+      document.querySelectorAll("#optList .opt").forEach((b) => b.addEventListener("click", () => pickCase(CASES.find((c) => c.key === b.dataset.key))));
+      let typingTimer;
+      $("#newText").addEventListener("input", () => { clearTimeout(typingTimer); typingTimer = setTimeout(renderMerge, 250); });
+      if (window.matchMedia("(max-width: 860px)").matches) $("#demoGrid").style.gridTemplateColumns = "1fr";
+
+      renderOld();
+      pickCase(CASES[0]);
+      icons();
+    </script>
+  </body>
+</html>

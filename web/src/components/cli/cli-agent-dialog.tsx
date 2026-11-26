@@ -66,7 +66,10 @@ export function CLIAgentDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(90svh,760px)] flex-col gap-0 overflow-hidden p-0 [corner-shape:squircle] sm:max-w-2xl">
+      <DialogContent
+        surface="glass"
+        className="flex max-h-[min(90svh,760px)] flex-col gap-0 overflow-hidden p-0 [corner-shape:squircle] sm:max-w-2xl"
+      >
         <DialogSession open={open}>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-12 pb-8 sm:px-12 sm:pt-14 sm:pb-12">
             <AgentStack />

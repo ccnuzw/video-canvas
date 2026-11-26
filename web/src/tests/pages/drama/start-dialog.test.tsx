@@ -8,8 +8,9 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import { useState } from "react";
 
-import type { CreateDramaInput, SourcePreflight } from "@/api/drama/type";
+import type { CreateDramaInput, PromptTemplate, SourcePreflight } from "@/api/drama/type";
 import type { PromptLibrary } from "@/components/drama/prompts/use-prompt-library";
 import { holdExitAnimations, installDom, type DomEnv } from "@/tests/helpers/dom";
 import service from "@/utils/requests/service";
@@ -57,6 +58,10 @@ const pre = (patch: Partial<SourcePreflight> = {}): SourcePreflight => ({
 
 const library: PromptLibrary = {
   ready: true,
+  presets: {},
+  presetStatus: "ready",
+  templateStatus: "ready",
+  refreshPresets: () => {},
   templates: [],
   mine: { plan: [], scripts: [], assets: [], asset_prompts: [], video: [], board: [] },
   skills: { plan: [], scripts: [], assets: [], asset_prompts: [], video: [], board: [] },
@@ -78,6 +83,7 @@ const model = (key: string, window: number) =>
 let get: ReturnType<typeof spyOn>;
 beforeEach(() => {
   get = spyOn(service, "get").mockResolvedValue({
+    items: [],
     genres: [{ key: "xianxia", name: "玄幻修仙" }],
     styles: [{ key: "real_city_film", name: "都市电影", prompt: "" }],
   } as never);
@@ -252,7 +258,93 @@ describe("开拍设置：文本模型", () => {
   });
 });
 
+test("规划估算发现模板已更新时刷新目录，保留表单和其他仍可用的选择", async () => {
+  const { ApiError } = await import("@/utils/requests/request");
+  const post = spyOn(service, "post").mockRejectedValue(new ApiError("规划模板已更新", 67031, 409));
+  const assetA = { id: "asset-a", revision: 1, name: "原资产模板", description: "" };
+  const assetB = { ...assetA, id: "asset-b", name: "新默认资产模板" };
+  const plan = { id: "plan-a", revision: 1, name: "规划模板", description: "" };
+  const display = (step: string) =>
+    [...dom.win.document.querySelectorAll("span")]
+      .find((element) => element.textContent === step)
+      ?.parentElement?.querySelector("button")?.textContent;
+  const Example = () => {
+    const [refreshed, setRefreshed] = useState(false);
+    return (
+      <StartBody
+        pre={pre()}
+        library={{
+          ...library,
+          refreshPresets: () => setRefreshed(true),
+          presets: {
+            plan: {
+              step: "plan",
+              default_id: plan.id,
+              items: [{ ...plan, revision: refreshed ? 2 : 1 }],
+            },
+            assets: {
+              step: "assets",
+              default_id: refreshed ? assetB.id : assetA.id,
+              items: [assetA, assetB],
+            },
+          },
+        }}
+        onCancel={() => {}}
+        onSubmit={async () => {}}
+      />
+    );
+  };
+  const mounted = await dom.mount(<Example />);
+  try {
+    await dom.click(byText(mounted.container, "16:9"));
+    await dom.flush(400);
+    expect(mounted.container.textContent).toContain("分集规划的内置提示词已变更，请重新选择");
+    expect(startButton(mounted.container).disabled).toBe(true);
+    expect(display("资产拆解")).toBe("原资产模板");
+    expect(byText(mounted.container, "16:9")?.getAttribute("aria-pressed")).toBe("true");
+  } finally {
+    post.mockRestore();
+    await mounted.unmount();
+  }
+});
+
 describe("开拍设置：侧滑到提示词编辑器", () => {
+  test("等待默认正文加载完成后，才以它起草个人提示词", async () => {
+    const { StartDialog } = await import("@/pages/drama/start-dialog");
+    let finish: (value: { items: PromptTemplate[] }) => void = () => {};
+    const templates = new Promise<{ items: PromptTemplate[] }>((resolve) => {
+      finish = resolve;
+    });
+    get.mockImplementation(async (path) =>
+      path === "/drama-prompt-templates" ? templates : { items: [] },
+    );
+    const mounted = await dom.mount(
+      <StartDialog open pre={pre()} onOpenChange={() => {}} onSubmit={async () => {}} />,
+    );
+    try {
+      const document = dom.win.document;
+      const chip = [...document.querySelectorAll("span")]
+        .find((element) => element.textContent === "视频提示词")
+        ?.parentElement?.querySelector("button");
+      await dom.click(chip);
+      expect(byText(document.body, "正在加载默认正文…")?.disabled).toBe(true);
+      await dom.act(async () => {
+        finish({
+          items: [
+            {
+              step: "video",
+              pages: [{ key: "storyboard", label: "视频", body: "当前模板的正文" }],
+            },
+          ],
+        });
+      });
+      await dom.click(byText(document.body, "新建"));
+      expect(document.querySelector("textarea")?.value).toBe("当前模板的正文");
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
   test("编辑器打开时开拍设置那页收起，弹窗高度跟着编辑器走；返回后恢复", async () => {
     const m = await mountBody(pre());
     const settingsPane = () =>
@@ -604,9 +696,53 @@ describe("开拍设置：资产图片的比例与分辨率", () => {
 });
 
 describe("开拍设置：弹窗开关", () => {
+  test("用同一草稿快速重开，重新读取并采用新默认", async () => {
+    const { StartDialog } = await import("@/pages/drama/start-dialog");
+    let latest = "旧默认视频模板";
+    get.mockImplementation(async (path) => {
+      if (path === "/drama-prompt-presets") {
+        return {
+          items: [
+            {
+              step: "video",
+              default_id: latest,
+              items: [{ id: latest, name: latest, revision: 1 }],
+            },
+          ],
+        };
+      }
+      return { items: [] };
+    });
+    const Host = () => {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            重开
+          </button>
+          <StartDialog open={open} onOpenChange={setOpen} pre={pre()} onSubmit={async () => {}} />
+        </>
+      );
+    };
+    const release = holdExitAnimations(dom);
+    const mounted = await dom.mount(<Host />);
+    try {
+      const popup = () =>
+        dom.win.document.body.querySelector<HTMLElement>('[data-slot="dialog-content"]')!;
+      expect(popup().textContent).toContain("旧默认视频模板 · 默认");
+      await dom.click(byText(popup(), "取消"));
+      expect(popup().hasAttribute("data-ending-style")).toBe(true);
+      latest = "新默认视频模板";
+      await dom.click(byText(mounted.container, "重开"));
+      expect(popup().textContent).toContain("新默认视频模板 · 默认");
+    } finally {
+      await mounted.unmount();
+      release();
+    }
+  });
+
   test("草稿过期时关弹窗并清掉预检：退出动画期间弹窗里仍是原来的内容", async () => {
     const { StartDialog } = await import("@/pages/drama/start-dialog");
-    const { useState } = await import("react");
     const Host = () => {
       const [state, setState] = useState<{ open: boolean; pre: SourcePreflight | null }>({
         open: true,

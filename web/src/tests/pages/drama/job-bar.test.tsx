@@ -198,7 +198,7 @@ describe("任务胶囊：自动规划", () => {
     const m = await mountPill(drama({ phase: "paused", pauseCode: "custom_prompt" }), []);
     const panel = await openPanel(m.container);
     expect(byText(panel, "重试")).toBeTruthy();
-    await dom.click(byText(panel, "改用内置重试"));
+    await dom.click(byText(panel, "改用原内置重试"));
     await dom.flush();
     expect(post.mock.calls[0][0]).toBe("/dramas/d1/planning/retry-builtin");
     // 改用内置只针对分集规划

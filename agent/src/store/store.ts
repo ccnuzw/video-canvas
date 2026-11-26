@@ -131,7 +131,7 @@ function translate(e: unknown, missing: string): never {
   if (err && typeof err.errcode === "number" && (err.errcode & 0xff) === 19) {
     const msg = err.message ?? "";
     if (/FOREIGN KEY/i.test(msg)) throw new NotFoundError(missing);
-    if (/UNIQUE|PRIMARY KEY/i.test(msg)) throw new DuplicateError();
+    if (/canvas delivery busy|UNIQUE|PRIMARY KEY/i.test(msg)) throw new DuplicateError();
   }
   throw e;
 }
@@ -453,6 +453,27 @@ export class AgentStore {
             n,
           );
     return rows.reverse().map(eventOf);
+  }
+
+  canvasDelivery(canvasId: string, nonce: string, acquire: boolean): boolean {
+    return this.#tx(() => {
+      if (!acquire)
+        return (
+          this.#run(
+            "DELETE FROM canvas_delivery_leases WHERE canvas_id=? AND nonce=?",
+            dec(canvasId),
+            nonce,
+          ) === 1
+        );
+      if (this.activeRun(canvasId)) return false;
+      return (
+        this.#run(
+          "INSERT INTO canvas_delivery_leases VALUES(?,?,unixepoch()+360) ON CONFLICT(canvas_id) DO UPDATE SET nonce=excluded.nonce, expires=excluded.expires WHERE expires<=unixepoch()",
+          dec(canvasId),
+          nonce,
+        ) === 1
+      );
+    });
   }
 
   // ---- 运行 ----

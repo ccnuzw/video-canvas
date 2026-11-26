@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/admin-ui/dialog";
 import { FormField } from "@/components/admin-ui/form-field";
+import { DialogSession } from "@/components/dialog-session";
 import { AnnouncementBar } from "@/components/home/announcement-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,8 +51,9 @@ export function AnnouncementDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="gap-0 p-0 sm:max-w-[520px]">
-        {/* 换一条公告或重新打开就换 key，表单状态整份重置 */}
-        <DialogForm key={item?.id ?? "new"} item={item} onClose={onClose} onSaved={onSaved} />
+        <DialogSession open={open}>
+          <DialogForm key={item?.id ?? "new"} item={item} onClose={onClose} onSaved={onSaved} />
+        </DialogSession>
       </DialogContent>
     </Dialog>
   );

@@ -45,6 +45,14 @@ export class Autosaver {
     return this.revision;
   }
 
+  /**
+   * 只更新版本号，不动内容和状态：同一个 revision 还被别的保存（改钩子、悬念）共用，
+   * 它们保存成功后要把新版本号告诉这里，否则下次自动保存会白白冲突
+   */
+  setRevision(revision: number) {
+    this.revision = revision;
+  }
+
   /** 以当前内容为已保存基线（载入 / 重新载入最新后调用） */
   reset(value: string, revision: number) {
     this.clearTimer();

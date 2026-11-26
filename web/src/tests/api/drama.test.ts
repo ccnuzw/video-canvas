@@ -103,9 +103,11 @@ describe("api/drama：请求体", () => {
     expect(
       toUpdateDramaBody({ revision: 3, imageModels: { character: "m1", scene: "", prop: "" } }),
     ).toEqual({ revision: 3, image_models: { character: "m1", scene: "", prop: "" } });
-    expect(toUpdateEpisodeBody({ revision: 2, scriptMd: "正文" })).toEqual({
+    // 剧本正文改走 PUT …/script，PATCH 不再带 script_md
+    expect(toUpdateEpisodeBody({ revision: 2, title: "归来", hook: "开场" })).toEqual({
       revision: 2,
-      script_md: "正文",
+      title: "归来",
+      hook: "开场",
     });
   });
 
@@ -199,7 +201,7 @@ describe("api/drama：请求", () => {
       ...rawDrama().episodes![0],
       script_md: "正文",
     });
-    const episode = await updateEpisode("1a2b", 1, { revision: 2, scriptMd: "正文" });
+    const episode = await updateEpisode("1a2b", 1, { revision: 2, title: "新标题" });
     expect(patch.mock.calls[1][0]).toBe("/dramas/1a2b/episodes/1");
     expect(episode.scriptMd).toBe("正文");
   });

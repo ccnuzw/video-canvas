@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRightLeft, Copy, Eye } from "lucide-react";
 import { toast } from "sonner";
-import { dramaSharing, type SharingMode, type Viewer } from "@/api/drama/share";
+import { canvasSharing, dramaSharing, type SharingMode, type Viewer } from "@/api/drama/share";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,6 +13,12 @@ import {
 } from "@/components/admin-ui/dialog";
 import { cn } from "@/lib/utils";
 import type { DialogControl } from "@/store/dialog";
+
+const canvasDetails = {
+  view: "对方能查看已保存的节点、提示词和媒体。你可以随时收回权限。",
+  copy: "发送可独立编辑的画布和素材。此后双方各自修改。",
+  transfer: "对方接手画布。你和现有查看者将无法再打开原画布。",
+};
 
 const modes = [
   {
@@ -45,6 +51,7 @@ const modes = [
 export function DramaShareDialog({
   id,
   title,
+  revision,
   transferred,
   open,
   onClose,
@@ -52,8 +59,11 @@ export function DramaShareDialog({
 }: {
   id: string;
   title: string;
+  revision?: number;
   transferred: () => void;
 } & DialogControl) {
+  const canvas = revision !== undefined;
+  const api = canvas ? canvasSharing : dramaSharing;
   const [mode, setMode] = useState<SharingMode>("view");
   const [email, setEmail] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -64,7 +74,7 @@ export function DramaShareDialog({
   useEffect(() => {
     let active = true;
     setFailed(false);
-    void dramaSharing.members(id).then(
+    void api.members(id).then(
       (items) => {
         if (active) setMembers(items);
       },
@@ -75,7 +85,7 @@ export function DramaShareDialog({
     return () => {
       active = false;
     };
-  }, [id, reload]);
+  }, [api, id, reload]);
   const submit = async () => {
     if (mode === "transfer" && !confirm) {
       setConfirm(true);
@@ -83,7 +93,7 @@ export function DramaShareDialog({
     }
     setBusy(true);
     try {
-      await dramaSharing.submit(id, mode, email.trim());
+      await api.submit(id, mode, email.trim(), revision);
       toast.success(
         mode === "view" ? "已授予查看权限" : mode === "copy" ? "已发送副本" : "已转移所有权",
       );
@@ -99,7 +109,7 @@ export function DramaShareDialog({
   const remove = async (member: string) => {
     setBusy(true);
     try {
-      await dramaSharing.remove(id, member);
+      await api.remove(id, member);
       setMembers((items) => items?.filter((item) => item.id !== member) ?? null);
       toast.success("已收回查看权限");
     } finally {
@@ -114,15 +124,20 @@ export function DramaShareDialog({
       }}
       onOpenChangeComplete={(next) => !next && onExited()}
     >
-      <DialogContent className="flex h-[min(90dvh,620px)] flex-col gap-0 overflow-hidden p-0 [corner-shape:squircle] sm:max-w-4xl">
+      <DialogContent
+        surface="glass"
+        className="flex h-[min(90dvh,620px)] flex-col gap-0 overflow-hidden p-0 [corner-shape:squircle] sm:max-w-4xl"
+      >
         <DialogHeader className="gap-1.5 px-6 pt-8 pb-6 sm:px-8">
           <DialogTitle className="truncate pr-8 text-xl font-semibold tracking-tight">
             {confirm ? "确认转移所有权" : `共享《${title}》`}
           </DialogTitle>
           <DialogDescription>
             {confirm
-              ? `将《${title}》转移给 ${email.trim()}。你的账号将移除该剧，${members ? `现有 ${members.length} 位查看者` : "已有查看者"}的权限将被收回。`
-              : "用接收方的注册邮箱共享这部短剧。"}
+              ? `将《${title}》转移给 ${email.trim()}。你的账号将移除${canvas ? "原画布" : "该剧"}，${members ? `现有 ${members.length} 位查看者` : "已有查看者"}的权限将被收回。`
+              : canvas
+                ? "用接收方的注册邮箱共享这张画布。"
+                : "用接收方的注册邮箱共享这部短剧。"}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -184,7 +199,9 @@ export function DramaShareDialog({
                         />
                         <span className="grid gap-1">
                           <span className="text-sm font-medium">{label}</span>
-                          <span className="text-muted-foreground text-xs leading-5">{detail}</span>
+                          <span className="text-muted-foreground text-xs leading-5">
+                            {canvas ? canvasDetails[value] : detail}
+                          </span>
                         </span>
                       </label>
                     ))}
@@ -194,7 +211,8 @@ export function DramaShareDialog({
             </div>
             <section className="border-chrome-border flex min-h-0 flex-col border-t px-6 py-6 sm:overflow-y-auto sm:border-t-0 sm:border-l">
               <h3 className="text-muted-foreground mb-2 text-xs">
-                可查看此剧的人{members && members.length > 0 ? ` · ${members.length}` : ""}
+                {canvas ? "可查看原画布的人" : "可查看此剧的人"}
+                {members && members.length > 0 ? ` · ${members.length}` : ""}
               </h3>
               {failed ? (
                 <Button

@@ -133,7 +133,7 @@ func (h *AssetLibraryHandler) AddItem(c *gin.Context) {
 	if !BindJSON(c, &req) {
 		return
 	}
-	v, created, err := h.svc.AddItem(c.Request.Context(), currentUserID(c), req.AssetID, uint64(req.FolderID))
+	v, created, err := h.svc.AddItem(c.Request.Context(), currentUserID(c), req.AssetID, uint64(req.FolderID), req.Name)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -143,6 +143,24 @@ func (h *AssetLibraryHandler) AddItem(c *gin.Context) {
 		return
 	}
 	response.OK(c, v)
+}
+
+// RenameItem 修改当前用户个人资产库的素材名称。
+func (h *AssetLibraryHandler) RenameItem(c *gin.Context) {
+	id, ok := CanvasPathID(c)
+	if !ok {
+		return
+	}
+	var req model.RenameAssetLibraryItemReq
+	if !BindJSON(c, &req) {
+		return
+	}
+	name, err := h.svc.RenameItem(c.Request.Context(), currentUserID(c), id, req.Name)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"name": name})
 }
 
 // MoveItem 移动库条目到另一个文件夹（folder_id 为 null 表示根目录）

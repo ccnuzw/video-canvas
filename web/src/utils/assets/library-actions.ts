@@ -5,7 +5,11 @@ import type { PagedList } from "./paged-list";
 /** 资产库改动用到的接口：由调用方注入，测试时换成假的 */
 export type LibraryApi = {
   /** 加入资产库，已在库里时幂等返回现有归属 */
-  addToLibrary: (assetId: string, folderId: string | null) => Promise<LibraryItemDto>;
+  addToLibrary: (
+    assetId: string,
+    folderId: string | null,
+    name?: string,
+  ) => Promise<LibraryItemDto>;
   /** 移到另一个文件夹 */
   moveLibraryItem: (id: string, folderId: string | null) => Promise<void>;
   /** 移出资产库 */
@@ -30,6 +34,7 @@ const isNotFound = (error: unknown) => (error as { status?: number } | null)?.st
  * @param item 要加入的历史条目
  * @param folderId 目标文件夹，null 是根目录
  * @param api 接口
+ * @param name 可选的库内名称
  * @returns 资产库条目；失败时 null
  */
 export async function addGeneratedToLibrary(
@@ -37,9 +42,10 @@ export async function addGeneratedToLibrary(
   item: GeneratedItemDto,
   folderId: string | null,
   api: LibraryApi,
+  name?: string,
 ): Promise<LibraryItemDto | null> {
   try {
-    const result = await api.addToLibrary(item.asset.id, folderId);
+    const result = await api.addToLibrary(item.asset.id, folderId, name);
     store.update((items) =>
       items.map((entry) =>
         entry.asset.id === item.asset.id ? { ...entry, libraryItemId: result.id } : entry,

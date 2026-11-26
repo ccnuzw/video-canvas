@@ -53,7 +53,7 @@ function ChoiceDialog<T extends string>({
       onOpenChange={(next) => !next && done(null)}
       onOpenChangeComplete={(next) => !next && onExited?.()}
     >
-      <AlertDialogContent className="data-[size=default]:sm:max-w-sm">
+      <AlertDialogContent surface="glass" className="data-[size=default]:sm:max-w-sm">
         <AlertDialogHeader className="gap-2.5">
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {(description || (stats && stats.length > 0) || note) && (

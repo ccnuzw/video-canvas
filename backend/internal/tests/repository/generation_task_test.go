@@ -495,6 +495,14 @@ func TestGenerationTaskRepo_ListByNode(t *testing.T) {
 	repo := NewGenerationTaskRepository(db)
 	user, other := gtNewUserID(), gtNewUserID()
 	canvas, otherCanvas := uint64(11), uint64(12)
+	if err := db.AutoMigrate(&model.CanvasProject{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []uint64{canvas, otherCanvas} {
+		if err := db.Create(&model.CanvasProject{BaseModel: model.BaseModel{ID: id}, UserID: user, PayloadJSON: []byte(`{}`)}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	insert := func(userID uint64, canvasID *uint64, nodeID string, isTest bool) *model.GenerationTask {
 		tk := gtTask(userID, model.TaskSucceeded, 1, time.Now())
 		tk.CanvasProjectID, tk.NodeID, tk.IsTest = canvasID, nodeID, isTest
@@ -507,7 +515,12 @@ func TestGenerationTaskRepo_ListByNode(t *testing.T) {
 	for range 4 {
 		mine = append(mine, insert(user, &canvas, "voice:c1", false))
 	}
-	insert(other, &canvas, "voice:c1", false)
+	foreign := gtTask(other, model.TaskSucceeded, 1, time.Now())
+	foreign.CanvasProjectID = &canvas
+	foreign.NodeID = "voice:c1"
+	if _, err := repo.InsertTask(ctx, foreign); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("其他用户不能在原作启动任务: %v", err)
+	}
 	insert(user, &canvas, "voice:c1", true)
 	insert(user, &otherCanvas, "voice:c1", false)
 	insert(user, &canvas, "voice:c2", false)

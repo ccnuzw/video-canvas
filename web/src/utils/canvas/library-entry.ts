@@ -22,12 +22,14 @@ export function canAddToLibrary(data: CanvasNodeData): boolean {
  * @param data 节点数据
  * @param folderId 目标文件夹，null 是根目录
  * @param api 接口
+ * @param name 可选的库内名称
  */
 export async function addNodeToLibrary(
   data: CanvasNodeData,
   folderId: string | null,
   api: Pick<LibraryApi, "addToLibrary">,
+  name?: string,
 ): Promise<LibraryItemDto> {
   if (!canAddToLibrary(data) || !data.assetId) throw new Error("node has no library-ready asset");
-  return api.addToLibrary(data.assetId, folderId);
+  return api.addToLibrary(data.assetId, folderId, name);
 }

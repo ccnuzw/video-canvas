@@ -26,6 +26,7 @@ import { DramaCard } from "@/pages/drama/drama-grid";
 import { SharedDramaList } from "@/pages/drama/shared-list";
 import { ProjectCard } from "@/pages/marketing/project-grid";
 import { mixWorks, parseWorksScope, type WorksScope } from "@/utils/home/works";
+import { PendingDeliveries } from "./pending-deliveries";
 
 /** 画布还没有分页控件，先一次拉够 */
 const PAGE_SIZE = 60;
@@ -78,6 +79,7 @@ export default function CanvasList() {
       variant="panel"
       shared={index < RECENT_CANVAS_LIMIT}
       deleting={list.deleting.has(canvas.id)}
+      onTransferred={list.reload}
       onDelete={() => void list.remove(canvas.id)}
     />
   );
@@ -187,13 +189,13 @@ export default function CanvasList() {
         <Segmented<WorksScope>
           variant="chrome"
           label="作品范围"
-          value={scope}
+          value={scope === "shared-drama" ? "shared-canvas" : scope}
           onChange={setScope}
           options={[
             { value: "all", label: "全部" },
             { value: "mine", label: "个人画布" },
             { value: "drama", label: "个人短剧" },
-            { value: "shared-drama", label: "共享给我" },
+            { value: "shared-canvas", label: "共享给我" },
             { value: "marketing", label: "个人营销片" },
           ]}
         />
@@ -205,9 +207,28 @@ export default function CanvasList() {
         </div>
       </AssetsToolbar>
 
+      {showCanvases && <PendingDeliveries onComplete={list.reload} />}
+
+      {(scope === "shared-canvas" || scope === "shared-drama") && (
+        <div className="mb-5">
+          <Segmented<WorksScope>
+            label="共享作品类型"
+            value={scope}
+            onChange={setScope}
+            options={[
+              { value: "shared-canvas", label: "画布" },
+              { value: "shared-drama", label: "短剧" },
+            ]}
+          />
+        </div>
+      )}
       <div className={GRID}>
-        {scope === "shared-drama" ? (
-          <SharedDramaList key={list.keyword} keyword={list.keyword} />
+        {scope === "shared-drama" || scope === "shared-canvas" ? (
+          <SharedDramaList
+            canvas={scope === "shared-canvas"}
+            key={scope + list.keyword}
+            keyword={list.keyword}
+          />
         ) : scope === "drama" ? (
           <NewStudioCard to="/drama" label="新建短剧" />
         ) : scope === "marketing" ? (
@@ -220,7 +241,7 @@ export default function CanvasList() {
           />
         )}
         {/* 切换范围时直接换内容，不做列表的进出场动画 */}
-        {scope !== "shared-drama" && body}
+        {scope !== "shared-drama" && scope !== "shared-canvas" && body}
       </div>
 
       {(dramasMore || projectsMore) && !loading && (

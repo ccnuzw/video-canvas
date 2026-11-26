@@ -411,14 +411,15 @@ export function OverviewArea({
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: DURATION.slow, ease: EASE_OUT, delay: index * 0.06 }}
-              className="absolute top-1/2 left-1/2 aspect-[3/4] overflow-hidden rounded-[14px] shadow-2xl ring-1 ring-white/10 transition-transform duration-500 hover:scale-105"
+              className="absolute top-1/2 left-1/2 overflow-hidden rounded-[14px] shadow-2xl ring-1 ring-white/10 transition-transform duration-500 hover:scale-105"
+              // 形象图常是整张角色三视图（横版）：按图片自己的比例完整显示，三张上下错落叠放
               style={{
-                width: index === 1 ? 170 : 150,
+                width: index === 1 ? 300 : 270,
                 zIndex: index === 1 ? 2 : 1,
-                transform: `translate(${["-125%", "-50%", "25%"][index]}, ${["-48%", "-56%", "-46%"][index]}) rotate(${[-9, 0, 8][index]}deg)`,
+                transform: `translate(${["-56%", "-44%", "-52%"][index]}, ${["-132%", "-50%", "32%"][index]}) rotate(${[-3, 0, 3][index]}deg)`,
               }}
             >
-              <img src={asset.src ?? ""} alt="" className="size-full object-cover" />
+              <img src={asset.src ?? ""} alt="" className="block h-auto w-full" />
               <span className="font-display absolute bottom-2 left-2.5 text-[13px] font-semibold text-white [text-shadow:0_1px_8px_rgb(0_0_0/0.6)]">
                 {asset.name}
               </span>

@@ -140,6 +140,18 @@ CREATE UNIQUE INDEX uk_agent_runs_active_canvas ON agent_runs (canvas_id) WHERE 
 CREATE UNIQUE INDEX uk_agent_runs_active_admin ON agent_runs (user_id) WHERE canvas_id = 0 AND status IN (${ACTIVE_RUN_STATUSES});
 `,
   },
+  {
+    version: 6,
+    name: "canvas-delivery-leases",
+    sql: `CREATE TABLE canvas_delivery_leases(canvas_id INTEGER PRIMARY KEY, nonce TEXT NOT NULL, expires INTEGER NOT NULL);
+${["INSERT", "UPDATE OF status"]
+  .map(
+    (event, index) => `CREATE TRIGGER canvas_delivery_guard_${index} BEFORE ${event} ON agent_runs
+WHEN NEW.status IN (${ACTIVE_RUN_STATUSES}) AND EXISTS (SELECT 1 FROM canvas_delivery_leases WHERE canvas_id=NEW.canvas_id AND expires>unixepoch())
+BEGIN SELECT RAISE(ABORT,'canvas delivery busy'); END;`,
+  )
+  .join("\n")}`,
+  },
 ];
 
 const checksum = (sql: string): string => createHash("sha256").update(sql).digest("hex");

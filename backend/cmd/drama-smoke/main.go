@@ -311,7 +311,8 @@ func verifyCanvas(ctx context.Context, e env, canvasID string) uint64 {
 // verifyBilling 校验锁定后的 67005 与积分流水守恒。
 func verifyBilling(ctx context.Context, e env, id string) {
 	_, b := request(e.url, "GET", "/dramas/"+id+"/episodes/1", nil)
-	status, b := request(e.url, "PATCH", "/dramas/"+id+"/episodes/1", map[string]any{"revision": data(b)["revision"], "script_md": "不应保存"})
+	// 剧本正文改成结构化存储后只能走 PUT …/script，锁定集仍返回 67005
+	status, b := request(e.url, "PUT", "/dramas/"+id+"/episodes/1/script", map[string]any{"revision": data(b)["revision"], "scenes": []any{}})
 	require(status == 409 && b["code"].(float64) == 67005, fmt.Sprint(b))
 	var credit model.UserCredit
 	must(e.db.First(&credit, "user_id = ?", 1).Error)

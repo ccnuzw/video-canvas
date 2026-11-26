@@ -1,6 +1,7 @@
 import {
   Activity,
   ArrowUpCircle,
+  Clapperboard,
   Coins,
   Film,
   HardDrive,
@@ -15,7 +16,6 @@ import {
   Puzzle,
   RadioTower,
   ScrollText,
-  Terminal,
   UserPlus,
   Users,
   Wallet,
@@ -38,13 +38,19 @@ export const ADMIN_NAV: AdminNavSection[] = [
     label: "AI 配置",
     items: [
       { to: "ai/overview", label: "总览", icon: LayoutDashboard },
-      { to: "ai/queue", label: "任务队列", icon: ListOrdered },
-      { to: "ai/channels", label: "模型渠道", icon: RadioTower },
       { to: "ai/plugins", label: "插件", icon: Puzzle },
       { to: "agent/skills", label: "技能", icon: Lightbulb },
+      { to: "ai/queue", label: "任务队列", icon: ListOrdered },
+      { to: "ai/channels", label: "模型渠道", icon: RadioTower },
       { to: "agent/runs", label: "运行记录", icon: History },
       { to: "agent/tokens", label: "分析令牌", icon: KeyRound },
-      { to: "cli", label: "命令行（CLI）", icon: Terminal, badge: "beta" },
+    ],
+  },
+  {
+    label: "短剧工作室",
+    items: [
+      { to: "drama-presets", label: "短剧预设", icon: Clapperboard },
+      { to: "drama-prompt-presets", label: "短剧提示词", icon: ScrollText },
     ],
   },
   {

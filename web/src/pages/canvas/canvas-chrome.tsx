@@ -55,6 +55,7 @@ export function CanvasChrome() {
           title={title}
           onRename={editor.rename}
           saveStatus={editor.saveStatus}
+          getVersion={editor.getVersion}
           onSaveNow={editor.saveNow}
           readOnly={editor.readOnly}
         />

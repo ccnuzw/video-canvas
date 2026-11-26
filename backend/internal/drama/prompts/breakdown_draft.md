@@ -2,7 +2,7 @@
 
 ## 输入变量
 
-输入来自开头 JSON 数据块：`episodes` 为本次选择的集号和已完成剧本，`characters_md` 是人物资料，`assets` 是短剧画布已有的资产，`genre`、`style`、`ratio` 为创作背景。`validation_error` 为上次输出的校验反馈。本次范围以 `episodes` 为准，不从未选择的集数推导新资产。
+输入来自开头 JSON 数据块：`episodes` 为本次选择的集号和已完成剧本，`characters_md` 是人物设定（每人一行，小传由用户维护，以它为准），`locations_md` 是用户写的地点描述（只列写了描述的地点，建场景设定时作为依据，与剧本冲突时以剧本为准），`assets` 是短剧画布已有的资产，`genre`、`style`、`ratio` 为创作背景。`validation_error` 为上次输出的校验反馈。本次范围以 `episodes` 为准，不从未选择的集数推导新资产。
 
 ## 本步职责
 

@@ -17,21 +17,6 @@ import {
 
 import { DramaPoster } from "./poster";
 
-/** 已随前端发布预览图的内置画风；新画风在补图前仍使用渐变占位。 */
-const STYLE_PREVIEW_KEYS = new Set([
-  "anime_90s",
-  "chinese_anime",
-  "flat_2d",
-  "mature_urban_anime",
-  "animation_3d",
-  "chinese_3d",
-  "clay_stop_motion",
-  "chinese_cyber_3d",
-  "real_historical",
-  "real_city_film",
-  "real_sweet_romance",
-]);
-
 /** 浮层里的小标题 */
 export function MenuLabel({ children }: { children: ReactNode }) {
   return <div className="text-muted-foreground px-1.5 pt-1 text-xs">{children}</div>;
@@ -220,9 +205,10 @@ export function StyleGrid({
             )}
           >
             <DramaPoster seed={style.key} className="aspect-16/10 w-full rounded-lg">
-              {STYLE_PREVIEW_KEYS.has(style.key) && (
+              {/* 预览图由后台给地址：没配图的画风（后台新建但还没上传）走渐变占位 */}
+              {style.previewUrl && (
                 <img
-                  src={`/drama-styles/${style.key}.webp`}
+                  src={style.previewUrl}
                   alt={`${style.name}风格预览`}
                   width={640}
                   height={400}

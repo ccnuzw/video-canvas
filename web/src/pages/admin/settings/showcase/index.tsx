@@ -39,7 +39,7 @@ import { useShowcaseAdmin } from "./use-showcase-admin";
 const RECOMMENDED_MAX = 8;
 
 /** 抽屉的状态：关闭、上传新视频（item 为 null）、编辑某一条 */
-type SheetState = { open: false } | { open: true; item: ShowcaseAdminItem | null };
+type SheetState = { open: boolean; item: ShowcaseAdminItem | null };
 
 /** 面板标题行：左标题，右辅助说明（设计稿 panel-head） */
 function PanelHead({ title, aside }: { title: string; aside?: string }) {
@@ -196,7 +196,7 @@ export default function ShowcaseSettingsPage() {
   const role = useAdminStore((state) => state.role);
   const canWrite = canManageInfra(role);
   const admin = useShowcaseAdmin();
-  const [sheet, setSheet] = useState<SheetState>({ open: false });
+  const [sheet, setSheet] = useState<SheetState>({ open: false, item: null });
   const [libraryOpen, setLibraryOpen] = useState(false);
   const { view, status } = admin;
   const enabledCount = view?.items.filter((item) => item.enabled).length ?? 0;
@@ -288,8 +288,8 @@ export default function ShowcaseSettingsPage() {
 
         <ShowcaseSheet
           open={sheet.open}
-          item={sheet.open ? sheet.item : null}
-          onClose={() => setSheet({ open: false })}
+          item={sheet.item}
+          onClose={() => setSheet((prev) => ({ ...prev, open: false }))}
           onSaved={admin.upsert}
         />
         <ShowcaseLibrary

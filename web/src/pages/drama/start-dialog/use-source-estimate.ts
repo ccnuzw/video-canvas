@@ -21,7 +21,7 @@ export type SourceEstimateState =
 export const ESTIMATE_DEBOUNCE_MS = 300;
 
 const keyOf = (input: SourceEstimateInput) =>
-  `${input.sourceKind}|${input.rangeEnd}|${input.episodeSeconds}|${input.textModel}`;
+  `${input.sourceKind}|${input.rangeEnd}|${input.episodeSeconds}|${input.textModel}|${JSON.stringify(input.planPrompt ?? null)}`;
 
 /**
  * 开拍设置的预估：范围、单集时长、模型、类型变化后停 300ms 才调草稿估价接口，旧请求的结果作废。

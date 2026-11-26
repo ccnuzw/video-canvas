@@ -19,7 +19,7 @@ function FilterSelect({
       size="sm"
       value={value}
       options={options.map(([optionValue, label]) => ({ value: optionValue, label }))}
-      className={cn("w-auto text-xs", value && "border-foreground/35", className)}
+      className={cn("w-auto", value && "border-foreground/35", className)}
       {...props}
     />
   );

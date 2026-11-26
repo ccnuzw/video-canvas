@@ -38,6 +38,36 @@ type DramaTx interface {
 	Episodes(context.Context, uint64, uint64) ([]model.DramaEpisode, error)
 	// SaveEpisode 插入新集或按revision更新已有集。
 	SaveEpisode(context.Context, *model.DramaEpisode, int64) error
+	// ScriptRows 读取一集的场次和元素。
+	ScriptRows(context.Context, uint64, uint64) ([]model.DramaSceneRows, error)
+	// ReplaceScriptRows 整集替换场次和元素，返回带新 ID 的行；带了不属于这一集的 ID 返回 ErrScriptRowMissing。
+	ReplaceScriptRows(context.Context, uint64, uint64, uint64, []model.DramaSceneRows) ([]model.DramaSceneRows, error)
+	// DeleteEpisodeScript 删除一集的剧本结构。
+	DeleteEpisodeScript(context.Context, uint64, uint64) error
+	// DeleteDramaScript 删除一部短剧的剧本结构、人物表和地点表。
+	DeleteDramaScript(context.Context, uint64, uint64) error
+	// MarkScriptStructured 把项目标为整部剧已转成结构。
+	MarkScriptStructured(context.Context, uint64, uint64) error
+	// MarkScriptBiosImported 把项目标为人物传记已导入人物表。
+	MarkScriptBiosImported(context.Context, uint64, uint64) error
+	// SetEpisodeScriptMD 只改一集的 script_md，不升 revision。
+	SetEpisodeScriptMD(context.Context, uint64, uint64, uint64, string) error
+	// ScriptCharacters 读取人物表。
+	ScriptCharacters(context.Context, uint64, uint64) ([]model.DramaScriptCharacter, error)
+	// ScriptLocations 读取地点表。
+	ScriptLocations(context.Context, uint64, uint64) ([]model.DramaScriptLocation, error)
+	// SaveScriptCharacter 新建或更新人物。
+	SaveScriptCharacter(context.Context, *model.DramaScriptCharacter) error
+	// SaveScriptLocation 新建或更新地点。
+	SaveScriptLocation(context.Context, *model.DramaScriptLocation) error
+	// DeleteScriptCharacter 删除人物，缺失返回ErrNotFound。
+	DeleteScriptCharacter(context.Context, uint64, uint64, uint64) error
+	// DeleteScriptLocation 删除地点，缺失返回ErrNotFound。
+	DeleteScriptLocation(context.Context, uint64, uint64, uint64) error
+	// ScriptUsage 统计人物或地点在各集的出现次数。
+	ScriptUsage(context.Context, uint64, uint64, string) ([]model.DramaScriptUsage, error)
+	// ScriptRefs 返回引用某人物（character）或地点（location）的集ID。
+	ScriptRefs(context.Context, uint64, uint64, string, uint64) ([]uint64, error)
 	// Segments 读取用户存活项目下某集片段，按seq和ID排序。
 	Segments(context.Context, uint64, uint64) ([]model.DramaSegment, error)
 	// ReplaceSegments 替换指定集全部片段，不删除任务和素材。
@@ -187,6 +217,10 @@ func (r *DramaRepository) DeleteProject(ctx context.Context, userID, id uint64) 
 		return err
 	}
 	if err := r.db.WithContext(ctx).Where("user_id = ? AND drama_id = ?", userID, id).Delete(&model.DramaEpisode{}).Error; err != nil {
+		return err
+	}
+	// 剧本结构、人物表、地点表没有软删，跟着项目一起清掉
+	if err := r.DeleteDramaScript(ctx, userID, id); err != nil {
 		return err
 	}
 	return r.db.WithContext(ctx).Where("user_id = ? AND id = ?", userID, id).Delete(&model.DramaProject{}).Error

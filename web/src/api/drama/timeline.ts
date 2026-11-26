@@ -73,7 +73,7 @@ export const getTimeline = async (id: string, no: number): Promise<TimelineView>
   mapTimeline(await service.get<BackendTimelineView>(`/dramas/${id}/episodes/${no}/timeline`));
 
 /**
- * 带版本保存整份时间线；静默：版本冲突（67034）由调用方载入最新版本，内容不合法（67035）就地提示
+ * 带版本保存整份时间线；静默：版本冲突（67046）由调用方载入最新版本，内容不合法（67047）就地提示
  * @param id 短剧 ID
  * @param no 集号
  * @param timeline 要保存的时间线

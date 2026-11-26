@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>剧本编辑器三版</title>
+<style>
+:root {
+  --bg: oklch(0.145 0.002 286);
+  --paper: oklch(0.19 0.004 286);
+  --paper-2: oklch(0.215 0.005 286);
+  --fg: oklch(0.925 0.01 85);
+  --muted: oklch(0.68 0.01 286);
+  --dim: oklch(0.52 0.01 286);
+  --line: oklch(1 0 0 / 0.08);
+  --line-2: oklch(1 0 0 / 0.14);
+  --hover: oklch(1 0 0 / 0.06);
+  --chrome: oklch(0.145 0.002 286 / 0.72);
+  --amber: oklch(0.81 0.15 82);
+  --amber-ink: oklch(0.2 0.03 80);
+  --amber-soft: oklch(0.81 0.15 82 / 0.14);
+  --info: oklch(0.76 0.12 265);
+  --info-soft: oklch(0.76 0.12 265 / 0.14);
+  --violet: oklch(0.76 0.12 305);
+  --violet-soft: oklch(0.76 0.12 305 / 0.12);
+  --teal: oklch(0.79 0.1 190);
+  --teal-soft: oklch(0.79 0.1 190 / 0.13);
+  --red: oklch(0.7 0.18 25);
+  --sans: "Geist Variable", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --serif: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "STSong", serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+[contenteditable] { outline: none; }
+.tx:empty::before { content: attr(data-ph); color: var(--dim); pointer-events: none; }
+
+/* ---------- 共用：页头、侧栏、弹层 ---------- */
+.shell { min-height: 100vh; }
+.top { display: flex; align-items: center; gap: 12px; max-width: 1180px; margin: 0 auto; padding: 72px 24px 0; }
+.top h1 { margin: 0; font-family: var(--serif); font-size: 22px; font-weight: 900; letter-spacing: 0.04em; }
+.saved { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; }
+.saved i { width: 6px; height: 6px; border-radius: 50%; background: oklch(0.8 0.15 160); }
+.stat { margin-left: auto; display: inline-flex; gap: 12px; align-items: center; height: 32px; padding: 0 14px; border-radius: 999px; background: var(--chrome); box-shadow: 0 0 0 1px var(--line); color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.stat b { color: var(--fg); font-weight: 600; }
+.stat .over, .stat .over b { color: var(--red); }
+.body { display: flex; gap: 40px; justify-content: center; max-width: 1180px; margin: 0 auto; padding: 20px 24px 160px; }
+.main { flex: 1; min-width: 0; max-width: 800px; }
+.rail { position: sticky; top: 24px; align-self: flex-start; width: 210px; flex: none; padding-top: 8px; }
+.rail h4 { margin: 0 0 10px; font: 500 11px var(--mono); letter-spacing: 0.14em; color: var(--dim); }
+.rail button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 12px; text-align: left; color: var(--muted); font-size: 13px; }
+.rail button:hover { background: var(--hover); color: var(--fg); }
+.rail .no { font: 11px var(--mono); color: var(--dim); }
+.rail .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail .sec { font: 11px var(--mono); color: var(--dim); }
+@media (max-width: 1100px) { .rail { display: none; } }
+
+.menu { position: fixed; z-index: 1000; min-width: 168px; max-width: 260px; overflow-y: auto; padding: 6px; border-radius: 18px; background: oklch(0.2 0.005 286 / 0.86); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); box-shadow: 0 0 0 1px var(--line-2), 0 16px 40px oklch(0 0 0 / 0.45); display: grid; gap: 2px; transform-origin: top left; animation: pop 160ms var(--ease); font-family: var(--sans); }
+.menu.up { transform-origin: bottom left; }
+@keyframes pop { from { opacity: 0; transform: scale(0.96); } }
+@media (prefers-reduced-motion: reduce) { .menu { animation: none; } }
+.menu .sep { height: 1px; margin: 4px 6px; background: var(--line); }
+.menu button { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; padding: 0 12px; border-radius: 12px; font-size: 13px; text-align: left; }
+.menu button:hover:not(:disabled), .menu button.act { background: var(--hover); }
+.menu button[aria-checked="true"] { color: var(--amber); }
+.menu button:disabled { opacity: 0.35; cursor: not-allowed; }
+.menu kbd { font: 11px var(--mono); color: var(--dim); }
+
+/* ============ 1 稿纸 ============ */
+.v1 .main { max-width: 760px; }
+.v1-page { position: relative; background: var(--paper); border-radius: 6px 6px 20px 20px; box-shadow: 0 0 0 1px var(--line), 0 30px 60px -30px oklch(0 0 0 / 0.6); padding: 64px 88px 96px; font-family: var(--serif); font-size: 16px; line-height: 2.05; }
+.v1-scene { margin-bottom: 44px; scroll-margin-top: 24px; }
+.v1-slug { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 14px; font-weight: 700; letter-spacing: 0.06em; }
+.v1-slug .no { color: var(--amber); font: 600 13px var(--mono); letter-spacing: 0; min-width: 32px; }
+.v1-slug button { border-bottom: 1px dashed transparent; line-height: 1.5; transition: border-color 150ms ease-out, color 150ms ease-out; }
+.v1-slug button:hover, .v1-slug button:focus-visible { border-bottom-color: var(--line-2); outline: none; }
+.v1-slug button.empty { color: var(--dim); font-weight: 400; }
+.v1-slug .ttl { margin-left: auto; font: 400 12.5px var(--sans); color: var(--dim); letter-spacing: 0; }
+.v1 .row { position: relative; }
+.v1 .gut { position: absolute; right: calc(100% + 18px); top: 0.35em; display: inline-flex; align-items: center; gap: 2px; height: 22px; padding: 0 8px; border-radius: 999px; font: 500 11.5px var(--sans); color: var(--dim); white-space: nowrap; opacity: 0; transition: opacity 150ms ease-out, background-color 150ms ease-out; }
+.v1 .row:hover .gut { opacity: 0.6; }
+.v1 .row:focus-within .gut { opacity: 1; color: var(--amber); background: var(--amber-soft); }
+.v1 .tx { padding: 1px 0; }
+.v1 .r-action { margin: 4px 0; }
+.v1 .r-character { margin-top: 22px; text-align: center; }
+.v1 .who { font: 600 14px var(--sans); letter-spacing: 0.32em; padding: 0 2px 0 6px; border-radius: 6px; }
+.v1 .who:focus-visible, .v1 .who:hover { background: var(--hover); outline: none; }
+.v1 .who.empty { color: var(--dim); letter-spacing: 0.1em; font-weight: 500; }
+.v1 .ext { font: 11px var(--mono); color: var(--dim); margin-left: 6px; }
+.v1 .ext.on { color: var(--amber); }
+.v1 .r-parenthetical .tx { width: 46%; margin: 0 auto; text-align: center; color: var(--muted); font-size: 14.5px; }
+.v1 .r-parenthetical .tx:not(:empty)::before { content: "（"; }
+.v1 .r-parenthetical .tx:not(:empty)::after { content: "）"; }
+.v1 .r-dialogue .tx { width: 60%; margin: 0 auto; text-align: center; }
+.v1 .r-transition .tx { text-align: right; font: 600 13px var(--sans); letter-spacing: 0.24em; color: var(--muted); }
+.v1 .r-subtitle .tx { text-align: center; font: 14px var(--sans); color: var(--info); }
+.v1 .r-subtitle .tx:not(:empty)::before { content: "字幕　"; color: var(--dim); }
+.v1 .r-shot .tx:not(:empty)::before { content: "空镜　"; font: 13px var(--sans); color: var(--dim); }
+.v1 .r-note .tx { font: 13px/1.8 var(--sans); color: var(--violet); padding-left: 14px; margin: 6px 0; border-left: 2px solid var(--violet-soft); }
+.v1 .fb { display: flex; align-items: center; gap: 14px; margin: 18px 0; font: 12px var(--sans); letter-spacing: 0.3em; color: var(--dim); outline: none; }
+.v1 .fb::before, .v1 .fb::after { content: ""; flex: 1; height: 1px; background: var(--line-2); }
+.v1 .fb:focus { color: var(--amber); }
+@media (max-width: 760px) { .v1-page { padding: 40px 22px 80px; } .v1 .gut { display: none; } }
+
+/* ============ 2 分块 ============ */
+.v2 .main { max-width: 800px; }
+.v2-scene { background: var(--paper); border-radius: 22px; box-shadow: 0 0 0 1px var(--line); padding: 8px 20px 18px 8px; margin-bottom: 18px; scroll-margin-top: 24px; font-size: 15px; line-height: 1.85; }
+.v2-head { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px 0 12px 44px; margin-bottom: 4px; background: var(--paper); border-radius: 22px 22px 0 0; }
+.v2-head .no { font: 600 15px var(--mono); color: var(--amber); margin-right: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; background: var(--hover); box-shadow: 0 0 0 1px var(--line); font-size: 13px; font-weight: 600; transition: background-color 150ms ease-out; }
+.chip:hover { background: oklch(1 0 0 / 0.1); }
+.chip.empty { color: var(--dim); font-weight: 500; box-shadow: 0 0 0 1px var(--line) inset; background: none; }
+.chip svg { width: 13px; height: 13px; opacity: 0.6; }
+.v2-head .ttl { margin-left: auto; color: var(--dim); font-size: 12.5px; }
+.v2 .row { display: grid; grid-template-columns: 44px 1fr; align-items: start; border-radius: 12px; }
+.v2 .hd { display: flex; justify-content: flex-end; gap: 0; padding-top: 4px; padding-right: 6px; opacity: 0; transition: opacity 150ms ease-out; }
+.v2 .row:hover .hd, .v2 .row:focus-within .hd { opacity: 1; }
+.v2 .hd button { width: 18px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: var(--dim); }
+.v2 .hd button:hover { background: var(--hover); color: var(--fg); }
+.v2 .hd svg { width: 14px; height: 14px; }
+.v2 .tx { padding: 3px 10px; margin: 1px 0; border-radius: 10px; transition: background-color 150ms ease-out; }
+.v2 .tx:focus { background: var(--hover); }
+.v2 .r-character .cell { display: flex; align-items: center; gap: 8px; padding: 10px 10px 0; }
+.av { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--amber-ink); background: var(--c); flex: none; }
+.v2 .who { font-weight: 700; font-size: 14px; padding: 0 6px; border-radius: 8px; }
+.v2 .who:hover, .v2 .who:focus-visible { background: var(--hover); outline: none; }
+.v2 .who.empty { color: var(--dim); font-weight: 500; }
+.v2 .ext { height: 20px; padding: 0 7px; border-radius: 999px; font: 10.5px var(--mono); color: var(--dim); box-shadow: 0 0 0 1px var(--line); }
+.v2 .ext.on { color: var(--amber); background: var(--amber-soft); box-shadow: none; }
+.v2 .r-parenthetical .tx, .v2 .r-dialogue .tx { margin-left: 32px; border-radius: 0 10px 10px 0; box-shadow: inset 2px 0 0 var(--c); padding-left: 14px; }
+.v2 .r-parenthetical .tx { color: var(--muted); font-size: 13.5px; }
+.v2 .r-parenthetical .tx:not(:empty)::before { content: "（"; }
+.v2 .r-parenthetical .tx:not(:empty)::after { content: "）"; }
+.tag { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; margin-right: 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; vertical-align: 2px; }
+.v2 .r-subtitle .cell, .v2 .r-shot .cell { display: flex; align-items: flex-start; padding-left: 10px; }
+.v2 .r-subtitle .tag { background: var(--info-soft); color: var(--info); margin-top: 6px; }
+.v2 .r-shot .tag { background: var(--teal-soft); color: var(--teal); margin-top: 6px; }
+.v2 .r-subtitle .tx, .v2 .r-shot .tx { flex: 1; padding-left: 4px; }
+.v2 .r-note .tx { background: var(--violet-soft); color: var(--violet); font-size: 13.5px; margin: 6px 0; padding: 8px 14px; border-radius: 12px; }
+.v2 .r-transition .tx { text-align: right; font-size: 12.5px; font-weight: 600; letter-spacing: 0.18em; color: var(--muted); }
+.v2 .fb { display: inline-flex; align-items: center; gap: 6px; height: 26px; margin: 8px 10px; padding: 0 12px; border-radius: 999px; background: var(--amber-soft); color: var(--amber); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; outline: none; }
+.v2 .fb:focus { box-shadow: 0 0 0 1px var(--amber); }
+.v2 .row.in-fb .cell, .v2 .row.in-fb > .tx { background-image: linear-gradient(90deg, var(--amber-soft), transparent 70%); }
+.v2 .row.in-fb > .tx { border-radius: 10px; }
+
+/* ============ 3 制片 ============ */
+.v3 .main { max-width: 820px; }
+.v3-budget { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 12px 16px; border-radius: 18px; background: var(--paper); box-shadow: 0 0 0 1px var(--line); font-size: 12.5px; color: var(--muted); }
+.v3-budget .bar { position: relative; flex: 1; display: flex; gap: 2px; height: 10px; border-radius: 999px; overflow: hidden; background: oklch(1 0 0 / 0.05); }
+.v3-budget .seg { height: 100%; background: var(--teal); opacity: 0.75; cursor: pointer; transition: opacity 150ms ease-out; }
+.v3-budget .seg:hover { opacity: 1; }
+.v3-budget .seg.over { background: var(--red); }
+.v3-budget .limit { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--fg); border-radius: 2px; }
+.v3-budget b { color: var(--fg); font: 600 13px var(--mono); }
+.v3-budget .over b, .v3-budget .over { color: var(--red); }
+.v3-sheet { background: var(--paper); border-radius: 20px; box-shadow: 0 0 0 1px var(--line); padding: 6px 0 40px; font-size: 14.5px; line-height: 1.75; }
+.v3-scene { scroll-margin-top: 24px; }
+.v3-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 18px 20px 8px; border-top: 1px solid var(--line); }
+.v3-scene:first-child .v3-head { border-top: 0; }
+.v3-head .no { font: 600 13px var(--mono); color: var(--amber); min-width: 38px; }
+.v3-head .chip { height: 26px; padding: 0 10px; font-size: 12.5px; }
+.v3-head .ttl { color: var(--dim); font-size: 12.5px; margin-left: 6px; }
+.v3-head .ss { margin-left: auto; font: 12px var(--mono); color: var(--muted); }
+.v3 .row { display: grid; grid-template-columns: 52px 1fr 56px; align-items: start; padding: 0 0 0 8px; }
+.v3 .row:focus-within { background: oklch(1 0 0 / 0.035); }
+.v3 .gl { margin-top: 5px; justify-self: center; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; font-size: 11px; font-weight: 700; background: var(--hover); color: var(--muted); }
+.v3 .r-character .gl, .v3 .r-dialogue .gl, .v3 .r-parenthetical .gl { background: var(--amber-soft); color: var(--amber); }
+.v3 .r-subtitle .gl { background: var(--info-soft); color: var(--info); }
+.v3 .r-shot .gl { background: var(--teal-soft); color: var(--teal); }
+.v3 .r-note .gl { background: var(--violet-soft); color: var(--violet); }
+.v3 .r-parenthetical .gl, .v3 .r-dialogue .gl { opacity: 0; }
+.v3 .row:focus-within .gl { opacity: 1; box-shadow: 0 0 0 1px currentColor; }
+.v3 .s { margin-top: 6px; text-align: right; padding-right: 20px; font: 11px var(--mono); color: var(--dim); }
+.v3 .tx { padding: 3px 0; }
+.v3 .r-character .cell { padding-top: 8px; display: flex; align-items: center; gap: 6px; }
+.v3 .who { font-weight: 700; font-size: 13px; letter-spacing: 0.08em; color: var(--amber); padding: 0 4px; margin-left: -4px; border-radius: 6px; }
+.v3 .who.empty { color: var(--dim); font-weight: 500; }
+.v3 .who:hover, .v3 .who:focus-visible { background: var(--hover); outline: none; }
+.v3 .ext { font: 10.5px var(--mono); color: var(--dim); padding: 0 6px; border-radius: 999px; }
+.v3 .ext.on { color: var(--amber); background: var(--amber-soft); }
+.v3 .r-parenthetical .tx { color: var(--muted); font-size: 13px; }
+.v3 .r-parenthetical .tx:not(:empty)::before { content: "（"; }
+.v3 .r-parenthetical .tx:not(:empty)::after { content: "）"; }
+.v3 .r-subtitle .tx { color: var(--info); }
+.v3 .r-shot .tx { color: var(--teal); }
+.v3 .r-note .tx { color: var(--violet); font-size: 13px; }
+.v3 .r-transition .tx { text-align: right; font-size: 12px; font-weight: 600; letter-spacing: 0.2em; color: var(--muted); padding-right: 4px; }
+.v3 .fb { margin: 6px 0; display: flex; align-items: center; gap: 10px; font-size: 11.5px; letter-spacing: 0.2em; color: var(--amber); outline: none; }
+.v3 .fb::after { content: ""; flex: 1; height: 1px; background: var(--amber-soft); }
+.v3-bar { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 2px; padding: 4px; max-width: calc(100vw - 32px); overflow-x: auto; scrollbar-width: none; border-radius: 999px; background: var(--chrome); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); box-shadow: 0 0 0 1px var(--line-2), 0 16px 40px oklch(0 0 0 / 0.45); }
+.v3-bar::-webkit-scrollbar { display: none; }
+.v3-bar button { flex: none; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 500; color: var(--muted); white-space: nowrap; transition: background-color 150ms ease-out, color 150ms ease-out; }
+.v3-bar button:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
+.v3-bar button[aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); }
+.v3-bar button:disabled { opacity: 0.35; cursor: not-allowed; }
+.v3-bar i { width: 1px; height: 16px; margin: 0 4px; background: var(--line-2); flex: none; }
+
+/* ---------- 切换器（原型外壳，照规范原样） ---------- */
+.proto-picker { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 2147483647; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(10, 10, 10, 0.82); -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset, 0 8px 24px rgba(0, 0, 0, 0.24), 0 2px 6px rgba(0, 0, 0, 0.12); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; line-height: 1; -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none; }
+.proto-picker-highlight { position: absolute; top: 4px; left: 0; height: 28px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); will-change: transform; }
+.proto-picker[data-ready] .proto-picker-highlight { transition: transform 250ms cubic-bezier(0.23, 1, 0.32, 1), width 250ms cubic-bezier(0.23, 1, 0.32, 1); }
+@media (prefers-reduced-motion: reduce) { .proto-picker[data-ready] .proto-picker-highlight { transition: none; } }
+.proto-picker-item { position: relative; display: flex; align-items: center; height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: rgba(255, 255, 255, 0.55); font: inherit; cursor: pointer; transition: color 150ms ease-out; }
+.proto-picker-item:hover { color: rgba(255, 255, 255, 0.85); }
+.proto-picker-item:active { transform: scale(0.97); }
+.proto-picker-item:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.4); outline-offset: 2px; }
+.proto-picker-item[data-active] { color: #fff; }
+.proto-picker-divider { width: 1px; height: 16px; margin: 0 4px; background: rgba(255, 255, 255, 0.12); }
+.proto-picker-replay { padding: 0 10px; font-size: 14px; }
+.proto-picker[data-position="top"] { bottom: auto; top: 24px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<nav class="proto-picker" data-position="top" aria-label="Prototype variants">
+  <span class="proto-picker-highlight" aria-hidden="true"></span>
+  <button class="proto-picker-item" data-active aria-current="true">稿纸</button>
+  <button class="proto-picker-item">分块</button>
+  <button class="proto-picker-item">制片</button>
+</nav>
+
+<script>
+/* ================= 数据与编辑引擎（三版共用，切换后内容保留） ================= */
+const TYPES = ["action", "character", "parenthetical", "dialogue", "transition", "subtitle", "shot", "note"];
+const LABEL = { action: "动作", character: "角色", parenthetical: "括号", dialogue: "对白", transition: "转场", subtitle: "字幕", shot: "空镜", note: "备注", fb_start: "闪回", fb_end: "闪回结束" };
+const GLYPH = { action: "动", character: "角", parenthetical: "括", dialogue: "白", transition: "转", subtitle: "幕", shot: "镜", note: "注" };
+const PH = { action: "动作", parenthetical: "语气", dialogue: "台词", transition: "切至：", subtitle: "字幕内容", shot: "空镜画面", note: "备注，只有你看得到" };
+const CAST = ["迅哥儿", "闰土", "母亲", "闰土父亲", "成年“我”"];
+const HUE = [82, 190, 305, 25, 265];
+const LOCS = ["海边沙地", "周家大院·祠堂与内院", "周家厨房", "周家后院", "周家书房"];
+const TIMES = ["日", "夜", "清晨", "黄昏", "傍晚", "深夜"];
+const IE = { interior: "内", exterior: "外", both: "内外" };
+const BUDGET = 60;
+
+let uidN = 0;
+const mk = (type, text = "", who = "", ext = "") => ({ id: ++uidN, type, text, who, ext });
+const S = {
+  scenes: [
+    { time: "夜", ie: "exterior", loc: "海边沙地", title: "意象镜头", els: [
+      mk("action", "黑屏渐亮。特写：一轮巨大、金黄的圆月挂在深蓝色的夜空中。"),
+      mk("action", "瓜地中央，一个十一二岁的少年背对镜头而立，颈上的银项圈在月光下泛着冷光。他双手紧捏一柄钢叉，屏息凝神。"),
+      mk("shot", "月光下一望无际的西瓜地，远处海浪拍岸。"),
+      mk("character", "", "成年“我”", "VO"),
+      mk("dialogue", "这少年便是闰土。我认识他时，也不过十多岁，离现在将有三十年了……"),
+    ] },
+    { time: "日", ie: "both", loc: "周家大院·祠堂与内院", title: "", els: [
+      mk("action", "画面由绚丽的蓝绿色调骤然切入青砖黛瓦的灰冷色调。高耸的马头墙将天空切割成一个局促的“四方形”。"),
+      mk("action", "院内张灯结彩，正值正月大祭祀。少年迅哥儿穿着厚重的锦缎棉袍，站在廊下，百无聊赖。"),
+      mk("character", "", "母亲"),
+      mk("dialogue", "你日日盼着的那个闰土，刚刚到了，正在厨房里呢。"),
+      mk("note", "母亲这句语气要轻快，带一点逗弄。"),
+      mk("transition", "切至："),
+    ] },
+    { time: "日", ie: "interior", loc: "周家厨房", title: "初见", els: [
+      mk("action", "厨房里热气腾腾，灶火通红。闰土站在角落里，手里拘谨地攥着衣角。"),
+      mk("character", "", "闰土父亲"),
+      mk("parenthetical", "憨厚地笑，推了推闰土"),
+      mk("dialogue", "这是少爷。快叫少爷。"),
+      mk("character", "", "迅哥儿"),
+      mk("dialogue", "你就是闰土？我早听过你的名字！听说……你会装弶捉小鸟雀？"),
+      mk("character", "", "闰土"),
+      mk("parenthetical", "眼睛一亮，比划着"),
+      mk("dialogue", "那有什么难的！不过须大雪下了才好。"),
+      mk("subtitle", "次日清晨"),
+    ] },
+    { time: "日", ie: "exterior", loc: "周家后院", title: "", els: [
+      mk("fb_start"),
+      mk("action", "鹅毛大雪初霁，闰土趴在雪堆后，手里紧紧攥着一根长长的麻绳。"),
+      mk("action", "小手猛地一拉——“啪”的一声，大竹匾落下来，把鸟雀全罩在了底下！"),
+      mk("fb_end"),
+      mk("character", "", "闰土"),
+      mk("parenthetical", "站起身，神采飞扬"),
+      mk("dialogue", "掀开竹匾，什么都有：稻鸡，角鸡，鹁鸪，蓝背……"),
+    ] },
+  ],
+  focus: null, // {s, i}：光标所在行
+  want: null,  // {s, i, off}：重绘后要把光标放回去的位置
+};
+
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const isSpeech = (t) => t === "character" || t === "parenthetical" || t === "dialogue";
+const textual = (t) => !(t === "character" || t === "fb_start" || t === "fb_end");
+const hue = (who) => HUE[Math.max(0, CAST.indexOf(who)) % HUE.length];
+const color = (who) => `oklch(0.8 0.12 ${hue(who)})`;
+
+/** 每行预估秒数：对白每秒 4 字，动作 / 空镜 / 字幕每条 2 秒 */
+const est = (e) => e.type === "dialogue" ? Math.max(1, e.text.length / 4) : ["action", "shot", "subtitle"].includes(e.type) && e.text ? 2 : 0;
+const sceneSec = (sc) => sc.els.reduce((n, e) => n + est(e), 0);
+const totalSec = () => S.scenes.reduce((n, sc) => n + sceneSec(sc), 0);
+const fmt = (n) => (n >= 10 ? Math.round(n) : n.toFixed(1)) + "s";
+
+/** 括号、对白前面必须是角色或台词 */
+const why = (els, i, t) => (t === "parenthetical" || t === "dialogue") && !(els[i - 1] && isSpeech(els[i - 1].type)) ? "前面要先有角色行" : "";
+
+const want = (s, i, off = "end") => { S.want = { s, i, off }; };
+const nextType = (t) => t === "character" || t === "parenthetical" ? "dialogue" : t === "dialogue" || t === "transition" || t === "fb_start" || t === "fb_end" ? "action" : t;
+
+/** 回车：永远是新起一行；光标在文字中间时后半段带到新行 */
+function enter(s, i, off) {
+  const els = S.scenes[s].els, e = els[i];
+  // 角色行后面已有台词：回车只是移到台词
+  if (e.type === "character" && els[i + 1] && (els[i + 1].type === "dialogue" || els[i + 1].type === "parenthetical")) {
+    want(s, i + 1, "end");
+    return render();
+  }
+  let rest = "";
+  if (textual(e.type)) { rest = e.text.slice(off); e.text = e.text.slice(0, off); }
+  const after = els[i + 1];
+  const t = after && (after.type === "parenthetical" || after.type === "dialogue") && isSpeech(e.type) ? "dialogue" : nextType(e.type);
+  els.splice(i + 1, 0, mk(t, rest));
+  want(s, i + 1, 0);
+  render();
+}
+function setType(s, i, t) {
+  const els = S.scenes[s].els, e = els[i];
+  if (!e || e.type === t || why(els, i, t)) return;
+  if (t === "character") {
+    const extra = e.text.trim() ? [mk("dialogue", e.text)] : els[i + 1] && isSpeech(els[i + 1].type) ? [] : [mk("dialogue")];
+    els.splice(i, 1, mk("character", "", ""), ...extra);
+    want(s, i);
+    render();
+    const btn = document.querySelector(`[data-s="${s}"][data-i="${i}"] .who`);
+    if (btn) openCast(btn, s, i);
+    return;
+  }
+  e.type = t;
+  if (!textual(t)) e.text = "";
+  want(s, i);
+  render();
+}
+function cycle(s, i, dir) {
+  const els = S.scenes[s].els;
+  let k = TYPES.indexOf(els[i].type);
+  for (let n = 0; n < TYPES.length; n++) {
+    k = (k + dir + TYPES.length) % TYPES.length;
+    if (!why(els, i, TYPES[k])) return setType(s, i, TYPES[k]);
+  }
+}
+function remove(s, i) {
+  const els = S.scenes[s].els;
+  if (els.length <= 1) return;
+  if (els[i].type === "character" && els[i + 1] && (els[i + 1].type === "dialogue" || els[i + 1].type === "parenthetical")) return;
+  els.splice(i, 1);
+  want(s, Math.max(0, i - 1));
+  render();
+}
+function insertFlashback(s, i) {
+  S.scenes[s].els.splice(i + 1, 0, mk("fb_start"), mk("action"), mk("fb_end"));
+  want(s, i + 2, 0);
+  render();
+}
+function addScene(s) {
+  S.scenes.splice(s + 1, 0, { time: "", ie: "", loc: "", title: "", els: [mk("action")] });
+  want(s + 1, 0, 0);
+  render();
+}
+
+/* ---------------- 光标 ---------------- */
+function caretOff(node) {
+  const sel = getSelection();
+  if (!sel.rangeCount) return 0;
+  const r = sel.getRangeAt(0), pre = r.cloneRange();
+  pre.selectNodeContents(node);
+  pre.setEnd(r.endContainer, r.endOffset);
+  return pre.toString().length;
+}
+function placeCaret(node, off) {
+  node.focus();
+  const t = node.firstChild, r = document.createRange();
+  if (!t) r.setStart(node, 0);
+  else r.setStart(t, off === "end" ? t.length : Math.min(off, t.length));
+  r.collapse(true);
+  const sel = getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+function restoreFocus() {
+  const w = S.want;
+  S.want = null;
+  if (!w) return;
+  const row = document.querySelector(`[data-s="${w.s}"][data-i="${w.i}"]`);
+  if (!row) return;
+  const tx = row.querySelector(".tx");
+  if (tx) placeCaret(tx, w.off);
+  else row.querySelector(".who, .fb")?.focus();
+  S.focus = { s: w.s, i: w.i };
+  syncBar();
+}
+
+/* ---------------- 弹层菜单 ---------------- */
+let menuEl = null, menuItems = [], menuPick = null;
+function closeMenu() { menuEl?.remove(); menuEl = null; }
+function openMenu(anchor, items, onPick) {
+  closeMenu();
+  const m = document.createElement("div");
+  m.className = "menu";
+  m.setAttribute("role", "menu");
+  m.innerHTML = items.map((it, k) => it.sep ? `<div class="sep"></div>` :
+    `<button role="menuitemradio" data-k="${k}" aria-checked="${!!it.checked}" ${it.disabled ? "disabled" : ""} title="${esc(it.why || "")}"><span>${esc(it.label)}</span>${it.checked ? "<span>✓</span>" : it.key ? `<kbd>${esc(it.key)}</kbd>` : ""}</button>`).join("");
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect(), h = m.offsetHeight;
+  let top = r.bottom + 6;
+  if (top + h > innerHeight - 8 && r.top - 6 - h > 8) { top = r.top - 6 - h; m.classList.add("up"); }
+  m.style.top = Math.max(8, top) + "px";
+  m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + "px";
+  m.style.maxHeight = innerHeight - 16 - Math.max(8, top) + "px";
+  m.addEventListener("mousedown", (e) => e.preventDefault());
+  m.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b || b.disabled) return;
+    closeMenu();
+    onPick(items[+b.dataset.k].value);
+  });
+  menuEl = m; menuItems = items; menuPick = onPick;
+  m.querySelector("button:not(:disabled)")?.classList.add("act");
+}
+document.addEventListener("mousedown", (e) => { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }, true);
+document.addEventListener("keydown", (e) => {
+  if (!menuEl) return;
+  const bs = [...menuEl.querySelectorAll("button:not(:disabled)")];
+  const k = bs.findIndex((b) => b.classList.contains("act"));
+  if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenu(); }
+  else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault(); e.stopPropagation();
+    bs[k]?.classList.remove("act");
+    const n = bs[(k + (e.key === "ArrowDown" ? 1 : -1) + bs.length) % bs.length];
+    n?.classList.add("act"); n?.scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter" && bs[k]) {
+    e.preventDefault(); e.stopPropagation();
+    const pick = menuPick, it = menuItems[+bs[k].dataset.k];
+    closeMenu(); pick(it.value);
+  }
+}, true);
+
+function typeItems(s, i) {
+  const els = S.scenes[s].els, e = els[i];
+  return [
+    ...TYPES.map((t) => ({ label: LABEL[t], value: t, checked: e.type === t, disabled: !!why(els, i, t), why: why(els, i, t) })),
+    { sep: true },
+    { label: "插入闪回", value: "fb" },
+  ];
+}
+function openType(anchor, s, i, opts = {}) {
+  openMenu(anchor, typeItems(s, i), (t) => {
+    if (opts.clear) S.scenes[s].els[i].text = "";
+    if (t === "fb") return insertFlashback(s, i);
+    const before = S.scenes[s].els[i].type;
+    setType(s, i, t);
+    if (before === t) { want(s, i); render(); }
+  });
+}
+function openCast(anchor, s, i) {
+  const e = S.scenes[s].els[i];
+  openMenu(anchor, CAST.map((c) => ({ label: c, value: c, checked: e.who === c })), (c) => {
+    e.who = c; want(s, i + 1, "end"); render();
+  });
+}
+function openHead(anchor, s, kind) {
+  const sc = S.scenes[s];
+  const opts = kind === "time" ? TIMES.map((t) => [t, t]) : kind === "ie" ? Object.entries(IE).map(([v, l]) => [v, l]) : LOCS.map((l) => [l, l]);
+  const key = kind === "time" ? "time" : kind === "ie" ? "ie" : "loc";
+  openMenu(anchor, opts.map(([v, l]) => ({ label: l, value: v, checked: sc[key] === v })), (v) => {
+    sc[key] = sc[key] === v ? "" : v; render();
+  });
+}
+
+/* ---------------- 共用片段 ---------------- */
+function statPill() {
+  const sec = Math.round(totalSec()), chars = S.scenes.reduce((n, sc) => n + sc.els.reduce((m, e) => m + e.text.length, 0), 0);
+  return `<span class="stat" id="stat"><span><b>${S.scenes.length}</b> 场</span><span><b>${chars.toLocaleString()}</b> 字</span><span class="${sec > BUDGET ? "over" : ""}">约 <b>${sec}</b> / ${BUDGET} 秒</span></span>`;
+}
+function pageTop() {
+  return `<header class="top"><h1>第 1 集 · 少年闰土</h1><span class="saved"><i></i>已保存</span>${statPill()}</header>`;
+}
+function rail() {
+  return `<aside class="rail"><h4>本集场次</h4>${S.scenes.map((sc, s) =>
+    `<button data-jump="${s}"><span class="no">1-${s + 1}</span><span class="nm">${esc(sc.title || sc.loc || "未选地点")}</span><span class="sec">${fmt(sceneSec(sc))}</span></button>`).join("")}</aside>`;
+}
+const attrs = (s, i, e) => `class="row r-${e.type}" data-s="${s}" data-i="${i}"`;
+const tx = (e) => `<div class="tx" contenteditable="plaintext-only" spellcheck="false" data-ph="${PH[e.type] || ""}">${esc(e.text)}</div>`;
+const who = (e) => `<button class="who ${e.who ? "" : "empty"}" data-menu="cast">${esc(e.who || "选择人物")}</button>`;
+const ext = (e) => `<button class="ext ${e.ext ? "on" : ""}" data-menu="ext" title="画外音 / 内心独白">${e.ext || "OS/VO"}</button>`;
+const chev = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>`;
+
+/* ================= 1 稿纸：剧本原样，工具藏在页边 ================= */
+function v1() {
+  const scenes = S.scenes.map((sc, s) => {
+    const rows = sc.els.map((e, i) => {
+      const gut = `<button class="gut" data-menu="type" tabindex="-1">${LABEL[e.type]}</button>`;
+      if (e.type === "character") return `<div ${attrs(s, i, e)}>${gut}${who(e)}${ext(e)}</div>`;
+      if (e.type === "fb_start" || e.type === "fb_end") return `<div ${attrs(s, i, e)}><div class="fb" tabindex="0">${LABEL[e.type]}</div></div>`;
+      return `<div ${attrs(s, i, e)}>${gut}${tx(e)}</div>`;
+    }).join("");
+    return `<section class="v1-scene" data-scene="${s}">
+      <div class="v1-slug" data-s="${s}"><span class="no">1-${s + 1}</span>
+        <button data-menu="time" class="${sc.time ? "" : "empty"}">${esc(sc.time || "时间")}</button>
+        <button data-menu="ie" class="${sc.ie ? "" : "empty"}">${esc(IE[sc.ie] || "内外景")}</button>
+        <button data-menu="loc" class="${sc.loc ? "" : "empty"}">${esc(sc.loc || "地点")}</button>
+        ${sc.title ? `<span class="ttl">${esc(sc.title)}</span>` : ""}</div>${rows}</section>`;
+  }).join("");
+  return `<div class="shell v1">${pageTop()}<div class="body"><div class="main"><div class="v1-page">${scenes}</div></div>${rail()}</div></div>`;
+}
+
+/* ================= 2 分块：一行一块，+ 和 / 选类型 ================= */
+const plus = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+const grip = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
+function v2() {
+  const scenes = S.scenes.map((sc, s) => {
+    let speaker = "", inFb = false;
+    const rows = sc.els.map((e, i) => {
+      if (e.type === "character") speaker = e.who;
+      else if (!isSpeech(e.type)) speaker = "";
+      if (e.type === "fb_start") inFb = true;
+      const fbClass = inFb && e.type !== "fb_start" && e.type !== "fb_end" ? " in-fb" : "";
+      if (e.type === "fb_end") inFb = false;
+      const hd = `<div class="hd"><button data-menu="insert" title="在下面加一行" tabindex="-1">${plus}</button><button data-menu="type" title="切换类型" tabindex="-1">${grip}</button></div>`;
+      const style = `style="--c:${color(speaker || e.who)}"`;
+      const open = `<div class="row r-${e.type}${fbClass}" data-s="${s}" data-i="${i}" ${style}>${hd}`;
+      if (e.type === "character") return `${open}<div class="cell"><span class="av">${esc((e.who || "?").replace(/[“”]/g, "").slice(-1))}</span>${who(e)}${ext(e)}</div></div>`;
+      if (e.type === "fb_start" || e.type === "fb_end") return `${open}<div><span class="fb" tabindex="0">${e.type === "fb_start" ? "闪回开始" : "闪回结束"}</span></div></div>`;
+      if (e.type === "subtitle" || e.type === "shot") return `${open}<div class="cell"><span class="tag">${LABEL[e.type]}</span>${tx(e)}</div></div>`;
+      return `${open}${tx(e)}</div>`;
+    }).join("");
+    return `<section class="v2-scene" data-scene="${s}">
+      <div class="v2-head" data-s="${s}"><span class="no">1-${s + 1}</span>
+        <button class="chip ${sc.time ? "" : "empty"}" data-menu="time">${esc(sc.time || "时间")}${chev}</button>
+        <button class="chip ${sc.ie ? "" : "empty"}" data-menu="ie">${esc(IE[sc.ie] || "内外景")}${chev}</button>
+        <button class="chip ${sc.loc ? "" : "empty"}" data-menu="loc">${esc(sc.loc || "选择地点")}${chev}</button>
+        ${sc.title ? `<span class="ttl">${esc(sc.title)}</span>` : ""}</div>${rows}</section>`;
+  }).join("");
+  return `<div class="shell v2">${pageTop()}<div class="body"><div class="main">${scenes}</div>${rail()}</div></div>`;
+}
+
+/* ================= 3 制片：类型和秒数都摆出来，底部类型条 ================= */
+function v3() {
+  const total = totalSec();
+  const scale = Math.max(total, BUDGET);
+  let acc = 0;
+  const segs = S.scenes.map((sc, s) => {
+    const sec = sceneSec(sc), start = acc;
+    acc += sec;
+    const over = start + sec > BUDGET;
+    return `<span class="seg ${over ? "over" : ""}" data-jump="${s}" title="1-${s + 1}　${fmt(sec)}" style="width:${(sec / scale) * 100}%"></span>`;
+  }).join("");
+  const budget = `<div class="v3-budget"><span>时长</span><div class="bar">${segs}<span class="limit" style="left:${(BUDGET / scale) * 100}%"></span></div>
+    <span class="${total > BUDGET ? "over" : ""}"><b>${Math.round(total)}</b> / ${BUDGET} 秒</span></div>`;
+  const scenes = S.scenes.map((sc, s) => {
+    const rows = sc.els.map((e, i) => {
+      const sec = est(e) ? fmt(est(e)) : "";
+      if (e.type === "fb_start" || e.type === "fb_end") return `<div ${attrs(s, i, e)}><span></span><div class="fb" tabindex="0">${LABEL[e.type]}</div><span></span></div>`;
+      const gl = `<span class="gl" title="${LABEL[e.type]}">${GLYPH[e.type]}</span>`;
+      const body = e.type === "character" ? `<div class="cell">${who(e)}${ext(e)}</div>` : tx(e);
+      return `<div ${attrs(s, i, e)}>${gl}${body}<span class="s">${sec}</span></div>`;
+    }).join("");
+    return `<section class="v3-scene" data-scene="${s}">
+      <div class="v3-head" data-s="${s}"><span class="no">1-${s + 1}</span>
+        <button class="chip ${sc.time ? "" : "empty"}" data-menu="time">${esc(sc.time || "时间")}</button>
+        <button class="chip ${sc.ie ? "" : "empty"}" data-menu="ie">${esc(IE[sc.ie] || "内外景")}</button>
+        <button class="chip ${sc.loc ? "" : "empty"}" data-menu="loc">${esc(sc.loc || "选择地点")}</button>
+        ${sc.title ? `<span class="ttl">${esc(sc.title)}</span>` : ""}<span class="ss">${fmt(sceneSec(sc))}</span></div>${rows}</section>`;
+  }).join("");
+  const bar = `<div class="v3-bar" role="toolbar" aria-label="剧本元素">${TYPES.map((t) => `<button data-bar="${t}">${LABEL[t]}</button>`).join("")}<i></i><button data-bar="fb">闪回</button><i></i><button data-bar="scene">＋ 场次</button></div>`;
+  return `<div class="shell v3">${pageTop()}<div class="body"><div class="main">${budget}<div class="v3-sheet">${scenes}</div></div>${rail()}</div>${bar}</div>`;
+}
+
+/** 制片版底部条：跟着光标所在行高亮当前类型、置灰不合法的类型 */
+function syncBar() {
+  const bar = document.querySelector(".v3-bar");
+  if (!bar) return;
+  const f = S.focus, els = f ? S.scenes[f.s]?.els : null, e = els?.[f.i];
+  bar.querySelectorAll("[data-bar]").forEach((b) => {
+    const t = b.dataset.bar;
+    if (!TYPES.includes(t)) return;
+    b.setAttribute("aria-pressed", String(!!e && e.type === t));
+    const w = e ? why(els, f.i, t) : "";
+    b.disabled = !!w;
+    b.title = w || LABEL[t];
+  });
+}
+
+/* ---------------- 事件（委托在舞台上） ---------------- */
+const stage = document.getElementById("stage");
+const VARIANTS = [v1, v2, v3];
+let current = 0;
+function render() { closeMenu(); stage.innerHTML = VARIANTS[current](); restoreFocus(); syncBar(); }
+const rowOf = (t) => t.closest?.("[data-i]");
+
+stage.addEventListener("keydown", (e) => {
+  if (e.isComposing || menuEl) return;
+  const row = rowOf(e.target);
+  if (!row) return;
+  const s = +row.dataset.s, i = +row.dataset.i, el = S.scenes[s].els[i];
+  const t = e.target.closest(".tx");
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); addScene(s); }
+  else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enter(s, i, t ? caretOff(t) : 0); }
+  else if (e.key === "Tab") { e.preventDefault(); cycle(s, i, e.shiftKey ? -1 : 1); }
+  else if (e.key === "Backspace" && (!t || (el.text === "" && caretOff(t) === 0))) { e.preventDefault(); remove(s, i); }
+});
+stage.addEventListener("input", (e) => {
+  const t = e.target.closest(".tx"), row = rowOf(e.target);
+  if (!t || !row) return;
+  const s = +row.dataset.s, i = +row.dataset.i;
+  S.scenes[s].els[i].text = t.textContent;
+  if (current === 1 && t.textContent === "/") openType(t, s, i, { clear: true });
+  const stat = document.getElementById("stat");
+  if (stat) stat.outerHTML = statPill();
+});
+stage.addEventListener("focusin", (e) => {
+  const row = rowOf(e.target);
+  if (row) { S.focus = { s: +row.dataset.s, i: +row.dataset.i }; syncBar(); }
+});
+stage.addEventListener("mousedown", (e) => { if (e.target.closest("[data-bar], .gut, .hd button")) e.preventDefault(); });
+stage.addEventListener("click", (e) => {
+  const jump = e.target.closest("[data-jump]");
+  if (jump) {
+    document.querySelector(`[data-scene="${jump.dataset.jump}"]`)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    return;
+  }
+  const bar = e.target.closest("[data-bar]");
+  if (bar) {
+    const f = S.focus || { s: 0, i: 0 }, t = bar.dataset.bar;
+    if (t === "scene") addScene(f.s);
+    else if (t === "fb") insertFlashback(f.s, f.i);
+    else setType(f.s, f.i, t);
+    return;
+  }
+  const b = e.target.closest("[data-menu]");
+  if (!b) return;
+  const holder = b.closest("[data-s]"), s = +holder.dataset.s, i = holder.dataset.i != null ? +holder.dataset.i : null;
+  const kind = b.dataset.menu;
+  if (kind === "time" || kind === "ie" || kind === "loc") openHead(b, s, kind);
+  else if (kind === "type") openType(b, s, i);
+  else if (kind === "cast") openCast(b, s, i);
+  else if (kind === "ext") { const el = S.scenes[s].els[i]; el.ext = el.ext === "" ? "VO" : el.ext === "VO" ? "OS" : ""; want(s, i); render(); }
+  else if (kind === "insert") {
+    S.scenes[s].els.splice(i + 1, 0, mk("action"));
+    want(s, i + 1, 0); render();
+    const nb = document.querySelector(`[data-s="${s}"][data-i="${i + 1}"] [data-menu="type"]`);
+    if (nb) openType(nb, s, i + 1);
+  }
+});
+
+/* ---------------- 切换器（照规范） ---------------- */
+const picker = document.querySelector(".proto-picker");
+const highlight = picker.querySelector(".proto-picker-highlight");
+const items = [...picker.querySelectorAll(".proto-picker-item:not(.proto-picker-replay)")];
+function moveHighlight() {
+  const el = items[current];
+  highlight.style.width = el.offsetWidth + "px";
+  highlight.style.transform = `translateX(${el.offsetLeft}px)`;
+}
+function mount(i) {
+  stage.innerHTML = "";
+  requestAnimationFrame(() => render());
+}
+function setActive(i) {
+  if (i < 0 || i >= VARIANTS.length) return;
+  current = i;
+  items.forEach((el, j) => {
+    el.toggleAttribute("data-active", j === i);
+    if (j === i) el.setAttribute("aria-current", "true");
+    else el.removeAttribute("aria-current");
+  });
+  moveHighlight();
+  const url = new URL(location);
+  url.searchParams.set("v", i + 1);
+  history.replaceState(null, "", url);
+  mount(i);
+}
+items.forEach((el, i) => el.addEventListener("click", () => setActive(i)));
+window.addEventListener("resize", moveHighlight);
+document.addEventListener("keydown", (e) => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  if (e.metaKey || e.ctrlKey || e.altKey || menuEl) return;
+  if (rowOf(e.target)) return; // 焦点在角色名、闪回标记上时，按键交给编辑器
+  const num = parseInt(e.key, 10);
+  if (num >= 1 && num <= VARIANTS.length) setActive(num - 1);
+  else if (e.key === "ArrowRight") setActive((current + 1) % VARIANTS.length);
+  else if (e.key === "ArrowLeft") setActive((current - 1 + VARIANTS.length) % VARIANTS.length);
+});
+setActive((parseInt(new URLSearchParams(location.search).get("v"), 10) || 1) - 1);
+requestAnimationFrame(() => requestAnimationFrame(() => picker.setAttribute("data-ready", "")));
+</script>
+</body>
+</html>

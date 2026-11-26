@@ -80,6 +80,15 @@ func (f *dramaFake) UpdateEpisode(ctx context.Context, user, id uint64, no int, 
 	f.ep.Revision++
 	return f.GetEpisode(ctx, user, id, no)
 }
+
+// PreviewScript 假实现原样返回文本，真实的解析和渲染由 DramaService 的测试覆盖。
+func (f *dramaFake) PreviewScript(_ context.Context, user, id uint64, _ int, text string) (string, error) {
+	if user != 1 || id != 10 {
+		return "", errcode.ErrDramaNotFound
+	}
+	return text, nil
+}
+
 func (f *dramaFake) Estimate(ctx context.Context, user, id uint64, _ *model.DramaJobReq) (int, error) {
 	_, err := f.Get(ctx, user, id)
 	return 17, err

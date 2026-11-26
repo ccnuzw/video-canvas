@@ -38,6 +38,7 @@ export type CanvasEditorApi = CanvasEditorCommands & {
   /** 改名并保存；失败会自己回滚并提示 */
   rename: (next: string) => void;
   saveStatus: SaveStatus;
+  getVersion: () => number;
   /** 立刻保存；返回是否保存成功 */
   saveNow: () => Promise<boolean>;
   /** 当前的全部节点（含组）；拖动时每帧都是新数组 */

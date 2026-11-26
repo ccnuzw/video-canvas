@@ -29,22 +29,26 @@ type DramaProject struct {
 	PauseReason    string         `gorm:"size:255;not null;default:''"`
 	PauseCode      string         `gorm:"size:16;not null;default:''"`
 	PromptSettings datatypes.JSON `gorm:"type:jsonb;not null;default:'{}'"`
-	SourceKind     string         `gorm:"size:16;not null;default:''"`
-	SourceSummary  string         `gorm:"type:text;not null;default:''"`
-	Genre          string         `gorm:"size:32;not null;default:''"`
-	StyleKey       string         `gorm:"size:32;not null"`
-	StyleCustom    string         `gorm:"type:text;not null;default:''"`
-	Ratio          string         `gorm:"size:8;not null;default:''"`
-	TargetEpisodes int            `gorm:"not null;default:0"`
-	EpisodeSeconds int            `gorm:"not null;default:60"`
-	TextModel      string         `gorm:"size:128;not null;default:''"`
-	VideoModel     string         `gorm:"size:128;not null;default:''"`
-	ImageModels    datatypes.JSON `gorm:"type:jsonb;not null;default:'{}'"`
-	ImageParams    datatypes.JSON `gorm:"type:jsonb;not null;default:'{}'"`
-	OutlineMD      string         `gorm:"type:text;not null;default:''"`
-	CharactersMD   string         `gorm:"type:text;not null;default:''"`
-	Status         string         `gorm:"size:16;not null;default:analyzing"`
-	Revision       int64          `gorm:"not null;default:1"`
+	// ScriptStructured 为 true 表示整部剧的剧本已转成场次 + 元素结构，script_md 此后只是渲染出的派生列。
+	ScriptStructured bool           `gorm:"not null;default:false"`
+	SourceKind       string         `gorm:"size:16;not null;default:''"`
+	SourceSummary    string         `gorm:"type:text;not null;default:''"`
+	Genre            string         `gorm:"size:32;not null;default:''"`
+	StyleKey         string         `gorm:"size:32;not null"`
+	StyleCustom      string         `gorm:"type:text;not null;default:''"`
+	Ratio            string         `gorm:"size:8;not null;default:''"`
+	TargetEpisodes   int            `gorm:"not null;default:0"`
+	EpisodeSeconds   int            `gorm:"not null;default:60"`
+	TextModel        string         `gorm:"size:128;not null;default:''"`
+	VideoModel       string         `gorm:"size:128;not null;default:''"`
+	ImageModels      datatypes.JSON `gorm:"type:jsonb;not null;default:'{}'"`
+	ImageParams      datatypes.JSON `gorm:"type:jsonb;not null;default:'{}'"`
+	OutlineMD        string         `gorm:"type:text;not null;default:''"`
+	CharactersMD     string         `gorm:"type:text;not null;default:''"`
+	Status           string         `gorm:"size:16;not null;default:analyzing"`
+	Revision         int64          `gorm:"not null;default:1"`
+	// ScriptBiosImported 为 true 表示当前的 characters_md 已导入人物表（小传以人物表 note 为准）；研读重写传记时置回 false。
+	ScriptBiosImported bool `gorm:"not null;default:false"`
 }
 
 // TableName 返回 DramaProject 对应的表名。

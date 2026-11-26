@@ -380,7 +380,7 @@ function PlanningRows() {
               onClick={() => void act(action)}
             >
               {action === "resume" ? <Play /> : action === "retry" ? <RotateCw /> : null}
-              {action === "resume" ? "继续" : action === "retry" ? "重试" : "改用内置重试"}
+              {action === "resume" ? "继续" : action === "retry" ? "重试" : "改用原内置重试"}
             </Button>
           ))
         )}

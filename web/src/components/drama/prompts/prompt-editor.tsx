@@ -168,7 +168,7 @@ export function PromptEditorPane({
         <Button
           variant="ghost"
           className="mr-auto rounded-full"
-          disabled={saving}
+          disabled={saving || library.templateStatus !== "ready"}
           onClick={() => {
             setDraft(restoreBuiltin(draft, template, draft.page));
             setError(null);

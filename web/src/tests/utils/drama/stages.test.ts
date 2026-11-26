@@ -74,6 +74,7 @@ describe("剧本页打开哪份项目文档（?doc=）", () => {
   test("地址栏写了大纲或人物传记就打开它", () => {
     expect(parseScriptDoc("outline", 16)).toBe("outline");
     expect(parseScriptDoc("characters", 16)).toBe("characters");
+    expect(parseScriptDoc("locations", 16)).toBe("locations");
   });
 
   test("切到剧本页、研读完成后没写 doc：默认打开大纲，哪怕已经有分集", () => {

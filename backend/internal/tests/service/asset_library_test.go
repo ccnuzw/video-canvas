@@ -201,6 +201,15 @@ func (r *libItems) SetFolder(_ context.Context, userID, id uint64, folderID *uin
 	return nil
 }
 
+func (r *libItems) SetName(_ context.Context, userID, id uint64, name string) error {
+	it, ok := r.rows[id]
+	if !ok || it.UserID != userID {
+		return repository.ErrNotFound
+	}
+	it.Name = name
+	return nil
+}
+
 func (r *libItems) Delete(_ context.Context, userID, id uint64) error {
 	it, ok := r.rows[id]
 	if !ok || it.UserID != userID {
@@ -415,7 +424,7 @@ func TestAssetLibraryService_Folders(t *testing.T) {
 		a, _ := e.svc.CreateFolder(ctx, me, "A")
 		_, _ = e.svc.CreateFolder(ctx, other, "B")
 		e.addAsset(1, me, "image")
-		if _, _, err := e.svc.AddItem(ctx, me, 1, uint64(a.ID)); err != nil {
+		if _, _, err := e.svc.AddItem(ctx, me, 1, uint64(a.ID), ""); err != nil {
 			t.Fatal(err)
 		}
 		l, err := e.svc.ListFolders(ctx, me)
@@ -429,9 +438,9 @@ func TestAssetLibraryService_Folders(t *testing.T) {
 		for id := uint64(1); id <= 3; id++ {
 			e.addAsset(id, me, "image")
 		}
-		_, _, _ = e.svc.AddItem(ctx, me, 1, uint64(a.ID))
-		_, _, _ = e.svc.AddItem(ctx, me, 2, uint64(a.ID))
-		_, _, _ = e.svc.AddItem(ctx, me, 3, 0) // 根目录
+		_, _, _ = e.svc.AddItem(ctx, me, 1, uint64(a.ID), "")
+		_, _, _ = e.svc.AddItem(ctx, me, 2, uint64(a.ID), "")
+		_, _, _ = e.svc.AddItem(ctx, me, 3, 0, "") // 根目录
 
 		v, err := e.svc.DeleteFolder(ctx, me, uint64(a.ID))
 		if err != nil || v.Removed != 2 {
@@ -445,7 +454,7 @@ func TestAssetLibraryService_Folders(t *testing.T) {
 		e := newLibEnv()
 		a, _ := e.svc.CreateFolder(ctx, me, "A")
 		e.addAsset(1, me, "image")
-		_, _, _ = e.svc.AddItem(ctx, me, 1, uint64(a.ID))
+		_, _, _ = e.svc.AddItem(ctx, me, 1, uint64(a.ID), "")
 
 		e.folders.failTx = errors.New("提交失败")
 		if _, err := e.svc.DeleteFolder(ctx, me, uint64(a.ID)); err == nil {
@@ -464,6 +473,37 @@ func TestAssetLibraryService_Folders(t *testing.T) {
 	})
 }
 
+func TestAssetLibraryService_ItemNames(t *testing.T) {
+	ctx := context.Background()
+	const owner, other = uint64(1), uint64(2)
+	env := newLibEnv()
+	env.addAsset(1, owner, "image")
+	item, created, err := env.svc.AddItem(ctx, owner, 1, 0, " 参考图 ")
+	if err != nil || !created || item.Name != "参考图" {
+		t.Fatalf("%+v %v %v", item, created, err)
+	}
+	id := uint64(item.ID)
+	t.Run("只修改自己的库内名称", func(t *testing.T) {
+		if _, err := env.svc.RenameItem(ctx, other, id, "新名称"); !libIsCode(err, errcode.ErrLibraryItemNotFound) {
+			t.Fatalf("期望 404，实际 %v", err)
+		}
+		if name, err := env.svc.RenameItem(ctx, owner, id, " 定稿 "); err != nil || name != "定稿" {
+			t.Fatalf("%q %v", name, err)
+		}
+		again, created, err := env.svc.AddItem(ctx, owner, 1, 0, "另一个名称")
+		if err != nil || created || again.Name != "定稿" || again.Asset.FileName != item.Asset.FileName {
+			t.Fatalf("重复加入应保留名称和原始文件：%+v %v %v", again, created, err)
+		}
+	})
+	t.Run("拒绝空白、过长和无效字符", func(t *testing.T) {
+		for _, name := range []string{" ", strings.Repeat("图", 256), "a\x00b"} {
+			if _, err := env.svc.RenameItem(ctx, owner, id, name); !libIsCode(err, errcode.ErrInvalidParams) {
+				t.Fatalf("名称 %q 期望参数错误，实际 %v", name, err)
+			}
+		}
+	})
+}
+
 func TestAssetLibraryService_Items(t *testing.T) {
 	ctx := context.Background()
 	const me, other = uint64(1), uint64(2)
@@ -472,11 +512,11 @@ func TestAssetLibraryService_Items(t *testing.T) {
 		e := newLibEnv()
 		e.addAsset(1, me, "image")
 		f, _ := e.svc.CreateFolder(ctx, me, "A")
-		first, created, err := e.svc.AddItem(ctx, me, 1, 0)
+		first, created, err := e.svc.AddItem(ctx, me, 1, 0, "")
 		if err != nil || !created || first.FolderID != 0 || first.Asset.ID != 1 {
 			t.Fatalf("%+v %v %v", first, created, err)
 		}
-		again, created, err := e.svc.AddItem(ctx, me, 1, uint64(f.ID))
+		again, created, err := e.svc.AddItem(ctx, me, 1, uint64(f.ID), "")
 		if err != nil || created || again.ID != first.ID || again.FolderID != 0 {
 			t.Fatalf("重复加入应返回现有归属：%+v %v %v", again, created, err)
 		}
@@ -488,7 +528,7 @@ func TestAssetLibraryService_Items(t *testing.T) {
 		e := newLibEnv()
 		e.addAsset(1, me, "image")
 		e.items.dupOnce = true
-		v, created, err := e.svc.AddItem(ctx, me, 1, 0)
+		v, created, err := e.svc.AddItem(ctx, me, 1, 0, "")
 		if err != nil || created || v == nil {
 			t.Fatalf("%+v %v %v", v, created, err)
 		}
@@ -498,13 +538,13 @@ func TestAssetLibraryService_Items(t *testing.T) {
 		e.addAsset(1, other, "image")
 		e.addAsset(2, me, "image")
 		f, _ := e.svc.CreateFolder(ctx, other, "别人的")
-		if _, _, err := e.svc.AddItem(ctx, me, 1, 0); !libIsCode(err, errcode.ErrAssetNotFound) {
+		if _, _, err := e.svc.AddItem(ctx, me, 1, 0, ""); !libIsCode(err, errcode.ErrAssetNotFound) {
 			t.Fatalf("别人的素材期望 40007，实际 %v", err)
 		}
-		if _, _, err := e.svc.AddItem(ctx, me, 999, 0); !libIsCode(err, errcode.ErrAssetNotFound) {
+		if _, _, err := e.svc.AddItem(ctx, me, 999, 0, ""); !libIsCode(err, errcode.ErrAssetNotFound) {
 			t.Fatalf("不存在的素材期望 40007，实际 %v", err)
 		}
-		if _, _, err := e.svc.AddItem(ctx, me, 2, uint64(f.ID)); !libIsCode(err, errcode.ErrAssetFolderNotFound) {
+		if _, _, err := e.svc.AddItem(ctx, me, 2, uint64(f.ID), ""); !libIsCode(err, errcode.ErrAssetFolderNotFound) {
 			t.Fatalf("别人的文件夹期望 64004，实际 %v", err)
 		}
 		if len(e.items.rows) != 0 {
@@ -516,7 +556,7 @@ func TestAssetLibraryService_Items(t *testing.T) {
 		e.addAsset(1, me, "image")
 		f, _ := e.svc.CreateFolder(ctx, me, "A")
 		of, _ := e.svc.CreateFolder(ctx, other, "O")
-		it, _, _ := e.svc.AddItem(ctx, me, 1, 0)
+		it, _, _ := e.svc.AddItem(ctx, me, 1, 0, "")
 
 		v, err := e.svc.MoveItem(ctx, me, uint64(it.ID), uint64(f.ID))
 		if err != nil || v.FolderID != f.ID {
@@ -536,7 +576,7 @@ func TestAssetLibraryService_Items(t *testing.T) {
 	t.Run("移出：只删归属不删素材；别人的 / 不存在 64005", func(t *testing.T) {
 		e := newLibEnv()
 		e.addAsset(1, me, "image")
-		it, _, _ := e.svc.AddItem(ctx, me, 1, 0)
+		it, _, _ := e.svc.AddItem(ctx, me, 1, 0, "")
 		if err := e.svc.RemoveItem(ctx, other, uint64(it.ID)); !libIsCode(err, errcode.ErrLibraryItemNotFound) {
 			t.Fatalf("别人的期望 64005，实际 %v", err)
 		}
@@ -560,7 +600,7 @@ func TestAssetLibraryService_Items(t *testing.T) {
 			if id > 3 {
 				fid = uint64(f.ID)
 			}
-			if _, _, err := e.svc.AddItem(ctx, me, id, fid); err != nil {
+			if _, _, err := e.svc.AddItem(ctx, me, id, fid, ""); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -625,7 +665,7 @@ func TestAssetLibraryService_ListGenerated(t *testing.T) {
 	e.canvases.briefs[canvasLive] = model.CanvasBrief{ID: canvasLive, Title: "我的画布"}
 	e.canvases.briefs[canvasGone] = model.CanvasBrief{ID: canvasGone, Title: "旧标题", Deleted: true}
 	e.addAsset(5, me, "image")
-	lib, _, _ := e.svc.AddItem(ctx, me, 5, 0) // 5 号已在资产库
+	lib, _, _ := e.svc.AddItem(ctx, me, 5, 0, "") // 5 号已在资产库
 
 	page, err := e.svc.ListGenerated(ctx, me, GeneratedListInput{Kind: "image", Limit: 4})
 	if err != nil {

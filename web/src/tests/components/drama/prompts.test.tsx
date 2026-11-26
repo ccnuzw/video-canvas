@@ -44,6 +44,10 @@ const makeLibrary = (items: MyPrompt[] = []) => {
   const removed: string[] = [];
   const library: PromptLibrary = {
     ready: true,
+    presets: {},
+    presetStatus: "ready",
+    templateStatus: "ready",
+    refreshPresets: () => {},
     templates: [
       { step: "plan", pages: [{ key: "plan", label: "分集规划", body: "内置规划" }] },
       { step: "scripts", pages: [{ key: "scripts", label: "分集剧本", body: "内置剧本" }] },
@@ -259,9 +263,11 @@ describe("四行提示词下拉", () => {
     over: {
       kind?: "script" | "novel" | null;
       value?: Record<PromptStep, PromptChoice>;
+      presets?: PromptLibrary["presets"];
     } = {},
   ) => {
     const lib = makeLibrary(items);
+    if (over.presets) lib.library.presets = over.presets;
     const calls = {
       change: [] as [PromptStep, PromptChoice][],
       edit: [] as [PromptStep, MyPrompt | null][],
@@ -312,6 +318,30 @@ describe("四行提示词下拉", () => {
       expect(chip.title).toBe("剧本直接导入，不改编");
       expect(chip.textContent).toBe("剧本直接导入");
     }
+    await m.unmount();
+  });
+
+  test("内置目录显示默认和用途，提交具体模板及版本", async () => {
+    const { m, change } = await mount([], {
+      value: { ...builtinPrompts(), plan: { source: "preset", id: "a", revision: 3 } },
+      presets: {
+        plan: {
+          step: "plan",
+          default_id: "a",
+          items: [
+            { id: "a", revision: 3, name: "标准版", description: "原内置" },
+            { id: "b", revision: 2, name: "快节奏", description: "突出反转" },
+          ],
+        },
+      },
+    });
+    const chip = rowChip(m.container, "分集规划");
+    expect(chip.textContent).toBe("标准版 · 默认");
+    await dom.click(chip);
+    const candidate = popupButton("快节奏");
+    expect(candidate?.textContent).toContain("突出反转");
+    await dom.click(candidate);
+    expect(change).toEqual([["plan", { source: "preset", id: "b", revision: 2 }]]);
     await m.unmount();
   });
 

@@ -16,7 +16,7 @@ function Segmented({ className, ...props }: ComponentProps<"div">) {
       role="group"
       data-slot="segmented"
       className={cn(
-        "bg-chrome ring-chrome-border inline-flex gap-0.5 rounded-full p-0.5 text-xs ring-1 backdrop-blur-xl",
+        "bg-chrome ring-chrome-border inline-flex gap-0.5 rounded-full p-0.5 text-sm ring-1 backdrop-blur-xl",
         className,
       )}
       {...props}
@@ -42,7 +42,7 @@ function SegmentedItem({
       data-slot="segmented-item"
       data-active={active || undefined}
       className={cn(
-        "text-muted-foreground hover:text-foreground rounded-full px-3 py-1.5 font-medium",
+        "text-muted-foreground hover:text-foreground rounded-full px-3 py-1 font-medium",
         slideId
           ? "relative data-active:text-foreground"
           : "data-active:bg-chrome-hover data-active:ring-chrome-border data-active:text-foreground data-active:ring-1",

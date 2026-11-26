@@ -6,6 +6,7 @@ import {
   FolderPlus,
   Library,
   Music2,
+  Pencil,
   Unlink,
   UserRound,
 } from "lucide-react";
@@ -262,6 +263,7 @@ export function HistoryAssetCard({
  * 个人资产库的一张素材卡：封面 + 底部常显的文件名；⋯ 菜单里有「移动到…」与「移出资产库」。
  * @param item 资产库条目
  * @param onPreview 点击卡片：打开预览
+ * @param onRename 菜单里的「重命名」
  * @param onMove 菜单里的「移动到…」
  * @param onRemove 菜单里的「移出资产库」
  * @param select 选择模式：给了就变成可勾选的卡片，预览与 ⋯ 菜单都收起（此时上面三个回调可省略）
@@ -271,6 +273,7 @@ export function LibraryAssetCard({
   item,
   onPreview,
   onMove,
+  onRename,
   onRemove,
   onEnroll,
   humanName,
@@ -281,6 +284,7 @@ export function LibraryAssetCard({
   natural?: boolean;
   onPreview?: () => void;
   onMove?: () => void;
+  onRename?: () => void;
   onRemove?: () => void;
   /** 加入真人库（只有图片、且还不在真人库里时才传） */
   onEnroll?: () => void;
@@ -289,7 +293,7 @@ export function LibraryAssetCard({
   select?: CardSelect;
 }) {
   const { asset } = item;
-  const name = asset.fileName ?? "未命名";
+  const name = item.name || asset.fileName || "未命名";
   const duration = asset.kind === "image" ? null : formatMediaDuration(asset.durationMs);
 
   return (
@@ -333,6 +337,12 @@ export function LibraryAssetCard({
             <DropdownMenuItem onClick={onEnroll}>
               <UserRound />
               加入真人库
+            </DropdownMenuItem>
+          )}
+          {onRename && (
+            <DropdownMenuItem onClick={onRename}>
+              <Pencil />
+              重命名
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={onMove}>
