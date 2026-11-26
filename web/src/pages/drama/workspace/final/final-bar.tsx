@@ -39,7 +39,8 @@ export function FinalBar({
   exportReason: string | null;
   readOnly: boolean;
   onRetrySave: () => void;
-  onLocate: (clipId: string) => void;
+  /** 点同步条目定位到那一段；编辑器暂不支持定位时不传，条目就只是文字 */
+  onLocate?: (clipId: string) => void;
   onAckSync: () => void;
   onUndoSync: () => void;
   onExport: () => void;
@@ -80,14 +81,14 @@ export function FinalBar({
           >
             <p className="text-muted-foreground px-2 pt-1 pb-1.5 text-[11.5px]">已按片场自动同步</p>
             {sync.map((item, index) => {
-              const locatable = !!item.clip;
+              const locatable = !!item.clip && !!onLocate;
               return (
                 <button
                   key={`${item.change.segmentId}-${item.change.kind}-${index}`}
                   type="button"
                   disabled={!locatable}
                   onClick={() => {
-                    if (!item.clip) return;
+                    if (!item.clip || !onLocate) return;
                     setOpen(false);
                     onLocate(item.clip.id);
                   }}

@@ -5,18 +5,24 @@ import type { AssetDto } from "@/api/asset/type";
 import { DRAMA_ERR, dramaErrorMessage, isDramaError } from "@/api/drama/errors";
 import { getTimeline, saveTimeline } from "@/api/drama/timeline";
 import type { Segment, Timeline, TimelineChange, TimelineView } from "@/api/drama/type";
+import {
+  emptyHistory,
+  pushHistory,
+  redoHistory,
+  undoHistory,
+  type History,
+} from "@/components/timeline-editor/history";
+import { mainTrack } from "@/components/timeline-editor/model";
+import type { EditorClip, EditorTimeline } from "@/components/timeline-editor/types";
 import type { AutosaveStatus } from "@/utils/drama/autosave";
-import { defaultTimeline } from "@/utils/drama/timeline";
+import { defaultTimeline, trackRemovedSegments } from "@/utils/drama/timeline";
 
 /** 停手多久后自动保存（毫秒） */
 const SAVE_DELAY = 1000;
-/** 撤销最多保留多少步 */
-const HISTORY_LIMIT = 100;
+const EMPTY: Timeline = { tracks: [], removedSegmentIds: [], imports: [] };
 
-const EMPTY: Timeline = { clips: [], muted: false, removedSegmentIds: [], imports: [] };
-
-/** 片场同步提示里的一条：变化本身，加上当时变化后的段（已移除为 null），文案由界面按片段列表生成 */
-export type SyncItem = { change: TimelineChange; clip: Timeline["clips"][number] | null };
+/** 片场同步提示里的一条：变化本身，加上当时变化后的主轨段（已移除为 null），文案由界面按片段列表生成 */
+export type SyncItem = { change: TimelineChange; clip: EditorClip | null };
 
 type TimelineEditorState = {
   /** 正在编辑的「短剧:集号」；null = 没有打开 */
@@ -33,8 +39,8 @@ type TimelineEditorState = {
   assets: Record<string, AssetDto>;
   /** 片场同步带来的变化（顶栏胶囊和轨上标记）；点「知道了」清空 */
   sync: SyncItem[];
-  undo: Timeline[];
-  redo: Timeline[];
+  /** 撤销 / 重做栈 */
+  history: History<Timeline>;
   save: AutosaveStatus;
   /** 每保存成功一次加一，界面据此把已有成片标成过期 */
   savedCount: number;
@@ -45,6 +51,8 @@ type TimelineEditorState = {
   openShared: (key: string, segments: readonly Segment[]) => void;
   /** 改时间线：记一步撤销，停手后自动保存 */
   edit: (fn: (timeline: Timeline) => Timeline) => void;
+  /** 编辑器改出了新的轨道：替换轨道，并按主轨的变化维护删除名单 */
+  applyEditor: (next: EditorTimeline) => void;
   undoEdit: () => void;
   redoEdit: () => void;
   /** 立刻保存未保存的改动；返回是否已是保存好的状态（合成前调用） */
@@ -70,11 +78,13 @@ let conflictSeq = 0;
 let beforeSync: Timeline | null = null;
 
 /** 把读到 / 存完的视图里的同步变化转成提示条目 */
-const syncItems = (view: TimelineView): SyncItem[] =>
-  view.changes.map((change) => ({
+const syncItems = (view: TimelineView): SyncItem[] => {
+  const main = mainTrack({ tracks: view.tracks }).clips;
+  return view.changes.map((change) => ({
     change,
-    clip: view.clips.find((clip) => clip.id === change.clipId) ?? null,
+    clip: main.find((clip) => clip.id === change.clipId) ?? null,
   }));
+};
 
 const keyOf = (dramaId: string, no: number) => `${dramaId}:${no}`;
 
@@ -97,12 +107,11 @@ export const useDramaTimelineStore = create<TimelineEditorState>((set, get) => {
     const state = get();
     if (items.length > 0 && previous) {
       beforeSync = previous;
-      set({ undo: [...state.undo, previous].slice(-HISTORY_LIMIT), redo: [] });
+      set({ history: pushHistory(state.history, previous) });
     }
     set({
       timeline: {
-        clips: view.clips,
-        muted: view.muted,
+        tracks: view.tracks,
         removedSegmentIds: view.removedSegmentIds,
         imports: view.imports,
       },
@@ -121,7 +130,7 @@ export const useDramaTimelineStore = create<TimelineEditorState>((set, get) => {
     const view = await getTimeline(dramaId, no);
     if (get().key !== key) return;
     beforeSync = null;
-    set({ undo: [], redo: [], sync: [], save: "saved" });
+    set({ history: emptyHistory(), sync: [], save: "saved" });
     adopt(view, null);
   };
 
@@ -188,8 +197,7 @@ export const useDramaTimelineStore = create<TimelineEditorState>((set, get) => {
     invalid: [],
     assets: {},
     sync: [],
-    undo: [],
-    redo: [],
+    history: emptyHistory(),
     save: "saved",
     savedCount: 0,
 
@@ -207,8 +215,7 @@ export const useDramaTimelineStore = create<TimelineEditorState>((set, get) => {
         invalid: [],
         assets: {},
         sync: [],
-        undo: [],
-        redo: [],
+        history: emptyHistory(),
         save: "saved",
       });
       try {
@@ -232,8 +239,7 @@ export const useDramaTimelineStore = create<TimelineEditorState>((set, get) => {
         invalid: [],
         assets: {},
         sync: [],
-        undo: [],
-        redo: [],
+        history: emptyHistory(),
         save: "saved",
       });
     },
@@ -246,38 +252,43 @@ export const useDramaTimelineStore = create<TimelineEditorState>((set, get) => {
       editSeq++;
       set({
         timeline: next,
-        undo: [...state.undo, state.timeline].slice(-HISTORY_LIMIT),
-        redo: [],
+        history: pushHistory(state.history, state.timeline),
         save: "dirty",
       });
       schedule();
     },
 
+    applyEditor: (next) =>
+      get().edit((timeline) => {
+        if (next.tracks === timeline.tracks) return timeline;
+        return {
+          ...timeline,
+          tracks: next.tracks,
+          removedSegmentIds: trackRemovedSegments(
+            timeline.tracks,
+            next.tracks,
+            timeline.removedSegmentIds,
+          ),
+        };
+      }),
+
     undoEdit: () => {
       const state = get();
-      const previous = state.undo.at(-1);
-      if (!previous || state.readOnly) return;
+      if (state.readOnly) return;
+      const result = undoHistory(state.history, state.timeline);
+      if (!result) return;
       editSeq++;
-      set({
-        timeline: previous,
-        undo: state.undo.slice(0, -1),
-        redo: [...state.redo, state.timeline],
-        save: "dirty",
-      });
+      set({ timeline: result.value, history: result.history, save: "dirty" });
       schedule();
     },
 
     redoEdit: () => {
       const state = get();
-      const next = state.redo.at(-1);
-      if (!next || state.readOnly) return;
+      if (state.readOnly) return;
+      const result = redoHistory(state.history, state.timeline);
+      if (!result) return;
       editSeq++;
-      set({
-        timeline: next,
-        redo: state.redo.slice(0, -1),
-        undo: [...state.undo, state.timeline],
-        save: "dirty",
-      });
+      set({ timeline: result.value, history: result.history, save: "dirty" });
       schedule();
     },
 

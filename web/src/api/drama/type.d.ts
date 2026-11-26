@@ -1,5 +1,6 @@
 import type { AssetDto, BackendAssetDto } from "@/api/asset/type";
 import type { TaskStatus, TaskView } from "@/api/generation-task/type";
+import type { EditorTrack } from "@/components/timeline-editor/types";
 
 /**
  * 短剧工作室接口类型（契约 docs/design/短剧工作室/接口契约.md）。
@@ -797,11 +798,14 @@ export interface BackendSourcePreflight {
   };
 }
 
-/** 时间线段的来源：分镜片段的某条视频结果，或画布素材 / 本地导入的素材 */
-export type TimelineClipKind = "segment" | "asset";
+/** 时间线段的来源：分镜片段的某条视频结果、画布素材 / 本地导入的素材，或文字（字幕） */
+export type TimelineClipKind = "segment" | "asset" | "text";
 
 /** 素材段的种类 */
-export type TimelineMedia = "video" | "image";
+export type TimelineMedia = "video" | "image" | "audio";
+
+/** 轨道种类 */
+export type TimelineTrackKind = "main" | "overlay" | "audio" | "text";
 
 /** 对账带来的变化种类：片段删除 / 取消采用 / 换了采用 / 占位采用了 / 新增片段 */
 export type TimelineChangeKind = "removed" | "unadopted" | "swapped" | "adopted" | "added";
@@ -810,20 +814,56 @@ export type TimelineChangeKind = "removed" | "unadopted" | "swapped" | "adopted"
 export interface BackendTimelineClip {
   id: string;
   kind: TimelineClipKind;
+  /** 只用于 kind=segment */
   segment_id?: string | null;
+  /** 只用于 kind=segment；空 = 主轨上待采用的占位 */
   task_id?: string | null;
+  /** 只用于 kind=segment；附属轨上的片段后端视为 true */
   pinned?: boolean;
+  /** 只用于 kind=asset */
   asset_id?: string | null;
+  /** 只用于 kind=asset */
   media?: TimelineMedia | "";
+  /** 只用于 kind=text */
+  text?: string;
+  /** 只用于 kind=text：subtitle / title */
+  style?: "subtitle" | "title";
+  /** 只用于 kind=text：top / middle / bottom */
+  pos?: "top" | "middle" | "bottom";
+  /** 只用于 kind=text：字号百分比 60–180 */
+  size?: number;
   in_ms: number;
   out_ms: number;
+  /** 附属轨必填；主轨不存 */
+  start_ms?: number;
   muted?: boolean;
+  /** 音量百分比 0–200，后端始终序列化 */
+  volume?: number;
+  fade_in_ms?: number;
+  fade_out_ms?: number;
+  /** 以下四项只有叠加轨用：中心点横向 / 纵向百分比、画面宽度百分比、不透明度百分比 */
+  x?: number;
+  y?: number;
+  scale?: number;
+  opacity?: number;
+}
+
+/** 后端时间线轨道 */
+export interface BackendTimelineTrack {
+  id: string;
+  kind: TimelineTrackKind;
+  /** 只有 audio 轨有：voice / music / sfx */
+  role?: "voice" | "music" | "sfx" | null;
+  name: string;
+  muted?: boolean;
+  hidden?: boolean;
+  locked?: boolean;
+  clips: BackendTimelineClip[] | null;
 }
 
 /** GET/PUT /dramas/:id/episodes/:no/timeline 的响应 */
 export interface BackendTimelineView {
-  clips: BackendTimelineClip[] | null;
-  muted: boolean;
+  tracks: BackendTimelineTrack[] | null;
   removed_segment_ids: string[] | null;
   imports: string[] | null;
   revision: number;
@@ -834,10 +874,12 @@ export interface BackendTimelineView {
   assets: BackendAssetDto[] | null;
 }
 
-/** 时间线上的一段；毫秒。视频的 in/out 是素材内的位置，图片 inMs 恒为 0、outMs 即时长 */
-export interface TimelineClip {
-  /** 段 ID，清单内唯一 */
-  id: string;
+/**
+ * 时间线段里宿主私有的部分（放在通用片段的 host 字段里，编辑器原样保留）。
+ * 后端用 0 表示「没有」的 ID，这里统一成空串。
+ */
+export interface DramaClipHost {
+  /** 段的来源种类 */
   kind: TimelineClipKind;
   /** 片段 ID；只用于 kind=segment */
   segmentId: string;
@@ -849,12 +891,6 @@ export interface TimelineClip {
   assetId: string;
   /** 素材种类；只用于 kind=asset */
   media: TimelineMedia | null;
-  /** 入点（毫秒） */
-  inMs: number;
-  /** 出点（毫秒）；图片是时长 */
-  outMs: number;
-  /** 这一段静音 */
-  muted: boolean;
 }
 
 /** 对账带来的一条变化 */
@@ -864,16 +900,15 @@ export interface TimelineChange {
   segmentId: string;
   /** 片段序号（从 0 起）；被删的片段是它在原时间线里排第几个片段 */
   seq: number;
-  /** 对应的段；空串 = 段已移除 */
+  /** 对应的主轨段；空串 = 段已移除 */
   clipId: string;
 }
 
-/** 一集的粗剪时间线 */
+/** 一集的粗剪时间线：轨道和片段就是编辑器的通用结构 */
 export interface Timeline {
-  clips: TimelineClip[];
-  /** 整轨静音 */
-  muted: boolean;
-  /** 用户主动从轨上删掉的片段，片场再改也不自动加回 */
+  /** 全部轨道，显示顺序为 字幕 → 叠加 → 主轨 → 音频 */
+  tracks: EditorTrack[];
+  /** 用户主动从主轨上删掉的片段，片场再改也不自动加回 */
   removedSegmentIds: string[];
   /** 「已导入」里的素材 ID */
   imports: string[];
@@ -883,11 +918,11 @@ export interface Timeline {
 export interface TimelineView extends Timeline {
   /** 乐观锁版本；0 = 还没保存过（按片段现算的默认时间线） */
   revision: number;
-  /** 这次读取时按片场同步的变化 */
+  /** 这次读取时按片场同步的变化（只来自主轨） */
   changes: TimelineChange[];
-  /** 固定的版本或素材已失效的段 */
+  /** 固定的版本或素材已失效的段（所有轨） */
   invalidClipIds: string[];
-  /** 素材段和「已导入」引用的素材 */
+  /** 所有轨和「已导入」引用的素材 */
   assets: AssetDto[];
 }
 

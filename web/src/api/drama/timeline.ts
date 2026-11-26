@@ -1,32 +1,88 @@
 import { mapAsset } from "@/api/asset";
+import { normalize } from "@/components/timeline-editor/model";
+import type {
+  AudioRole,
+  ClipType,
+  EditorClip,
+  EditorTrack,
+} from "@/components/timeline-editor/types";
+import { clipRef, hostOf } from "@/utils/drama/timeline-host";
 import service from "@/utils/requests/service";
 
 import type {
   BackendTimelineClip,
+  BackendTimelineTrack,
   BackendTimelineView,
+  DramaClipHost,
   Timeline,
-  TimelineClip,
+  TimelineClipKind,
+  TimelineMedia,
+  TimelineTrackKind,
   TimelineView,
 } from "./type";
 
-/** 后端段 → 前端段；空 id 统一成空串 */
-const mapClip = (raw: BackendTimelineClip): TimelineClip => ({
+/** 后端段的种类和素材种类 → 通用片段类型 */
+const typeOf = (kind: TimelineClipKind, media: TimelineMedia | null): ClipType =>
+  kind === "segment" ? "video" : kind === "text" ? "text" : (media ?? "video");
+
+/** 后端段 → 通用片段；空 id 统一成空串，叠加和文字参数只在对应的轨和片段上有 */
+function mapClip(raw: BackendTimelineClip, trackKind: TimelineTrackKind): EditorClip {
+  const host: DramaClipHost = {
+    kind: raw.kind,
+    segmentId: raw.segment_id ?? "",
+    taskId: raw.task_id ?? "",
+    pinned: !!raw.pinned,
+    assetId: raw.asset_id ?? "",
+    media: raw.media || null,
+  };
+  return {
+    id: raw.id,
+    type: typeOf(raw.kind, host.media),
+    ref: clipRef(host),
+    startMs: trackKind === "main" ? 0 : (raw.start_ms ?? 0),
+    inMs: raw.in_ms,
+    outMs: raw.out_ms,
+    muted: !!raw.muted,
+    volume: raw.volume ?? 100,
+    fadeInMs: raw.fade_in_ms ?? 0,
+    fadeOutMs: raw.fade_out_ms ?? 0,
+    overlay:
+      trackKind === "overlay"
+        ? {
+            x: raw.x ?? 50,
+            y: raw.y ?? 50,
+            scale: raw.scale ?? 100,
+            opacity: raw.opacity ?? 100,
+          }
+        : null,
+    text:
+      raw.kind === "text"
+        ? {
+            text: raw.text ?? "",
+            style: raw.style ?? "subtitle",
+            pos: raw.pos ?? "bottom",
+            size: raw.size ?? 100,
+          }
+        : null,
+    host,
+  };
+}
+
+/** 后端轨道 → 通用轨道；音频轨角色缺省为音效，clips 兜底空数组 */
+const mapTrack = (raw: BackendTimelineTrack): EditorTrack => ({
   id: raw.id,
   kind: raw.kind,
-  segmentId: raw.segment_id ?? "",
-  taskId: raw.task_id ?? "",
-  pinned: !!raw.pinned,
-  assetId: raw.asset_id ?? "",
-  media: raw.media || null,
-  inMs: raw.in_ms,
-  outMs: raw.out_ms,
+  role: raw.kind === "audio" ? ((raw.role as AudioRole | null | undefined) ?? "sfx") : null,
+  name: raw.name,
   muted: !!raw.muted,
+  hidden: !!raw.hidden,
+  locked: !!raw.locked,
+  clips: (raw.clips ?? []).map((clip) => mapClip(clip, raw.kind)),
 });
 
-/** 时间线视图 snake → camel；列表兜底空数组 */
+/** 时间线视图 snake → camel；列表兜底空数组，主轨起点按顺序重算 */
 export const mapTimeline = (raw: BackendTimelineView): TimelineView => ({
-  clips: (raw.clips ?? []).map(mapClip),
-  muted: !!raw.muted,
+  tracks: normalize({ tracks: (raw.tracks ?? []).map(mapTrack) }).tracks,
   removedSegmentIds: raw.removed_segment_ids ?? [],
   imports: raw.imports ?? [],
   revision: raw.revision ?? 0,
@@ -40,28 +96,62 @@ export const mapTimeline = (raw: BackendTimelineView): TimelineView => ({
   assets: (raw.assets ?? []).map(mapAsset),
 });
 
-/** 前端段 → 请求体；只发本种类用到的字段 */
-const toClipBody = (clip: TimelineClip): BackendTimelineClip =>
-  clip.kind === "segment"
-    ? {
-        id: clip.id,
-        kind: "segment",
-        segment_id: clip.segmentId,
-        task_id: clip.taskId || null,
-        pinned: clip.pinned,
-        in_ms: Math.round(clip.inMs),
-        out_ms: Math.round(clip.outMs),
-        muted: clip.muted,
-      }
-    : {
-        id: clip.id,
-        kind: "asset",
-        asset_id: clip.assetId,
-        media: clip.media ?? "video",
-        in_ms: Math.round(clip.inMs),
-        out_ms: Math.round(clip.outMs),
-        muted: clip.muted,
-      };
+/** 通用片段 → 请求体；只发本种类和所在轨用到的字段 */
+function toClipBody(clip: EditorClip, trackKind: TimelineTrackKind): BackendTimelineClip {
+  const host = hostOf(clip);
+  const body: BackendTimelineClip = {
+    id: clip.id,
+    kind: clip.type === "text" ? "text" : host.kind === "text" ? "asset" : host.kind,
+    in_ms: Math.round(clip.inMs),
+    out_ms: Math.round(clip.outMs),
+    muted: clip.muted,
+    volume: Math.round(clip.volume),
+    fade_in_ms: Math.round(clip.fadeInMs),
+    fade_out_ms: Math.round(clip.fadeOutMs),
+  };
+  if (trackKind !== "main") body.start_ms = Math.round(clip.startMs);
+  if (body.kind === "segment") {
+    body.segment_id = host.segmentId;
+    body.task_id = host.taskId || null;
+    // 附属轨上的片段版本不跟随采用，后端一律当固定版本
+    body.pinned = trackKind === "main" ? host.pinned : true;
+  } else if (body.kind === "asset") {
+    body.asset_id = host.assetId;
+    body.media = (host.media ?? (clip.type === "text" ? "video" : clip.type)) as TimelineMedia;
+  } else if (clip.text) {
+    body.text = clip.text.text;
+    body.style = clip.text.style;
+    body.pos = clip.text.pos;
+    body.size = Math.round(clip.text.size);
+  }
+  if (trackKind === "overlay" && clip.overlay) {
+    body.x = Math.round(clip.overlay.x);
+    body.y = Math.round(clip.overlay.y);
+    body.scale = Math.round(clip.overlay.scale);
+    body.opacity = Math.round(clip.overlay.opacity);
+  }
+  return body;
+}
+
+/** 通用轨道 → 请求体；role 只有音频轨有 */
+const toTrackBody = (track: EditorTrack): BackendTimelineTrack => ({
+  id: track.id,
+  kind: track.kind,
+  ...(track.kind === "audio" && track.role ? { role: track.role } : {}),
+  name: track.name,
+  muted: track.muted,
+  hidden: track.hidden,
+  locked: track.locked,
+  clips: track.clips.map((clip) => toClipBody(clip, track.kind)),
+});
+
+/** PUT 请求体：版本、轨道、删除名单和已导入 */
+export const toTimelineBody = (timeline: Timeline, revision: number) => ({
+  revision,
+  tracks: timeline.tracks.map(toTrackBody),
+  removed_segment_ids: timeline.removedSegmentIds,
+  imports: timeline.imports,
+});
 
 /**
  * 读一集对账后的粗剪时间线；没剪过返回按片段现算的默认时间线（revision 为 0）
@@ -89,13 +179,7 @@ export const saveTimeline = async (
   mapTimeline(
     await service.put<BackendTimelineView>(
       `/dramas/${id}/episodes/${no}/timeline`,
-      {
-        revision,
-        clips: timeline.clips.map(toClipBody),
-        muted: timeline.muted,
-        removed_segment_ids: timeline.removedSegmentIds,
-        imports: timeline.imports,
-      },
+      toTimelineBody(timeline, revision),
       { silent: true },
     ),
   );
