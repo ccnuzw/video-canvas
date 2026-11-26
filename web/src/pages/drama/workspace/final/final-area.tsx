@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDefaultLayout } from "react-resizable-panels";
 import { toast } from "sonner";
 
 import { getAsset } from "@/api/asset";
 import type { AssetDto } from "@/api/asset/type";
 import type { Timeline, TimelineClip } from "@/api/drama/type";
 import { finalFileName } from "@/components/drama/final-file";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useSharedWorkspace } from "@/hooks/use-shared-workspace";
+import { useDramaJobsStore } from "@/store/drama";
 import { segmentKey, useDramaSegmentsStore } from "@/store/drama-segments";
 import { useDramaTimelineStore } from "@/store/drama-timeline";
 import { downloadMedia } from "@/utils/canvas/download";
 import { activeComposeJob, finalState } from "@/utils/drama/compose";
 import { jobConflictReason } from "@/utils/drama/jobs";
 import { reloadSegments } from "@/utils/drama/segment-events";
-import { playableTake } from "@/utils/drama/segments";
 import type { WorkspaceStage } from "@/utils/drama/stages";
 import {
   assetClip,
@@ -48,6 +50,12 @@ const NO_SEGMENTS: never[] = [];
 /** 片场改动多久没有新变化才去对账（毫秒）：生成中片段状态推送很频繁，只在内容稳定后对一次 */
 const RESYNC_DELAY = 600;
 
+/** 分栏拖动条：透明的 12px 宽，留出卡片间距；悬停 / 拖动时中间亮一条主色细线 */
+const HANDLE_COLUMN =
+  "w-3 bg-transparent after:!w-3 before:absolute before:inset-y-2 before:left-1/2 before:w-0.5 before:-translate-x-1/2 before:rounded-full before:transition-colors hover:before:bg-primary/60 data-[separator=active]:before:bg-primary";
+const HANDLE_ROW =
+  "!h-3 !w-full bg-transparent after:!h-3 before:absolute before:inset-x-2 before:top-1/2 before:h-0.5 before:-translate-y-1/2 before:rounded-full before:transition-colors hover:before:bg-primary/60 data-[separator=active]:before:bg-primary";
+
 /**
  * 成片：剪辑台。左素材、右预览、下单轨时间线；顶栏是集标题、片场同步、统计和合成。
  * 时间线只存剪辑清单（自动保存），「合成」由后端按清单裁剪拼接，不扣积分。
@@ -79,10 +87,32 @@ export function FinalArea({
   const canRedo = useDramaTimelineStore((state) => state.redo.length > 0);
   const editor = useDramaTimelineStore.getState;
 
-  const { compose, pending } = useCompose(drama.id);
+  const { compose } = useCompose(drama.id);
+  // 竖屏（高大于宽的比例）：预览放右侧整列
+  const [rw, rh] = /^\d+:\d+$/.test(drama.ratio) ? drama.ratio.split(":").map(Number) : [9, 16];
+  const portrait = rh > rw;
+  // 分栏尺寸每人记住：竖屏和横屏各存一份
+  const portraitCols = useDefaultLayout({
+    id: "drama-final-portrait-cols",
+    panelIds: ["edit", "preview"],
+  });
+  const portraitRows = useDefaultLayout({
+    id: "drama-final-portrait-rows",
+    panelIds: ["media", "track"],
+  });
+  const landscapeRows = useDefaultLayout({
+    id: "drama-final-landscape-rows",
+    panelIds: ["top", "track"],
+  });
+  const landscapeCols = useDefaultLayout({
+    id: "drama-final-landscape-cols",
+    panelIds: ["media", "preview"],
+  });
   const [selected, setSelected] = useState<string | null>(null);
-  const [mode, setMode] = useState<"timeline" | "final">("timeline");
-  const [downloading, setDownloading] = useState(false);
+  /** 导出进行到哪一步：保存时间线 / 等合成任务 / 下载；没在导出为 null */
+  const [exportStep, setExportStep] = useState<"saving" | "composing" | "downloading" | null>(null);
+  /** 这次导出提交的合成任务 ID，用来认出它结束了 */
+  const exportJob = useRef<string | null>(null);
 
   // 片段读自片段接口：进到成片页（或换集）时拉一次，之后靠推送保持新鲜
   useEffect(() => {
@@ -96,13 +126,42 @@ export function FinalArea({
   useEffect(() => {
     if (no > 0 && shared) editor().openShared(`${drama.id}:${no}`, segments);
   }, [drama.id, no, shared, segments, editor]);
-  // 换集：清掉选中，回到时间线预览
+  // 换集：清掉选中，放下进行中的导出（合成任务照常在后台跑完）
   const [shownEpisode, setShownEpisode] = useState(no);
   if (shownEpisode !== no) {
     setShownEpisode(no);
     setSelected(null);
-    setMode("timeline");
+    setExportStep(null);
   }
+
+  /** 下载这一集的成片 */
+  const downloadFinal = useCallback(
+    async (url: string) => {
+      setExportStep("downloading");
+      try {
+        await downloadMedia(url, finalFileName(drama.title, no));
+      } finally {
+        setExportStep(null);
+      }
+    },
+    [drama.title, no],
+  );
+
+  // 导出提交了合成任务：任务失败或取消就停下；成功后等详情刷出新成片（不再过期）再下载
+  useEffect(() => {
+    if (exportStep !== "composing") return;
+    const job = jobs.find((item) => item.id === exportJob.current);
+    if (job && (job.status === "failed" || job.status === "canceled")) {
+      exportJob.current = null;
+      setExportStep(null);
+      return;
+    }
+    if (job && job.status !== "succeeded") return;
+    if (episode?.final && !episode.finalStale) {
+      exportJob.current = null;
+      void downloadFinal(episode.final.url);
+    }
+  }, [exportStep, jobs, episode, downloadFinal]);
 
   // 片场改了采用、增删片段、改顺序：内容稳定后对账一次
   const signature = segments
@@ -172,8 +231,14 @@ export function FinalArea({
     () => timeline.imports.flatMap((id) => (assetMap[id] ? [assetMap[id]] : [])),
     [timeline.imports, assetMap],
   );
+  /** 时间线上用到的结果和素材，键为「task:ID」「asset:ID」（两种 ID 编码相同，可能撞成同一个串） */
   const onTimeline = useMemo(
-    () => new Set(clips.map((clip) => clip.taskId).filter(Boolean)),
+    () =>
+      new Set(
+        clips.map((clip) =>
+          clip.kind === "segment" ? `task:${clip.taskId}` : `asset:${clip.assetId}`,
+        ),
+      ),
     [clips],
   );
 
@@ -299,7 +364,7 @@ export function FinalArea({
       const key = event.key.toLowerCase();
       if (key === " ") {
         event.preventDefault();
-        if (mode === "timeline") player.toggle();
+        player.toggle();
         return;
       }
       if (readOnly) return;
@@ -320,7 +385,7 @@ export function FinalArea({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [actions, player, readOnly, selected, mode]);
+  }, [actions, player, readOnly, selected]);
 
   if (!episode) {
     return (
@@ -336,104 +401,164 @@ export function FinalArea({
     status !== "ready"
       ? "时间线还没读完"
       : (composeReason({ timeline, segments, assets, invalid, save }) ?? busy);
-  const adopted = segments.filter((segment) => playableTake(segment)).length;
 
   const locate = (clipId: string) => {
     const index = clips.findIndex((clip) => clip.id === clipId);
     if (index < 0) return;
     setSelected(clipId);
-    setMode("timeline");
     player.pause();
     player.seek(clipStarts(clips)[index]);
   };
 
-  const submit = async () => {
-    // 先把没保存的剪辑存上：合成读的是服务端的时间线
-    if (!(await editor().flush())) return;
-    if (await compose(no)) setMode("timeline");
-  };
-
-  const download = async () => {
-    if (!final) return;
-    setDownloading(true);
-    try {
-      await downloadMedia(final.url, finalFileName(drama.title, no));
-    } finally {
-      setDownloading(false);
+  /**
+   * 导出：先把没保存的剪辑存上（合成读的是服务端的时间线），再让后端按时间线合成，合成完自动下载；
+   * 时间线合成后没改过就直接下载上次的成片。共享只读只能下载已有的成片。
+   */
+  const exportNow = async () => {
+    if (readOnly) {
+      if (final) void downloadFinal(final.url);
+      return;
     }
+    setExportStep("saving");
+    const wasSaved = editor().save === "saved";
+    if (!(await editor().flush())) return setExportStep(null);
+    if (wasSaved && final && state === "fresh") return void downloadFinal(final.url);
+    setExportStep("composing");
+    if (!(await compose(no))) return setExportStep(null);
+    exportJob.current =
+      activeComposeJob(useDramaJobsStore.getState().byDrama[drama.id] ?? [], no)?.id ?? null;
   };
+  const exportLabel =
+    exportStep === "saving"
+      ? "保存中…"
+      : exportStep === "composing"
+        ? `合成中 ${running?.progress ?? 0}%`
+        : exportStep === "downloading"
+          ? "下载中…"
+          : null;
+  const exportReason = readOnly ? (final ? null : "作者还没有导出过这一集") : reason;
+
+  const mediaPanel = (
+    <MediaPanel
+      segments={segments}
+      canvasId={drama.canvasId}
+      imports={imports}
+      onTimeline={onTimeline}
+      aspect={aspectOf(drama.ratio)}
+      readOnly={readOnly}
+      onAdd={(payload) => void insertPayload(afterPlayhead(), payload)}
+      onImported={(asset) => {
+        editor().addAssets([asset]);
+        edit((t) => ({
+          ...t,
+          imports: [asset.id, ...t.imports.filter((id) => id !== asset.id)],
+        }));
+      }}
+    />
+  );
+  const preview = (
+    <TimelinePreview
+      player={player}
+      items={items}
+      labels={sources.map((source) => source.label)}
+      aspect={aspectOf(drama.ratio)}
+      muted={timeline.muted}
+      readOnly={readOnly}
+      onToggleMute={actions.toggleTrackMute}
+      empty={status === "ready" && segments.length === 0 && clips.length === 0}
+      onGoStudio={() => onGo("studio", no)}
+    />
+  );
+  const track = (
+    <TimelineTrack
+      clips={clips}
+      sources={sources}
+      segments={segments}
+      selected={selected}
+      syncIds={syncIds}
+      player={player}
+      muted={timeline.muted}
+      readOnly={readOnly}
+      canUndo={canUndo}
+      canRedo={canRedo}
+      actions={actions}
+    />
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <FinalBar
         no={no}
         title={episode.title}
-        state={state}
         save={save}
         sync={sync}
         segments={segments}
-        adopted={adopted}
-        timelineMs={totalMs(clips)}
-        running={running}
-        composing={pending === no}
-        composeReason={reason}
-        hasFinal={!!final}
-        saving={downloading}
+        exporting={exportLabel}
+        exportReason={exportLabel ? null : exportReason}
         readOnly={readOnly || !!shared}
         onRetrySave={() => void editor().flush()}
         onLocate={locate}
         onAckSync={() => editor().ackSync()}
         onUndoSync={() => editor().undoSync()}
-        onDownload={() => void download()}
-        onCompose={() => void submit()}
+        onExport={() => void exportNow()}
       />
-      <div className="flex min-h-0 flex-1 gap-3 px-6">
-        <MediaPanel
-          segments={segments}
-          canvasId={drama.canvasId}
-          imports={imports}
-          onTimeline={onTimeline}
-          aspect={aspectOf(drama.ratio)}
-          readOnly={readOnly}
-          onAdd={(payload) => void insertPayload(afterPlayhead(), payload)}
-          onImported={(asset) => {
-            editor().addAssets([asset]);
-            edit((t) => ({
-              ...t,
-              imports: [asset.id, ...t.imports.filter((id) => id !== asset.id)],
-            }));
-          }}
-        />
-        <TimelinePreview
-          player={player}
-          items={items}
-          labels={sources.map((source) => source.label)}
-          aspect={aspectOf(drama.ratio)}
-          final={final}
-          mode={mode}
-          onMode={setMode}
-          muted={timeline.muted}
-          readOnly={readOnly}
-          onToggleMute={actions.toggleTrackMute}
-          empty={status === "ready" && segments.length === 0 && clips.length === 0}
-          onGoStudio={() => onGo("studio", no)}
-        />
-      </div>
-      <div className="px-6 pt-3 pb-4">
-        <TimelineTrack
-          clips={clips}
-          sources={sources}
-          segments={segments}
-          selected={selected}
-          syncIds={syncIds}
-          player={player}
-          muted={timeline.muted}
-          readOnly={readOnly}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          actions={actions}
-        />
-      </div>
+      {portrait ? (
+        // 竖屏：预览在右侧整列，左侧上素材、下时间线；两条边都能拖
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="min-h-0 flex-1 px-6 pb-4"
+          defaultLayout={portraitCols.defaultLayout}
+          onLayoutChanged={portraitCols.onLayoutChanged}
+        >
+          <ResizablePanel id="edit" minSize={480}>
+            <ResizablePanelGroup
+              orientation="vertical"
+              defaultLayout={portraitRows.defaultLayout}
+              onLayoutChanged={portraitRows.onLayoutChanged}
+            >
+              <ResizablePanel id="media" minSize={160}>
+                {mediaPanel}
+              </ResizablePanel>
+              <ResizableHandle className={HANDLE_ROW} />
+              <ResizablePanel id="track" defaultSize={232} minSize={180} maxSize="70%">
+                {track}
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </ResizablePanel>
+          <ResizableHandle className={HANDLE_COLUMN} />
+          <ResizablePanel id="preview" defaultSize={400} minSize={260} maxSize="60%">
+            {preview}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        // 横屏：上面素材 + 预览，下面时间线；两条边都能拖
+        <ResizablePanelGroup
+          orientation="vertical"
+          className="min-h-0 flex-1 px-6 pb-4"
+          defaultLayout={landscapeRows.defaultLayout}
+          onLayoutChanged={landscapeRows.onLayoutChanged}
+        >
+          <ResizablePanel id="top" minSize={240}>
+            <ResizablePanelGroup
+              orientation="horizontal"
+              defaultLayout={landscapeCols.defaultLayout}
+              onLayoutChanged={landscapeCols.onLayoutChanged}
+            >
+              <ResizablePanel id="media" defaultSize={300} minSize={220} maxSize="50%">
+                {mediaPanel}
+              </ResizablePanel>
+              <ResizableHandle className={HANDLE_COLUMN} />
+              <ResizablePanel id="preview" minSize={320}>
+                {preview}
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </ResizablePanel>
+          <ResizableHandle className={HANDLE_ROW} />
+          <ResizablePanel id="track" defaultSize={232} minSize={180} maxSize="60%">
+            {track}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
     </div>
   );
 }

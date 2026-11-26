@@ -1,9 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { Clapperboard, Film, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
-import type { AssetDto } from "@/api/asset/type";
 import { Button } from "@/components/ui/button";
-import { VideoPlayer } from "@/components/video-player";
 import { cn } from "@/lib/utils";
 
 import type { PlayerItem, TimelinePlayer } from "./use-timeline-player";
@@ -22,17 +20,13 @@ function Timecode({ player }: { player: TimelinePlayer }) {
 }
 
 /**
- * 成片剪辑台的预览：「时间线」按清单播放（两个 video 交替，图片和待采用占位按时长显示），
- * 「成片」播放已合成的整集。
+ * 成片剪辑台的预览：按时间线清单播放（两个 video 交替，图片和待采用占位按时长显示）。
  */
 export function TimelinePreview({
   player,
   items,
   labels,
   aspect,
-  final,
-  mode,
-  onMode,
   muted,
   readOnly,
   onToggleMute,
@@ -44,9 +38,6 @@ export function TimelinePreview({
   /** 每段在画面上显示的名字（占位、失效时用） */
   labels: readonly string[];
   aspect: string;
-  final: AssetDto | null;
-  mode: "timeline" | "final";
-  onMode: (mode: "timeline" | "final") => void;
   muted: boolean;
   readOnly: boolean;
   onToggleMute: () => void;
@@ -55,41 +46,13 @@ export function TimelinePreview({
   onGoStudio: () => void;
 }) {
   const item = items[player.index];
-  const showFinal = mode === "final" && final;
 
   return (
     <section
       aria-label="预览"
-      className="bg-chrome ring-chrome-border relative flex min-w-0 flex-1 flex-col rounded-2xl ring-1 [corner-shape:squircle]"
+      className="bg-chrome ring-chrome-border relative flex size-full min-w-0 flex-col rounded-2xl ring-1 ring-inset [corner-shape:squircle]"
     >
-      <div className="flex items-center px-3 pt-3">
-        <div role="tablist" className="bg-chrome-hover flex rounded-full p-0.5 text-xs">
-          {(["timeline", "final"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={mode === value}
-              disabled={value === "final" && !final}
-              title={value === "final" && !final ? "还没有成片" : undefined}
-              onClick={() => {
-                player.pause();
-                onMode(value);
-              }}
-              className={cn(
-                "h-6 rounded-full px-3 transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                mode === value
-                  ? "bg-background text-foreground font-medium shadow-sm"
-                  : "text-muted-foreground",
-              )}
-            >
-              {value === "timeline" ? "时间线" : "成片"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid min-h-0 flex-1 place-items-center p-3">
+      <div className="grid min-h-0 flex-1 place-items-center px-3 pt-4 pb-2">
         {empty ? (
           <div className="flex flex-col items-center gap-3 text-center">
             <span className="bg-muted text-muted-foreground grid size-14 place-items-center rounded-[18px]">
@@ -106,67 +69,53 @@ export function TimelinePreview({
             style={{ aspectRatio: aspect }}
             className="relative h-full max-h-full max-w-full overflow-hidden rounded-xl bg-black shadow-[0_30px_60px_-30px_rgb(0_0_0/0.8)] ring-1 ring-white/10"
           >
-            {showFinal ? (
-              <VideoPlayer
-                key={final.id}
-                src={final.url}
-                durationMs={final.durationMs ?? undefined}
-              />
-            ) : (
-              <>
-                {([0, 1] as const).map((slot) => (
-                  <video
-                    key={slot}
-                    ref={player.videoRef(slot)}
-                    playsInline
-                    preload="auto"
-                    className={cn(
-                      "absolute inset-0 size-full object-contain",
-                      item?.kind === "video" && player.activeSlot === slot
-                        ? "visible"
-                        : "invisible",
-                    )}
-                  />
-                ))}
-                {item?.kind === "image" && item.url && (
-                  <img
-                    src={item.url}
-                    alt=""
-                    className="absolute inset-0 size-full object-contain"
-                  />
-                )}
-                {(item?.kind === "placeholder" || item?.kind === "broken") && (
-                  <div className="absolute inset-0 grid place-items-center px-4 text-center text-white">
-                    <div>
-                      <div
-                        className={cn(
-                          "text-[15px] font-semibold",
-                          item.kind === "broken" && "text-destructive",
-                        )}
-                      >
-                        {item.kind === "placeholder"
-                          ? `${labels[player.index]} 待采用`
-                          : `${labels[player.index]} 素材已失效`}
-                      </div>
-                      <div className="mt-1 text-xs opacity-70">
-                        {item.kind === "placeholder" ? "合成时跳过" : "请换版本或删掉这一段"}
-                      </div>
+            <>
+              {([0, 1] as const).map((slot) => (
+                <video
+                  key={slot}
+                  ref={player.videoRef(slot)}
+                  playsInline
+                  preload="auto"
+                  className={cn(
+                    "absolute inset-0 size-full object-contain",
+                    item?.kind === "video" && player.activeSlot === slot ? "visible" : "invisible",
+                  )}
+                />
+              ))}
+              {item?.kind === "image" && item.url && (
+                <img src={item.url} alt="" className="absolute inset-0 size-full object-contain" />
+              )}
+              {(item?.kind === "placeholder" || item?.kind === "broken") && (
+                <div className="absolute inset-0 grid place-items-center px-4 text-center text-white">
+                  <div>
+                    <div
+                      className={cn(
+                        "text-[15px] font-semibold",
+                        item.kind === "broken" && "text-destructive",
+                      )}
+                    >
+                      {item.kind === "placeholder"
+                        ? `${labels[player.index]} 待采用`
+                        : `${labels[player.index]} 素材已失效`}
+                    </div>
+                    <div className="mt-1 text-xs opacity-70">
+                      {item.kind === "placeholder" ? "合成时跳过" : "请换版本或删掉这一段"}
                     </div>
                   </div>
-                )}
-                {item?.muted && (
-                  <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] text-white">
-                    <VolumeX className="size-3" />
-                    静音
-                  </span>
-                )}
-              </>
-            )}
+                </div>
+              )}
+              {item?.muted && (
+                <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] text-white">
+                  <VolumeX className="size-3" />
+                  静音
+                </span>
+              )}
+            </>
           </div>
         )}
       </div>
 
-      {!showFinal && !empty && (
+      {!empty && (
         <div className="flex items-center gap-3 px-4 pb-3">
           <span className="flex-1" />
           <button

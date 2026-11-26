@@ -50,6 +50,8 @@ const PAD = 12;
 /** 缩放范围：每秒多少像素 */
 const MIN_PPS = 2;
 const MAX_PPS = 160;
+/** 轨道末尾留白（像素），方便把素材拖到最后 */
+const TAIL = 48;
 /** 缩略图一格的宽度（像素） */
 const TILE = 48;
 /** 刻度间隔候选（秒），取第一个间距不小于 64px 的 */
@@ -161,7 +163,7 @@ export function TimelineTrack({
   // 适配宽度：整条时间线正好铺满可见区域；剪辑后总长变了也跟着适配，手动缩放过就不再自动
   const clipsTotal = totalMs(clips);
   useLayoutEffect(() => {
-    if (fit) setPps(clampPps((viewport - PAD - 48) / Math.max(clipsTotal / 1000, 8)));
+    if (fit) setPps(clampPps((viewport - PAD - TAIL) / Math.max(clipsTotal / 1000, 8)));
   }, [fit, viewport, clipsTotal]);
 
   // 播放头不走 React 渲染：订阅播放器时钟直接改位置；播放时滚动跟随
@@ -178,10 +180,21 @@ export function TimelineTrack({
     return player.subscribe(update);
   }, [player, pps]);
 
+  /** 缩放时以播放头为锚：记下播放头在可见区域里的位置，缩放后滚到让它停在原处，画面不跳 */
+  const anchor = useRef<{ t: number; x: number } | null>(null);
   const zoom = (next: number) => {
+    const el = scrollRef.current;
+    const t = player.time();
+    if (el) anchor.current = { t, x: PAD + (t / 1000) * ppsRef.current - el.scrollLeft };
     setFit(false);
     setPps(clampPps(next));
   };
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const at = anchor.current;
+    anchor.current = null;
+    if (el && at) el.scrollLeft = Math.max(0, PAD + (at.t / 1000) * pps - at.x);
+  }, [pps]);
 
   /** 指针位置对应的时间线毫秒 */
   const timeAt = (clientX: number) => {
@@ -263,7 +276,8 @@ export function TimelineTrack({
   };
 
   const step = STEPS.find((s) => s * pps >= 64) ?? 120;
-  const widthPx = Math.max(PAD + (total / 1000) * pps + 160, viewport);
+  // 适配宽度时正好铺满不溢出；放大后才出现滚动
+  const widthPx = Math.max(PAD + (total / 1000) * pps + TAIL, viewport);
   const ticks: number[] = [];
   for (let s = 0; s <= (widthPx - PAD) / pps; s += step) ticks.push(s);
   const insertMark = drag?.mode === "move" && drag.moving ? drag.insert : dropAt;
@@ -281,7 +295,7 @@ export function TimelineTrack({
   return (
     <section
       aria-label="时间线"
-      className="bg-chrome ring-chrome-border flex h-[232px] shrink-0 flex-col rounded-2xl ring-1 [corner-shape:squircle]"
+      className="bg-chrome ring-chrome-border flex size-full min-h-0 flex-col rounded-2xl ring-1 ring-inset [corner-shape:squircle]"
     >
       <div className="border-chrome-border flex items-center gap-0.5 border-b px-2.5 py-1.5">
         <ToolButton
@@ -365,7 +379,7 @@ export function TimelineTrack({
             render={
               <div
                 ref={scrollRef}
-                className="relative min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+                className="relative min-w-0 flex-1 overflow-x-scroll overflow-y-hidden"
                 onWheel={(event) => {
                   if (!event.metaKey && !event.ctrlKey) return;
                   event.preventDefault();

@@ -6,7 +6,7 @@ import { uploadAsset } from "@/api/asset";
 import type { AssetDto } from "@/api/asset/type";
 import { getCanvas } from "@/api/canvas";
 import type { Segment } from "@/api/drama/type";
-import { VideoPoster } from "@/components/canvas/media-preview";
+import { MediaPreview, VideoPoster } from "@/components/canvas/media-preview";
 import { UPLOAD_SIZE_LIMIT } from "@/constants/canvas";
 import { cn } from "@/lib/utils";
 import { sortSegments } from "@/utils/drama/segments";
@@ -53,7 +53,7 @@ export function MediaPanel({
   canvasId: string;
   /** 「已导入」的素材 */
   imports: readonly AssetDto[];
-  /** 已经在时间线上的结果任务 ID */
+  /** 时间线上用到的结果和素材，键为「task:ID」「asset:ID」（在轨的卡片底色深一些） */
   onTimeline: ReadonlySet<string>;
   /** CSS aspect-ratio，如 9/16 */
   aspect: string;
@@ -145,11 +145,12 @@ export function MediaPanel({
   };
 
   const matches = (kind: string) => filter === "all" || filter === kind;
+  const grid = "grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2.5";
 
   return (
     <aside
       aria-label="素材"
-      className="bg-chrome ring-chrome-border flex w-[300px] shrink-0 flex-col rounded-2xl ring-1 [corner-shape:squircle] max-lg:hidden"
+      className="bg-chrome ring-chrome-border flex size-full min-h-0 flex-col rounded-2xl ring-1 ring-inset [corner-shape:squircle]"
     >
       <div role="tablist" className="flex gap-1 px-3 pt-3 pb-2">
         {TABS.map((item) => (
@@ -225,47 +226,38 @@ export function MediaPanel({
         }}
       >
         {tab === "segments" &&
-          (segments.length === 0 ? (
-            <Empty text="这一集还没有片段" />
-          ) : (
-            sortSegments(segments).map((segment) => {
-              const takes = segment.takes
-                .map((take, index) => ({ take, version: index + 1 }))
-                .filter(({ take }) => take.status === "succeeded" && take.asset?.url);
-              return (
-                <section key={segment.id} className="mb-3">
-                  <h4 className="text-muted-foreground mx-0.5 mb-1.5 text-xs font-medium">
-                    {segmentLabel(segment.seq)} · {segment.seconds}s
-                  </h4>
-                  {takes.length === 0 ? (
-                    <p className="text-muted-foreground mx-0.5 text-xs">还没有可用视频</p>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {takes.map(({ take, version }) => (
-                        <Tile
-                          key={take.taskId}
-                          aspect={aspect}
-                          readOnly={readOnly}
-                          payload={{ type: "take", segmentId: segment.id, taskId: take.taskId }}
-                          onAdd={onAdd}
-                          title={`版本 ${version}`}
-                          sub={
-                            take.asset?.durationMs
-                              ? `${Math.round(take.asset.durationMs / 1000)}s`
-                              : ""
-                          }
-                          badge={take.taskId === segment.chosenTaskId ? "已采用" : null}
-                          onTimeline={onTimeline.has(take.taskId)}
-                        >
-                          <VideoPoster src={take.asset!.url} />
-                        </Tile>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              );
-            })
-          ))}
+          sortSegments(segments).map((segment) => {
+            const takes = segment.takes
+              .map((take, index) => ({ take, version: index + 1 }))
+              .filter(({ take }) => take.status === "succeeded" && take.asset?.url);
+            if (takes.length === 0) return null;
+            return (
+              <section key={segment.id} className="mb-3">
+                <h4 className="text-muted-foreground mx-0.5 mb-1.5 text-xs font-medium">
+                  {segmentLabel(segment.seq)} · {segment.seconds}s
+                </h4>
+                <div className={grid}>
+                  {takes.map(({ take, version }) => (
+                    <Tile
+                      key={take.taskId}
+                      aspect={aspect}
+                      readOnly={readOnly}
+                      payload={{ type: "take", segmentId: segment.id, taskId: take.taskId }}
+                      onAdd={onAdd}
+                      title={`版本 ${version}`}
+                      sub={
+                        take.asset?.durationMs ? `${Math.round(take.asset.durationMs / 1000)}s` : ""
+                      }
+                      badge={take.taskId === segment.chosenTaskId ? "已采用" : null}
+                      onTimeline={onTimeline.has(`task:${take.taskId}`)}
+                    >
+                      <VideoPoster src={take.asset!.url} />
+                    </Tile>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
 
         {tab === "canvas" &&
           (canvas === null ? (
@@ -275,15 +267,16 @@ export function MediaPanel({
           ) : canvas.filter((item) => matches(item.kind)).length === 0 ? (
             <Empty text="画布上还没有图片或视频" />
           ) : (
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className={grid}>
               {canvas
                 .filter((item) => matches(item.kind))
                 .map((item) => (
                   <Tile
                     key={`${item.assetId}-${item.url}`}
-                    aspect={aspect}
+                    aspect="1/1"
                     readOnly={readOnly}
                     payload={{ type: "canvas", assetId: item.assetId }}
+                    onTimeline={onTimeline.has(`asset:${item.assetId}`)}
                     onAdd={onAdd}
                     title={item.label}
                     sub={item.kind === "image" ? "图片" : "视频"}
@@ -298,28 +291,32 @@ export function MediaPanel({
           (uploads.length === 0 && imports.filter((asset) => matches(asset.kind)).length === 0 ? (
             <Empty text="将文件拖至此处添加" />
           ) : (
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className={grid}>
               {uploads.map((item) => (
                 <div
                   key={item.key}
-                  style={{ aspectRatio: aspect }}
-                  className="bg-muted relative grid place-items-center overflow-hidden rounded-lg text-center text-[11px]"
+                  className="bg-chrome-hover overflow-hidden rounded-xl [corner-shape:squircle]"
                 >
-                  {item.failed ? (
-                    <button
-                      type="button"
-                      onClick={() => void upload(item)}
-                      className="text-destructive flex flex-col items-center gap-1"
-                    >
-                      <RotateCcw className="size-4" />
-                      上传失败
-                    </button>
-                  ) : (
-                    <span className="text-muted-foreground flex flex-col items-center gap-1">
-                      <Loader2 className="size-4 animate-spin" />
-                      {item.progress}%
-                    </span>
-                  )}
+                  <div className="bg-muted grid aspect-square place-items-center text-center text-[12px]">
+                    {item.failed ? (
+                      <button
+                        type="button"
+                        onClick={() => void upload(item)}
+                        className="text-destructive flex flex-col items-center gap-1"
+                      >
+                        <RotateCcw className="size-4" />
+                        上传失败，点此重试
+                      </button>
+                    ) : (
+                      <span className="text-muted-foreground flex flex-col items-center gap-1">
+                        <Loader2 className="size-4 animate-spin" />
+                        {item.progress}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="truncate px-2.5 py-2 text-[12.5px]" title={item.file.name}>
+                    {item.file.name}
+                  </div>
                 </div>
               ))}
               {imports
@@ -327,9 +324,10 @@ export function MediaPanel({
                 .map((asset) => (
                   <Tile
                     key={asset.id}
-                    aspect={aspect}
+                    aspect="1/1"
                     readOnly={readOnly}
                     payload={{ type: "asset", asset }}
+                    onTimeline={onTimeline.has(`asset:${asset.id}`)}
                     onAdd={onAdd}
                     title={asset.fileName ?? ""}
                     sub={
@@ -355,17 +353,17 @@ function Empty({ text }: { text: string }) {
   return <p className="text-muted-foreground py-12 text-center text-[12.5px]">{text}</p>;
 }
 
-/** 图片或视频的封面 */
+/** 图片或视频的缩略图：和画布一样只请求缩略图 / 封面变体，失败才退回原图 */
 function Thumb({ kind, url }: { kind: "video" | "image"; url: string }) {
-  if (kind === "video") return <VideoPoster src={url} />;
+  if (kind === "video") return <VideoPoster src={url} className="size-full object-cover" />;
   return url ? (
-    <img src={url} alt="" draggable={false} className="size-full object-cover" />
+    <MediaPreview src={url} mode="thumb" fit="cover" draggable={false} />
   ) : (
     <ImageIcon className="text-muted-foreground size-5" />
   );
 }
 
-/** 可拖进时间线的素材卡片 */
+/** 可拖进时间线的素材卡片：上面缩略图，下面名字和时长 */
 function Tile({
   aspect,
   readOnly,
@@ -377,6 +375,7 @@ function Tile({
   onTimeline = false,
   children,
 }: {
+  /** 缩略图的 CSS aspect-ratio */
   aspect: string;
   readOnly: boolean;
   payload: TimelineDragPayload;
@@ -391,38 +390,43 @@ function Tile({
     <div
       draggable={!readOnly}
       onDragStart={(event) => startTimelineDrag(event, payload)}
-      style={{ aspectRatio: aspect }}
       className={cn(
-        "group bg-muted relative overflow-hidden rounded-lg ring-1 ring-transparent",
-        !readOnly && "cursor-grab hover:ring-chrome-border active:cursor-grabbing",
+        "group overflow-hidden rounded-xl ring-1 ring-transparent transition-colors [corner-shape:squircle]",
+        // 已经在时间线上的底色深一些，不在的浅一些，不另外加角标
+        onTimeline ? "bg-muted/35" : "bg-muted",
+        !readOnly && "hover:ring-chrome-border cursor-grab active:cursor-grabbing",
       )}
     >
-      {children}
-      {badge && (
-        <span className="bg-status-success absolute top-1 left-1 rounded px-1 text-[10px] font-semibold text-black">
-          {badge}
-        </span>
-      )}
-      {onTimeline && (
-        <span className="absolute top-1 right-1 rounded bg-black/55 px-1 text-[10px] text-white">
-          在轨上
-        </span>
-      )}
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-1.5 pt-4 pb-1 text-[10.5px] leading-tight text-white">
-        <span className="block truncate">{title}</span>
-        {sub && <span className="opacity-80">{sub}</span>}
-      </span>
-      {!readOnly && (
-        <button
-          type="button"
-          aria-label="加到播放头所在段之后"
-          title="加到播放头所在段之后"
-          onClick={() => onAdd(payload)}
-          className="absolute right-1 bottom-1 hidden size-5 place-items-center rounded-full bg-white/90 text-black group-hover:grid"
-        >
-          <Plus className="size-3" />
-        </button>
-      )}
+      <div
+        style={{ aspectRatio: aspect }}
+        className="bg-muted relative grid place-items-center overflow-hidden"
+      >
+        <div className="absolute inset-0 grid place-items-center">{children}</div>
+        {badge && (
+          <span className="bg-status-success absolute top-1.5 left-1.5 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-black">
+            {badge}
+          </span>
+        )}
+        {!readOnly && (
+          <button
+            type="button"
+            aria-label="加到播放头所在段之后"
+            title="加到播放头所在段之后"
+            onClick={() => onAdd(payload)}
+            className="absolute right-1.5 bottom-1.5 hidden size-7 place-items-center rounded-full bg-white/90 text-black shadow group-hover:grid"
+          >
+            <Plus className="size-4" />
+          </button>
+        )}
+      </div>
+      <div className="px-2.5 py-2">
+        <div className="truncate text-[12.5px] leading-tight" title={title}>
+          {title || "未命名"}
+        </div>
+        {sub && (
+          <div className="text-muted-foreground mt-0.5 text-[11.5px] leading-tight">{sub}</div>
+        )}
+      </div>
     </div>
   );
 }

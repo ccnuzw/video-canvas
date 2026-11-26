@@ -41,34 +41,27 @@ const noop = () => {};
 const barProps = {
   no: 1,
   title: "湖底沉箱",
-  state: "none" as const,
   save: "saved" as const,
   sync: [],
   segments: [segment("s1", 0), segment("s2", 1)],
-  adopted: 1,
-  timelineMs: 89_000,
-  running: null,
-  composing: false,
-  composeReason: null,
-  hasFinal: false,
-  saving: false,
+  exporting: null,
+  exportReason: null,
   readOnly: false,
   onRetrySave: noop,
   onLocate: noop,
   onAckSync: noop,
   onUndoSync: noop,
-  onDownload: noop,
-  onCompose: noop,
+  onExport: noop,
 };
 
 describe("成片顶栏", () => {
-  test("标题、统计和合成按钮", () => {
+  test("只有标题和一个「导出」按钮：不显示统计、成片状态、下载和合成", () => {
     const html = renderToStaticMarkup(<FinalBar {...barProps} />);
     expect(html).toContain("第 1 集 · 湖底沉箱");
-    expect(html).toContain("1/2");
-    expect(html).toContain("01:29");
-    expect(html).toContain("合成第 1 集");
-    expect(html).not.toContain("片场更新");
+    expect(html).toContain("导出");
+    for (const text of ["已采用", ">下载 mp4<", "合成第 1 集", "成片已过期", "片场更新"]) {
+      expect(html).not.toContain(text);
+    }
   });
 
   test("有同步变化时出现「片场更新 N」胶囊，不出横幅", () => {
@@ -87,27 +80,24 @@ describe("成片顶栏", () => {
     expect(html).toContain("片场更新 2");
   });
 
-  test("不能合成时按钮禁用并写明原因；成片过期显示提示", () => {
+  test("不能导出时按钮禁用，原因只在悬停提示里", () => {
     const html = renderToStaticMarkup(
-      <FinalBar
-        {...barProps}
-        state="stale"
-        hasFinal
-        composeReason="第 2 段的素材已失效，请换版本或删掉"
-      />,
+      <FinalBar {...barProps} exportReason="第 2 段的素材已失效，请换版本或删掉" />,
     );
-    expect(html).toContain("成片已过期，可重新合成");
-    expect(html).toContain("重新合成");
-    expect(html).toContain("第 2 段的素材已失效，请换版本或删掉");
+    expect(html).toContain('title="第 2 段的素材已失效，请换版本或删掉"');
     expect(html).toContain("disabled");
-    expect(html).toContain("下载 mp4");
   });
 
-  test("保存失败给出重试；只读时不出合成按钮", () => {
+  test("导出进行中按钮上显示进度", () => {
+    const html = renderToStaticMarkup(<FinalBar {...barProps} exporting="合成中 45%" />);
+    expect(html).toContain("合成中 45%");
+    expect(html).toContain("animate-spin");
+  });
+
+  test("保存失败给出重试", () => {
     expect(renderToStaticMarkup(<FinalBar {...barProps} save="error" />)).toContain(
       "时间线保存失败 · 重试",
     );
-    expect(renderToStaticMarkup(<FinalBar {...barProps} readOnly />)).not.toContain("合成第 1 集");
   });
 });
 
