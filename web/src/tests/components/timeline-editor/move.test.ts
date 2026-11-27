@@ -40,22 +40,48 @@ function sample(): EditorTimeline {
 }
 const mainIds = (tl: EditorTimeline) => mainTrack(tl).clips.map((c) => c.id);
 
-describe("主轨插入位置（拖着的片段中心点落在哪）", () => {
-  test("按其余片段的中点判断：中心过了某段中点就排到它后面", () => {
+describe("主轨插入位置（按拖动方向看领头的边）", () => {
+  test("没动时就是原位置", () => {
     const tl = sample();
-    // 拖 a：其余合上空位后是 b(0–4s 中点 2s)、c(4–6s 中点 5s)
-    expect(mainSlotAt(tl, "a", 1000)).toBe(0);
-    expect(mainSlotAt(tl, "a", 2500)).toBe(1);
-    expect(mainSlotAt(tl, "a", 5500)).toBe(2);
+    expect(mainSlotAt(tl, "a", 0, 0)).toBe(0);
+    expect(mainSlotAt(tl, "b", 4000, 4000)).toBe(1);
+    expect(mainSlotAt(tl, "c", 8000, 8000)).toBe(2);
   });
 
-  test("从别的轨拖进来的片段：按主轨全部片段算", () => {
+  test("往左拖看左边缘：越过前面某段的中点就排到它前面", () => {
     const tl = sample();
-    expect(mainSlotAt(tl, "o1", 0)).toBe(0);
-    // 主轨 a(0–4s 中点 2s)、b(4–8s 中点 6s)、c(8–10s 中点 9s)
-    expect(mainSlotAt(tl, "o1", 4500)).toBe(1);
-    expect(mainSlotAt(tl, "o1", 6500)).toBe(2);
-    expect(mainSlotAt(tl, "o1", 99999)).toBe(3);
+    // 拖 c（原在 8–10s）：a 中点 2s、b 中点 6s
+    expect(mainSlotAt(tl, "c", 6500, 0)).toBe(2);
+    expect(mainSlotAt(tl, "c", 5500, 0)).toBe(1);
+    expect(mainSlotAt(tl, "c", 1500, 0)).toBe(0);
+  });
+
+  test("往右拖看右边缘：越过后面某段的中点就排到它后面", () => {
+    const tl = sample();
+    // 拖 a（原在 0–4s，长 4s）：b 中点 6s、c 中点 9s
+    expect(mainSlotAt(tl, "a", 1500, 0)).toBe(0);
+    expect(mainSlotAt(tl, "a", 2500, 0)).toBe(1);
+    expect(mainSlotAt(tl, "a", 5500, 0)).toBe(2);
+  });
+
+  test("很长的片段往前拖到很短的片段前面（中心点永远过不去的情况）", () => {
+    const tl = emptyTimeline();
+    tl.tracks.find((t) => t.id === "main")!.clips = [
+      clip("short", { outMs: 600 }),
+      clip("long", { outMs: 9000 }),
+    ];
+    const packed = normalize(tl);
+    // long 原在 0.6–9.6s；左边缘拖到 0.2s，越过了 short 的中点 0.3s
+    expect(mainSlotAt(packed, "long", 200, 0)).toBe(0);
+    expect(mainSlotAt(packed, "long", 400, 0)).toBe(1);
+  });
+
+  test("从别的轨拖进来：看指针落在主轨哪段的哪一半", () => {
+    const tl = sample();
+    expect(mainSlotAt(tl, "o1", 0, 1000)).toBe(0);
+    expect(mainSlotAt(tl, "o1", 0, 4500)).toBe(1);
+    expect(mainSlotAt(tl, "o1", 0, 6500)).toBe(2);
+    expect(mainSlotAt(tl, "o1", 0, 99999)).toBe(3);
   });
 });
 

@@ -261,13 +261,15 @@ function applyMove(drag: Drag, event: PointerEvent, ctx: DragInput): Drag {
   if (!drag.moving && Math.hypot(pointer.x - drag.x0, pointer.y - drag.y0) < MOVE_THRESHOLD) {
     return drag;
   }
-  const start = ctx.timeAt(event.clientX) - drag.grabMs;
+  const pointerMs = ctx.timeAt(event.clientX);
+  const start = pointerMs - drag.grabMs;
   const targets = ctx.snapOn ? snapTargets(timeline, ctx.player.time(), drag.id) : [];
   const plan = planMove(
     timeline,
     drag.id,
     ctx.laneAt(event.clientY),
     start,
+    pointerMs,
     targets,
     thresholdOf(pps),
     drag.canLeaveMain,

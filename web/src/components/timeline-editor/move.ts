@@ -22,21 +22,38 @@ export type MoveTarget =
   /** 附属轨的某个起点（毫秒） */
   | { kind: "track"; trackId: string; startMs: number };
 
+/** 一段的中点（毫秒） */
+const midOf = (clip: EditorClip) => clip.startMs + clipLength(clip) / 2;
+
 /**
- * 拖着 id 这一段、它的中心点在时间线上 centerMs 处时，应该插到主轨的第几个位置。
- * 按「拿掉这一段后其余片段首尾相接」的位置算中点：中心点越过某段的中点就排到它后面。
- * 用合上空位后的位置而不是原位置，拖动中其余片段让位后判断也不会来回跳。
+ * 拖着 id 这一段时它应该插到主轨的第几个位置（按拿掉这一段之后的主轨算）。
+ * 主轨内按拖动方向看「领头的那条边」：往左拖看左边缘，越过前面某段的中点就排到它前面；
+ * 往右拖看右边缘，越过后面某段的中点就排到它后面。中点按原位置算，所以没动时就是原位置，
+ * 很长的片段也能拖到很短的片段前面（看中心点的话中心永远过不去）。
+ * 从别的轨拖进来的片段看指针落在主轨哪段的哪一半。
+ * @param startMs 拖着的片段此刻的起点
+ * @param pointerMs 指针此刻的时间位置
  */
-export function mainSlotAt(timeline: EditorTimeline, id: string, centerMs: number): number {
-  let slot = 0;
-  let at = 0;
-  for (const clip of mainTrack(timeline).clips) {
-    if (clip.id === id) continue;
-    const len = clipLength(clip);
-    if (centerMs > at + len / 2) slot++;
-    at += len;
+export function mainSlotAt(
+  timeline: EditorTimeline,
+  id: string,
+  startMs: number,
+  pointerMs: number,
+): number {
+  const clips = mainTrack(timeline).clips;
+  const index = clips.findIndex((clip) => clip.id === id);
+  if (index < 0) return clips.filter((clip) => midOf(clip) < pointerMs).length;
+  const self = clips[index];
+  if (startMs < self.startMs) {
+    const passed = clips.slice(0, index).filter((clip) => midOf(clip) > startMs).length;
+    return index - passed;
   }
-  return slot;
+  if (startMs > self.startMs) {
+    const end = startMs + clipLength(self);
+    const passed = clips.slice(index + 1).filter((clip) => midOf(clip) < end).length;
+    return index + passed;
+  }
+  return index;
 }
 
 /** 换到目标轨时要改的字段：进叠加轨补默认叠加参数，离开叠加轨去掉 */

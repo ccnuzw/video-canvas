@@ -86,9 +86,9 @@ describe("片段拖动的落点", () => {
   const tl = sample();
   const targets = snapTargets(tl, 0, "v1");
 
-  test("主轨片段在主轨上：按中心点给出插入位置，总是合法", () => {
-    // a 长 4s，起点拖到 3s → 中心 5s，越过了 b 合上空位后的中点
-    expect(planMove(tl, "a", "main", 3000, [], 50, true)).toEqual({
+  test("主轨片段在主轨上：按领头的边给出插入位置，总是合法", () => {
+    // a 长 4s 往右拖，起点到 3s → 右边缘 7s，越过了 b 的中点 6s
+    expect(planMove(tl, "a", "main", 3000, 3000, [], 50, true)).toEqual({
       target: { kind: "main", index: 1 },
       ok: true,
       snapAt: null,
@@ -96,11 +96,11 @@ describe("片段拖动的落点", () => {
   });
 
   test("主轨片段拖到叠加轨：可以离开主轨时换轨；占位或失效段（不能离开）留在主轨", () => {
-    expect(planMove(tl, "a", "overlay1", 6000, [], 50, true)).toMatchObject({
+    expect(planMove(tl, "a", "overlay1", 6000, 6000, [], 50, true)).toMatchObject({
       target: { kind: "track", trackId: "overlay1", startMs: 6000 },
       ok: true,
     });
-    expect(planMove(tl, "a", "overlay1", 6000, [], 50, false)?.target).toEqual({
+    expect(planMove(tl, "a", "overlay1", 6000, 6000, [], 50, false)?.target).toEqual({
       kind: "main",
       index: 1,
     });
@@ -110,34 +110,36 @@ describe("片段拖动的落点", () => {
     const added = addTrack(tl, "audio");
     if ("error" in added) throw new Error(added.error);
     const two = added.timeline;
-    expect(planMove(two, "v1", added.trackId, 4000, targets, 50, true)).toMatchObject({
+    expect(planMove(two, "v1", added.trackId, 4000, 4000, targets, 50, true)).toMatchObject({
       target: { kind: "track", trackId: added.trackId, startMs: 4000 },
       ok: true,
     });
-    expect(planMove(two, "v1", "overlay1", 4000, targets, 50, true)?.target).toMatchObject({
+    expect(planMove(two, "v1", "overlay1", 4000, 4000, targets, 50, true)?.target).toMatchObject({
       trackId: "voice1",
     });
-    expect(planMove(two, "v1", "main", 4000, targets, 50, true)?.target).toMatchObject({
+    expect(planMove(two, "v1", "main", 4000, 4000, targets, 50, true)?.target).toMatchObject({
       trackId: "voice1",
     });
-    expect(planMove(two, "v1", null, 4000, targets, 50, true)?.target).toMatchObject({
+    expect(planMove(two, "v1", null, 4000, 4000, targets, 50, true)?.target).toMatchObject({
       trackId: "voice1",
     });
   });
 
   test("压到别的片段时 ok 为 false，起点不小于 0，吸附取更近的边", () => {
-    expect(planMove(tl, "v1", "voice1", 5000, targets, 50, true)).toMatchObject({ ok: false });
-    expect(planMove(tl, "v1", "voice1", -400, targets, 50, true)?.target).toMatchObject({
+    expect(planMove(tl, "v1", "voice1", 5000, 5000, targets, 50, true)).toMatchObject({
+      ok: false,
+    });
+    expect(planMove(tl, "v1", "voice1", -400, -400, targets, 50, true)?.target).toMatchObject({
       startMs: 0,
     });
-    expect(planMove(tl, "v1", "voice1", 4020, targets, 50, true)).toMatchObject({
+    expect(planMove(tl, "v1", "voice1", 4020, 4020, targets, 50, true)).toMatchObject({
       target: { startMs: 4000 },
       snapAt: 4000,
     });
   });
 
   test("找不到片段返回 null", () => {
-    expect(planMove(tl, "nope", "main", 0, [], 50, true)).toBeNull();
+    expect(planMove(tl, "nope", "main", 0, 0, [], 50, true)).toBeNull();
   });
 
   test("relocate 不做校验地把片段摆到新位置，用来画落点不合法时的样子", () => {

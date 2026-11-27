@@ -71,15 +71,16 @@ const sameFamily = (a: TrackKind, b: TrackKind) =>
   a === b || (a === "main" && b === "overlay") || (a === "overlay" && b === "main");
 
 /**
- * 拖着 id 这一段、指针悬停在 hoverTrackId 这条轨、片段起点在 startMs 时的落点。
+ * 拖着 id 这一段、指针悬停在 hoverTrackId 这条轨、片段起点在 startMs、指针在 pointerMs 时的落点。
  * 悬停的轨能放（同类或主轨 ↔ 叠加、没锁、类型相符；从主轨拿去叠加轨还要 canLeaveMain）就换过去，否则留在原轨。
- * 落在主轨按中心点给插入位置；落在附属轨起点吸附到 targets。找不到片段返回 null。
+ * 落在主轨按拖动方向的领头边给插入位置（见 mainSlotAt）；落在附属轨起点吸附到 targets。找不到片段返回 null。
  */
 export function planMove(
   timeline: EditorTimeline,
   id: string,
   hoverTrackId: string | null,
   startMs: number,
+  pointerMs: number,
   targets: readonly number[],
   thresholdMs: number,
   canLeaveMain: boolean,
@@ -97,7 +98,7 @@ export function planMove(
   const len = clipLength(found.clip);
   if (dest.kind === "main") {
     return {
-      target: { kind: "main", index: mainSlotAt(timeline, id, startMs + len / 2) },
+      target: { kind: "main", index: mainSlotAt(timeline, id, startMs, pointerMs) },
       ok: true,
       snapAt: null,
     };
