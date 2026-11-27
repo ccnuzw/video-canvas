@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { Segment } from "@/api/drama/type";
 import { FinalBar } from "@/pages/drama/workspace/final/final-bar";
+import { readFullscreen, writeFullscreen } from "@/pages/drama/workspace/final/fullscreen";
 import { segmentClip } from "@/utils/drama/timeline";
 
 const segment = (id: string, seq: number): Segment =>
@@ -38,6 +39,8 @@ const barProps = {
   onAckSync: noop,
   onUndoSync: noop,
   onExport: noop,
+  fullscreen: false,
+  onToggleFullscreen: noop,
 };
 
 describe("成片顶栏", () => {
@@ -104,5 +107,39 @@ describe("成片顶栏的同步条目", () => {
     const html = renderToStaticMarkup(<FinalBar {...barProps} exporting="保存中…" />);
     expect(html).toContain("保存中…");
     expect(html).toContain("disabled");
+  });
+});
+
+describe("剪辑台全屏", () => {
+  test("顶栏有全屏按钮；全屏时变成退出全屏", () => {
+    const off = renderToStaticMarkup(<FinalBar {...barProps} />);
+    expect(off).toContain('aria-label="全屏"');
+    expect(off).toContain('aria-pressed="false"');
+    const on = renderToStaticMarkup(<FinalBar {...barProps} fullscreen />);
+    expect(on).toContain('aria-label="退出全屏"');
+    expect(on).toContain('aria-pressed="true"');
+  });
+
+  test("记住是否全屏：读写都容忍存储不可用", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+    };
+    expect(readFullscreen(storage)).toBe(false);
+    writeFullscreen(true, storage);
+    expect(readFullscreen(storage)).toBe(true);
+    writeFullscreen(false, storage);
+    expect(readFullscreen(storage)).toBe(false);
+    const broken = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(readFullscreen(broken)).toBe(false);
+    expect(() => writeFullscreen(true, broken)).not.toThrow();
   });
 });

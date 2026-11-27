@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { emptyTimeline } from "@/components/timeline-editor/model";
 import {
   LANE_PAD,
+  PANEL_CHROME,
+  RULER_HEIGHT,
+  TOOLBAR_HEIGHT,
   anchoredScroll,
   clampPps,
+  fitPanelHeight,
   fitPps,
   laneWidth,
   msToX,
@@ -47,5 +52,20 @@ describe("时间线布局换算", () => {
   test("缩放锚点：缩放后滚动位置让播放头停在原来的屏幕位置，不会小于 0", () => {
     expect(anchoredScroll(10_000, 100, 20)).toBe(LANE_PAD + 200 - 100);
     expect(anchoredScroll(0, 500, 20)).toBe(0);
+  });
+});
+
+describe("时间线面板的默认高度", () => {
+  test("刚好放下工具条、刻度尺和全部轨道，再留出横向滚动条的位置", () => {
+    const tracks = emptyTimeline().tracks;
+    const rows = 32 + 46 + 64 + 44 + 44;
+    expect(fitPanelHeight(tracks)).toBe(TOOLBAR_HEIGHT + RULER_HEIGHT + rows + PANEL_CHROME);
+  });
+
+  test("轨道越多越高；没有轨道时也至少放得下工具条和刻度尺", () => {
+    const tracks = emptyTimeline().tracks;
+    const more = [...tracks, { ...tracks[3], id: "a3" }];
+    expect(fitPanelHeight(more)).toBe(fitPanelHeight(tracks) + 44);
+    expect(fitPanelHeight([])).toBe(TOOLBAR_HEIGHT + RULER_HEIGHT + PANEL_CHROME);
   });
 });

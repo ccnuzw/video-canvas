@@ -1,4 +1,4 @@
-import type { TrackKind } from "../types";
+import type { EditorTrack, TrackKind } from "../types";
 
 /**
  * 时间线面板的布局常量和像素 ↔ 毫秒换算（纯函数）。
@@ -13,6 +13,10 @@ export const LANE_TAIL = 48;
 export const HEAD_WIDTH = 168;
 /** 刻度尺的高度（像素） */
 export const RULER_HEIGHT = 28;
+/** 工具条的高度（像素）：按钮 32px + 上下内边距 12px + 底边框 1px，改工具条样式时同步 */
+export const TOOLBAR_HEIGHT = 45;
+/** 面板的其余占用（像素）：横向滚动条的位置和上下描边 */
+export const PANEL_CHROME = 18;
 /** 缩放下限：每秒多少像素 */
 export const MIN_PPS = 2;
 /** 缩放上限：每秒多少像素 */
@@ -87,3 +91,10 @@ export const formatClock = (seconds: number): string =>
 
 /** 毫秒 → 「3.0s」 */
 export const formatSeconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
+
+/** 时间线面板刚好放下工具条、刻度尺和全部轨道（不出现竖向滚动条）需要的高度（像素） */
+export const fitPanelHeight = (tracks: readonly EditorTrack[]): number =>
+  TOOLBAR_HEIGHT +
+  RULER_HEIGHT +
+  PANEL_CHROME +
+  tracks.reduce((sum, track) => sum + ROW_HEIGHT[track.kind], 0);

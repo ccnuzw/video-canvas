@@ -10,6 +10,7 @@ import { Inspector } from "./inspector";
 import { MediaPanel } from "./media-panel";
 import { placeMedia } from "./place";
 import { Preview } from "./preview/preview";
+import { fitPanelHeight } from "./timeline/layout";
 import { TimelinePanel } from "./timeline/timeline-panel";
 import type {
   DraggedMedia,
@@ -76,11 +77,12 @@ export function TimelineEditor({
     panelIds: ["edit", "preview"],
   });
   const portraitRows = useDefaultLayout({
-    id: `${layoutId}-portrait-rows`,
+    // v2：时间线默认高度改成刚好放下全部轨道，旧版本存下的 232px 不再沿用
+    id: `${layoutId}-portrait-rows-v2`,
     panelIds: ["media", "track"],
   });
   const landscapeRows = useDefaultLayout({
-    id: `${layoutId}-landscape-rows`,
+    id: `${layoutId}-landscape-rows-v2`,
     panelIds: ["top", "track"],
   });
   const landscapeCols = useDefaultLayout({
@@ -232,6 +234,9 @@ export function TimelineEditor({
     />
   );
 
+  // 时间线默认高度刚好放下进来时的全部轨道，一开始不出现竖向滚动条（之后拖出的高度每人记住）
+  const trackHeight = fitPanelHeight(shown.tracks);
+
   return portrait ? (
     // 竖屏：预览在右侧整列，左侧上素材、下时间线；两条边都能拖
     <ResizablePanelGroup
@@ -250,7 +255,7 @@ export function TimelineEditor({
             {left}
           </ResizablePanel>
           <ResizableHandle className={HANDLE_ROW} />
-          <ResizablePanel id="track" defaultSize={232} minSize={180} maxSize="70%">
+          <ResizablePanel id="track" defaultSize={trackHeight} minSize={180} maxSize="70%">
             {track}
           </ResizablePanel>
         </ResizablePanelGroup>
@@ -284,7 +289,7 @@ export function TimelineEditor({
         </ResizablePanelGroup>
       </ResizablePanel>
       <ResizableHandle className={HANDLE_ROW} />
-      <ResizablePanel id="track" defaultSize={232} minSize={180} maxSize="60%">
+      <ResizablePanel id="track" defaultSize={trackHeight} minSize={180} maxSize="60%">
         {track}
       </ResizablePanel>
     </ResizablePanelGroup>

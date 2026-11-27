@@ -15,7 +15,10 @@ import { composeReason } from "@/utils/drama/timeline";
 
 import { useCompose } from "../../use-compose";
 import { useWorkspace } from "../context";
+import { cn } from "@/lib/utils";
+
 import { FinalBar } from "./final-bar";
+import { readFullscreen, writeFullscreen } from "./fullscreen";
 import { useFinalHost } from "./use-final-host";
 
 const NO_SEGMENTS: never[] = [];
@@ -72,6 +75,14 @@ export function FinalArea({
   useEffect(() => {
     if (no > 0 && shared) editor().openShared(`${drama.id}:${no}`, segments);
   }, [drama.id, no, shared, segments, editor]);
+  /** 剪辑台铺满窗口（盖住工作区顶栏和分集栏）；按浏览器记住上次的选择 */
+  const [fullscreen, setFullscreen] = useState(readFullscreen);
+  const toggleFullscreen = () => {
+    setFullscreen((on) => {
+      writeFullscreen(!on);
+      return !on;
+    });
+  };
   /** 顶栏「片场更新」点某一条：让编辑器选中并定位到那一段（nonce 每次加一） */
   const [focus, setFocus] = useState<{ clipId: string; nonce: number } | undefined>();
   // 换集：放下进行中的导出（合成任务照常在后台跑完）
@@ -228,7 +239,13 @@ export function FinalArea({
   const exportReason = readOnly ? (final ? null : "作者还没有导出过这一集") : reason;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className={cn(
+        "flex min-h-0 flex-col",
+        // 全屏：铺满浏览器窗口，盖住工作区的顶栏和分集栏；菜单、弹层和提示挂在 body 上，层级更高，照常可见
+        fullscreen ? "bg-background fixed inset-0 z-40" : "h-full",
+      )}
+    >
       <FinalBar
         no={no}
         title={episode.title}
@@ -243,6 +260,8 @@ export function FinalArea({
         onAckSync={() => editor().ackSync()}
         onUndoSync={() => editor().undoSync()}
         onExport={() => void exportNow()}
+        fullscreen={fullscreen}
+        onToggleFullscreen={toggleFullscreen}
       />
       <div className="min-h-0 flex-1 px-6 pb-4">
         <TimelineEditor

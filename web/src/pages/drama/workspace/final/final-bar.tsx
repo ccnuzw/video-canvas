@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { ChevronDown, Download, Loader2, LocateFixed, RefreshCw, Undo2 } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  Loader2,
+  LocateFixed,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  Undo2,
+} from "lucide-react";
 
 import type { Segment } from "@/api/drama/type";
 import { Button } from "@/components/ui/button";
@@ -27,6 +36,8 @@ export function FinalBar({
   onAckSync,
   onUndoSync,
   onExport,
+  fullscreen,
+  onToggleFullscreen,
 }: {
   no: number;
   title: string;
@@ -44,6 +55,10 @@ export function FinalBar({
   onAckSync: () => void;
   onUndoSync: () => void;
   onExport: () => void;
+  /** 剪辑台是否铺满窗口 */
+  fullscreen: boolean;
+  /** 进入 / 退出全屏 */
+  onToggleFullscreen: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -137,6 +152,16 @@ export function FinalBar({
         </Popover>
       )}
       <span className="flex-1" />
+      <button
+        type="button"
+        aria-label={fullscreen ? "退出全屏" : "全屏"}
+        aria-pressed={fullscreen}
+        title={fullscreen ? "退出全屏" : "全屏"}
+        onClick={onToggleFullscreen}
+        className="hover:bg-chrome-hover ring-chrome-border grid size-8 shrink-0 place-items-center rounded-full ring-1 transition-colors [&_svg]:size-4"
+      >
+        {fullscreen ? <Minimize2 /> : <Maximize2 />}
+      </button>
       <Button
         size="sm"
         className="min-w-24 rounded-full"
