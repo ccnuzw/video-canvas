@@ -24,7 +24,8 @@ FROM alpine:3.22
 
 WORKDIR /app
 # 画布 Agent 看视频、截帧需要 ffmpeg / ffprobe（抽帧由 backend 做，Agent 服务不联网也不碰素材）。
-RUN apk add --no-cache ffmpeg && addgroup -S app && adduser -S -G app app
+# 成片合成把字幕烧进画面：ffmpeg 的 ass 滤镜（libass，已随 ffmpeg 依赖装好）按名字「Noto Sans CJK SC」找字体，镜像里没有 CJK 字体中文会显示成方块。
+RUN apk add --no-cache ffmpeg font-noto-cjk && addgroup -S app && adduser -S -G app app
 COPY --from=build /out/server /app/server
 COPY --from=build /src/configs/config.yaml /app/configs/config.yaml
 # /run/plugin-runner 是 backend 与 plugin-runner 容器共享 Unix socket 的卷挂载点，首次挂载时命名卷继承这里的属主

@@ -26,6 +26,11 @@ type ComposeClip struct {
 	OutMS int64
 	// Muted 这一段不要声音（补静音轨）
 	Muted bool
+	// Volume 音量百分比（0–200）；0 表示不调整（100%），要静音用 Muted
+	Volume int
+	// FadeInMS / FadeOutMS 淡入淡出时长（毫秒），同时作用于画面（淡到黑）和声音；0 表示没有
+	FadeInMS  int64
+	FadeOutMS int64
 }
 
 // composeTarget 统一后的画面尺寸。
@@ -62,26 +67,36 @@ func (e *Extractor) ComposeClips(ctx context.Context, clips []ComposeClip, ratio
 			_ = os.Remove(destination) // 不保留可能被误认为可播放成片的半成品。
 		}
 	}()
+	_, _, err = e.composeBase(ctx, dir, clips, ratio, destination)
+	return err
+}
+
+// composeBase 把各段逐个转码成统一规格再拼接到 destination，返回统一后的画面尺寸和成片总秒数；
+// dir 放中间文件，由调用方清理。
+func (e *Extractor) composeBase(ctx context.Context, dir string, clips []ComposeClip, ratio, destination string) (composeTarget, float64, error) {
 	infos, err := e.composeProbeAll(ctx, clips)
 	if err != nil {
-		return err
+		return composeTarget{}, 0, err
 	}
 	target := composeTargetOf(clips, infos, ratio)
 	var playlist strings.Builder
+	var total float64
 	for i, clip := range clips {
 		name := fmt.Sprintf("part-%06d.mp4", i)
 		if err := e.composeTranscode(ctx, clip, infos[i], target, filepath.Join(dir, name)); err != nil {
-			return err
+			return composeTarget{}, 0, err
 		}
+		length, _ := clipLength(clip, infos[i]) // 探测阶段已校验过
+		total += length
 		fmt.Fprintf(&playlist, "file '%s'\n", name)
 	}
 	listPath := filepath.Join(dir, "concat.txt")
 	if err := os.WriteFile(listPath, []byte(playlist.String()), 0600); err != nil {
-		return fmt.Errorf("写入合成清单失败：%w", err)
+		return composeTarget{}, 0, fmt.Errorf("写入合成清单失败：%w", err)
 	}
 	_, err = e.run(ctx, e.ffmpeg, "-nostdin", "-v", "error", "-f", "concat", "-safe", "1", "-i", listPath,
 		"-map", "0:v:0", "-map", "0:a:0", "-c", "copy", "-movflags", "+faststart", "-y", destination)
-	return err
+	return target, total, err
 }
 
 // composeProbeAll 读每段的尺寸、时长和音轨，并校验入出点；图片只需要尺寸。
@@ -219,10 +234,17 @@ func (e *Extractor) composeTranscode(ctx context.Context, clip ComposeClip, info
 		args = append(args, "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000")
 		audio = "1:a:0"
 	}
+	lengthMS := int64(length*1000 + 0.5)
 	filter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30", target.width, target.height, target.width, target.height)
+	filter += videoFadeFilters(clip.FadeInMS, clip.FadeOutMS, lengthMS)
+	// 声音：先音量和淡变，再补静音到整段长度；用静音源时没有可调的声音
+	audioChain := []string{"apad"}
+	if audio == "0:a:0" {
+		audioChain = append(gainFilters(clip.Volume, clip.FadeInMS, clip.FadeOutMS, lengthMS), "apad")
+	}
 	args = append(args, "-map", "0:v:0", "-map", audio, "-vf", filter,
 		"-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-		"-c:a", "aac", "-ar", "48000", "-ac", "2", "-af", "apad",
+		"-c:a", "aac", "-ar", "48000", "-ac", "2", "-af", strings.Join(audioChain, ","),
 		"-t", seconds, "-video_track_timescale", "90000", "-y", destination)
 	_, err = e.run(ctx, e.ffmpeg, args...)
 	return err

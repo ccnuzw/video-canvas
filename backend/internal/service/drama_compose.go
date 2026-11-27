@@ -30,10 +30,11 @@ const (
 	dramaComposeTimeoutMax = 30 * time.Minute
 )
 
-// DramaVideoComposer 按剪辑清单截取各段、统一到项目比例再拼接，由 videoframe.Extractor 实现。
+// DramaVideoComposer 按剪辑清单合成成片，由 videoframe.Extractor 实现。
 type DramaVideoComposer interface {
-	// ComposeClips 将本地各段按顺序合成到 destination（最后一个参数），ratio 为空沿用第一段视频比例；调用方负责最终成片文件清理。
-	ComposeClips(context.Context, []videoframe.ComposeClip, string, string) error
+	// ComposeTimeline 把主轨按顺序拼接、统一到项目比例，再叠加画面、混音、烧字幕，合成到 destination（最后一个参数）；
+	// ratio 为空沿用第一段视频比例；没有附属轨内容时等同只拼主轨；调用方负责最终成片文件清理。
+	ComposeTimeline(context.Context, videoframe.ComposePlan, string, string) error
 }
 
 // DramaComposeAssets 复用素材存储，未提交对象和数据库登记分离以保证取消与重试安全。
@@ -59,6 +60,8 @@ type dramaComposeInput struct {
 	SkippedSeqs    []int         `json:"skipped_seqs"`
 	Ratio          string        `json:"ratio,omitempty"`
 	Clips          []composeClip `json:"clips,omitempty"`
+	// Tracks 叠加、配音/BGM、字幕等附属轨；没有任何附属轨内容时为空，结构与只有主轨的任务一致
+	Tracks *composeTracks `json:"tracks,omitempty"`
 }
 
 // composeClip 冻结后的一段：具体素材 + 入出点；Muted 已合并整轨静音。
@@ -68,6 +71,10 @@ type composeClip struct {
 	InMS    int64  `json:"in_ms"`
 	OutMS   int64  `json:"out_ms"`
 	Muted   bool   `json:"muted"`
+	// Volume 音量百分比；旧任务没有这个字段，按 0 处理（合成时当 100%）
+	Volume    int   `json:"volume,omitempty"`
+	FadeInMS  int64 `json:"fade_in_ms,omitempty"`
+	FadeOutMS int64 `json:"fade_out_ms,omitempty"`
 }
 
 // estimateCompose 与提交使用同一项目锁和片段校验，完全不解析模型或访问积分账户。
@@ -105,8 +112,7 @@ func enqueueCompose(ctx context.Context, tx repository.DramaTx, p *model.DramaPr
 }
 
 // composeInput 读时间线并对账后冻结成剪辑清单：待采用占位跳过并记下序号；任何一条轨上有失效段整体拒绝（67048），
-// 不让用户以为合成了时间线上看到的样子。
-// 本轮只合成主轨；叠加、配音/BGM、字幕等附属轨的合成（overlay、amix、字幕烧录）下一步做，在那之前它们不进成片。
+// 不让用户以为合成了时间线上看到的样子。所有轨都冻结进输入：主轨的片段清单，加上叠加、配音/BGM、字幕轨。
 func composeInput(ctx context.Context, tx repository.DramaTx, p *model.DramaProject, ep model.DramaEpisode) (*dramaComposeInput, error) {
 	t, err := loadEpisodeTimeline(ctx, tx, p, &ep)
 	if err != nil {
@@ -126,7 +132,7 @@ func composeInput(ctx context.Context, tx repository.DramaTx, p *model.DramaProj
 	}
 	input := &dramaComposeInput{EpisodeID: ep.ID, SegmentVersion: ep.SegmentVersion, AssetIDs: []uint64{}, SkippedSeqs: []int{}, Ratio: p.Ratio}
 	for _, c := range main.Clips {
-		clip := composeClip{Media: drama.MediaVideo, InMS: c.InMS, OutMS: c.OutMS, Muted: c.Muted || main.Muted}
+		clip := composeClip{Media: drama.MediaVideo, InMS: c.InMS, OutMS: c.OutMS, Muted: c.Muted || main.Muted, Volume: c.Volume, FadeInMS: c.FadeInMS, FadeOutMS: c.FadeOutMS}
 		switch {
 		case c.Kind == drama.ClipAsset:
 			clip.AssetID, clip.Media = c.AssetID, c.Media
@@ -145,6 +151,7 @@ func composeInput(ctx context.Context, tx repository.DramaTx, p *model.DramaProj
 		return nil, errcode.ErrDramaNothingToCompose
 	}
 	slices.Sort(input.SkippedSeqs)
+	input.Tracks = freezeTracks(t.tracks, t.taskAsset)
 	return input, nil
 }
 
@@ -205,13 +212,22 @@ func (s *DramaService) renderCompose(ctx context.Context, job *model.DramaJob) (
 		if err := s.downloadCompose(ctx, job.UserID, c.AssetID, c.Media, path); err != nil {
 			return nil, nil, withCause(errcode.ErrInternal.WithMsg("下载失败：无法读取采用视频"), fmt.Errorf("素材 %d：%w", c.AssetID, err), "compose_download")
 		}
-		clips = append(clips, videoframe.ComposeClip{Path: path, Image: c.Media == drama.MediaImage, InMS: c.InMS, OutMS: c.OutMS, Muted: c.Muted})
+		clips = append(clips, videoframe.ComposeClip{Path: path, Image: c.Media == drama.MediaImage, InMS: c.InMS, OutMS: c.OutMS, Muted: c.Muted, Volume: c.Volume, FadeInMS: c.FadeInMS, FadeOutMS: c.FadeOutMS})
 		if err := s.dramaProgress(ctx, job, (i+1)*40/len(input.Clips)); err != nil {
 			return nil, nil, err
 		}
 	}
+	paths := map[uint64]string{}
+	if !input.Tracks.empty() {
+		paths, err = s.downloadTracks(ctx, job.UserID, dir, input.Tracks, func(done, total int) error {
+			return s.dramaProgress(ctx, job, 40+done*10/total)
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	dst := filepath.Join(dir, "final.mp4")
-	if err := s.compose.ComposeClips(ctx, clips, input.Ratio, dst); err != nil {
+	if err := s.compose.ComposeTimeline(ctx, input.Tracks.planOf(clips, paths), input.Ratio, dst); err != nil {
 		return nil, nil, withCause(errcode.ErrInternal.WithMsg("转码失败：无法合成视频"), err, "compose_transcode")
 	}
 	if err := s.dramaProgress(ctx, job, 80); err != nil {
@@ -247,11 +263,17 @@ func composeTimeout(job *model.DramaJob) time.Duration {
 	if err != nil {
 		return dramaComposeTimeout
 	}
-	var total time.Duration
+	var main time.Duration
 	for _, c := range input.Clips {
-		total += time.Duration(c.OutMS-c.InMS) * time.Millisecond
+		main += time.Duration(c.OutMS-c.InMS) * time.Millisecond
 	}
-	return min(max(dramaComposeTimeout, 2*total), dramaComposeTimeoutMax)
+	// 成片总长是全部轨的最晚结束点；附属轨还要叠加、混音，按 3 倍放宽
+	total := max(main, time.Duration(input.Tracks.trackEndMS())*time.Millisecond)
+	factor := time.Duration(2)
+	if !input.Tracks.empty() {
+		factor = 3
+	}
+	return min(max(dramaComposeTimeout, factor*total), dramaComposeTimeoutMax)
 }
 
 // downloadCompose 从用户素材存储下载到临时目录，沿用素材转存的大小和取消约束；素材种类必须和段的种类一致。

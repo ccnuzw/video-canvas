@@ -158,13 +158,15 @@ type composeProcessor struct {
 	inputs []string
 	clips  []videoframe.ComposeClip
 	ratio  string
+	// plan 最近一次收到的完整合成计划（含附属轨）
+	plan videoframe.ComposePlan
 }
 
-func (p *composeProcessor) ComposeClips(_ context.Context, clips []videoframe.ComposeClip, ratio, dst string) error {
+func (p *composeProcessor) ComposeTimeline(_ context.Context, plan videoframe.ComposePlan, ratio, dst string) error {
 	p.calls++
-	p.clips, p.ratio = clips, ratio
+	p.plan, p.clips, p.ratio = plan, plan.Main, ratio
 	p.inputs = nil
-	for _, c := range clips {
+	for _, c := range plan.Main {
 		p.inputs = append(p.inputs, c.Path)
 	}
 	if p.during != nil {
@@ -412,16 +414,83 @@ func TestDramaCompose_BrokenTimelineRejected(t *testing.T) {
 	dramaCheckCode(t, err, errcode.ErrDramaTimelineBroken.Code)
 }
 
-// 附属轨合成下一步做：本轮只合成主轨，叠加、配音、字幕不影响冻结的剪辑清单；但附属轨上有失效素材照样拒绝。
-func TestDramaCompose_AttachedTracksIgnoredButBrokenRejected(t *testing.T) {
-	main := drama.TimelineClip{ID: "a", Kind: drama.ClipSegment, SegmentID: 5, TaskID: 20, InMS: 1000, OutMS: 4000, Volume: 100}
-	text := drama.Track{ID: "t1", Kind: drama.TrackText, Name: "字幕", Clips: []drama.TimelineClip{{ID: "s", Kind: drama.ClipText, Text: "你好", Style: drama.TextSubtitle, Pos: drama.PosBottom, Size: 100, OutMS: 2000, Volume: 100}}}
-	audio := func(asset uint64) drama.Track {
-		return drama.Track{ID: "a1", Kind: drama.TrackAudio, Role: drama.RoleVoice, Name: "配音", Clips: []drama.TimelineClip{{ID: "v", Kind: drama.ClipAsset, AssetID: asset, Media: drama.MediaAudio, OutMS: 2000, Volume: 100}}}
+// 所有轨都冻结进合成输入并交给合成：主轨音量和淡变、叠加参数、音频轨、字幕、轨道静音/隐藏规则都要带上；
+// 附属轨上有失效素材照样拒绝。
+func TestDramaCompose_FreezesAllTracks(t *testing.T) {
+	main := drama.TimelineClip{ID: "a", Kind: drama.ClipSegment, SegmentID: 5, TaskID: 20, InMS: 1000, OutMS: 4000, Volume: 150, FadeInMS: 500, FadeOutMS: 700}
+	overlay := func(hidden bool) drama.Track {
+		return drama.Track{ID: "o1", Kind: drama.TrackOverlay, Name: "叠加", Hidden: hidden, Muted: true, Clips: []drama.TimelineClip{
+			{ID: "ov", Kind: drama.ClipAsset, AssetID: 40, Media: drama.MediaImage, StartMS: 1000, OutMS: 2000, Volume: 100, X: 75, Y: 25, Scale: 40, Opacity: 80, FadeInMS: 300},
+			{ID: "ovv", Kind: drama.ClipAsset, AssetID: 41, Media: drama.MediaVideo, StartMS: 4000, InMS: 500, OutMS: 2500, Volume: 50, Muted: true, X: 50, Y: 50, Scale: 100, Opacity: 100},
+		}}
 	}
+	voice := drama.Track{ID: "a1", Kind: drama.TrackAudio, Role: drama.RoleVoice, Name: "配音", Clips: []drama.TimelineClip{
+		{ID: "v", Kind: drama.ClipAsset, AssetID: 50, Media: drama.MediaAudio, StartMS: 500, InMS: 200, OutMS: 2200, Volume: 120, FadeInMS: 100, FadeOutMS: 200},
+		{ID: "v0", Kind: drama.ClipAsset, AssetID: 50, Media: drama.MediaAudio, StartMS: 3000, OutMS: 1000, Volume: 0},
+		{ID: "vm", Kind: drama.ClipAsset, AssetID: 50, Media: drama.MediaAudio, StartMS: 5000, OutMS: 1000, Volume: 100, Muted: true},
+	}}
+	mutedMusic := drama.Track{ID: "a2", Kind: drama.TrackAudio, Role: drama.RoleMusic, Name: "BGM", Muted: true, Clips: []drama.TimelineClip{
+		{ID: "m", Kind: drama.ClipAsset, AssetID: 50, Media: drama.MediaAudio, OutMS: 2000, Volume: 100},
+	}}
+	text := drama.Track{ID: "t1", Kind: drama.TrackText, Name: "字幕", Clips: []drama.TimelineClip{
+		{ID: "s", Kind: drama.ClipText, Text: "你好", Style: drama.TextTitle, Pos: drama.PosTop, Size: 120, StartMS: 200, OutMS: 2200, Volume: 100},
+	}}
+	hiddenText := drama.Track{ID: "t2", Kind: drama.TrackText, Name: "隐藏字幕", Hidden: true, Clips: []drama.TimelineClip{
+		{ID: "s2", Kind: drama.ClipText, Text: "不应出现", Style: drama.TextSubtitle, Pos: drama.PosBottom, Size: 100, OutMS: 1000, Volume: 100},
+	}}
 	r := newComposeMemory()
-	r.library = append(r.library, model.Asset{ID: 50, UserID: 7, Kind: "audio", DurationMs: 3000})
-	composeTracks(t, r, false, []drama.Track{text, audio(50)}, main)
+	r.library = append(r.library, model.Asset{ID: 40, UserID: 7, Kind: "image"}, model.Asset{ID: 41, UserID: 7, Kind: "video", DurationMs: 3000}, model.Asset{ID: 50, UserID: 7, Kind: "audio", DurationMs: 3000})
+	composeTracks(t, r, false, []drama.Track{text, hiddenText, overlay(false), voice, mutedMusic}, main)
+	p := &composeProcessor{}
+	s := composeService(r, &composeFiles{r: r}, p)
+	ctx := context.Background()
+	job, err := s.CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 提交之后再改时间线（删掉所有附属轨）：冻结的输入不受影响
+	composeTimeline(t, r, false, main)
+	if err := s.HandleDrama(ctx, 7, 1, uint64(job.ID)); err != nil {
+		t.Fatal(err)
+	}
+	plan := p.plan
+	if len(plan.Main) != 1 || plan.Main[0].Volume != 150 || plan.Main[0].FadeInMS != 500 || plan.Main[0].FadeOutMS != 700 {
+		t.Fatalf("主轨应带音量和淡变：%+v", plan.Main)
+	}
+	if len(plan.Overlays) != 2 {
+		t.Fatalf("叠加画面 %+v", plan.Overlays)
+	}
+	ov := plan.Overlays[0]
+	if !ov.Image || ov.StartMS != 1000 || ov.OutMS != 2000 || ov.X != 75 || ov.Y != 25 || ov.Scale != 40 || ov.Opacity != 80 || ov.FadeInMS != 300 || !ov.Muted {
+		t.Fatalf("叠加图片 %+v（轨道静音要并进片段静音）", ov)
+	}
+	if v := plan.Overlays[1]; v.Image || v.InMS != 500 || v.OutMS != 2500 || v.StartMS != 4000 || v.Volume != 50 || !v.Muted {
+		t.Fatalf("叠加视频 %+v", v)
+	}
+	// 配音：音量 0 和片段静音的不进合成；BGM 轨静音整条不进
+	if len(plan.Audios) != 1 {
+		t.Fatalf("音频轨应只剩一段：%+v", plan.Audios)
+	}
+	if a := plan.Audios[0]; a.StartMS != 500 || a.InMS != 200 || a.OutMS != 2200 || a.Volume != 120 || a.FadeInMS != 100 || a.FadeOutMS != 200 {
+		t.Fatalf("配音 %+v", a)
+	}
+	// 字幕：隐藏轨不进
+	if len(plan.Texts) != 1 {
+		t.Fatalf("字幕应只剩可见轨：%+v", plan.Texts)
+	}
+	if x := plan.Texts[0]; x.Text != "你好" || x.Style != "title" || x.Pos != "top" || x.Size != 120 || x.StartMS != 200 || x.LenMS != 2200 {
+		t.Fatalf("字幕 %+v", x)
+	}
+}
+
+func TestDramaCompose_HiddenOverlayTrackSkipped(t *testing.T) {
+	main := drama.TimelineClip{ID: "a", Kind: drama.ClipSegment, SegmentID: 5, TaskID: 20, OutMS: 4000, Volume: 100}
+	hidden := drama.Track{ID: "o1", Kind: drama.TrackOverlay, Name: "叠加", Hidden: true, Clips: []drama.TimelineClip{
+		{ID: "ov", Kind: drama.ClipAsset, AssetID: 40, Media: drama.MediaImage, OutMS: 2000, Volume: 100, X: 50, Y: 50, Scale: 100, Opacity: 100},
+	}}
+	r := newComposeMemory()
+	r.library = append(r.library, model.Asset{ID: 40, UserID: 7, Kind: "image"})
+	composeTracks(t, r, false, []drama.Track{hidden}, main)
 	p := &composeProcessor{}
 	s := composeService(r, &composeFiles{r: r}, p)
 	ctx := context.Background()
@@ -432,14 +501,42 @@ func TestDramaCompose_AttachedTracksIgnoredButBrokenRejected(t *testing.T) {
 	if err := s.HandleDrama(ctx, 7, 1, uint64(job.ID)); err != nil {
 		t.Fatal(err)
 	}
-	if len(p.clips) != 1 || p.clips[0].InMS != 1000 || p.clips[0].OutMS != 4000 {
-		t.Fatalf("只应合成主轨：%+v", p.clips)
+	if len(p.plan.Overlays) != 0 {
+		t.Fatalf("隐藏的叠加轨不应合成：%+v", p.plan.Overlays)
 	}
+}
+
+// 附属轨上有失效素材照样拒绝；没有附属轨内容时输入里没有 tracks，和之前完全一致。
+func TestDramaCompose_AttachedBrokenRejectedAndEmptyAttachedUnchanged(t *testing.T) {
+	main := drama.TimelineClip{ID: "a", Kind: drama.ClipSegment, SegmentID: 5, TaskID: 20, InMS: 1000, OutMS: 4000, Volume: 100}
+	audio := func(asset uint64) drama.Track {
+		return drama.Track{ID: "a1", Kind: drama.TrackAudio, Role: drama.RoleVoice, Name: "配音", Clips: []drama.TimelineClip{{ID: "v", Kind: drama.ClipAsset, AssetID: asset, Media: drama.MediaAudio, OutMS: 2000, Volume: 100}}}
+	}
+	ctx := context.Background()
 	// 配音用的素材 99 不存在：附属轨失效，整体拒绝
 	broken := newComposeMemory()
 	composeTracks(t, broken, false, []drama.Track{audio(99)}, main)
-	_, err = composeService(broken, &composeFiles{r: broken}, &composeProcessor{}).CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}})
+	_, err := composeService(broken, &composeFiles{r: broken}, &composeProcessor{}).CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}})
 	dramaCheckCode(t, err, errcode.ErrDramaTimelineBroken.Code)
+
+	// 附属轨都是空的：冻结输入不带附属轨，合成计划里也没有
+	r := newComposeMemory()
+	composeTracks(t, r, false, []drama.Track{{ID: "t1", Kind: drama.TrackText, Name: "字幕"}, {ID: "a1", Kind: drama.TrackAudio, Role: drama.RoleVoice, Name: "配音"}}, main)
+	p := &composeProcessor{}
+	s := composeService(r, &composeFiles{r: r}, p)
+	job, err := s.CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(r.jobs[0].InputJSON), "tracks") {
+		t.Fatalf("没有附属轨内容时冻结输入不应带 tracks：%s", r.jobs[0].InputJSON)
+	}
+	if err := s.HandleDrama(ctx, 7, 1, uint64(job.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.plan.Overlays)+len(p.plan.Audios)+len(p.plan.Texts) != 0 || len(p.plan.Main) != 1 || p.plan.Main[0].InMS != 1000 {
+		t.Fatalf("合成计划 %+v", p.plan)
+	}
 }
 
 func TestDramaCompose_LegacyQueuedInput(t *testing.T) {
@@ -458,5 +555,31 @@ func TestDramaCompose_LegacyQueuedInput(t *testing.T) {
 	}
 	if p.ratio != "" || len(p.clips) != 1 || p.clips[0].OutMS != 0 || p.clips[0].Image {
 		t.Fatalf("旧任务合成参数 ratio=%q clips=%+v", p.ratio, p.clips)
+	}
+}
+
+// 叠加轨上放的是片段的某个版本（kind=segment）：要换成那个版本的视频素材冻结进去，不能被当成无关片段丢掉。
+func TestDramaCompose_OverlaySegmentTakeFrozenAsVideo(t *testing.T) {
+	main := drama.TimelineClip{ID: "a", Kind: drama.ClipSegment, SegmentID: 5, TaskID: 20, OutMS: 4000, Volume: 100}
+	overlay := drama.Track{ID: "o1", Kind: drama.TrackOverlay, Name: "叠加", Clips: []drama.TimelineClip{
+		{ID: "ov", Kind: drama.ClipSegment, SegmentID: 5, TaskID: 20, Pinned: true, StartMS: 1000, InMS: 500, OutMS: 2500, Volume: 80, X: 70, Y: 30, Scale: 40, Opacity: 100},
+	}}
+	r := newComposeMemory()
+	composeTracks(t, r, false, []drama.Track{overlay}, main)
+	p := &composeProcessor{}
+	s := composeService(r, &composeFiles{r: r}, p)
+	ctx := context.Background()
+	job, err := s.CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.HandleDrama(ctx, 7, 1, uint64(job.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.plan.Overlays) != 1 {
+		t.Fatalf("叠加轨上的片段版本应进合成：%+v", p.plan.Overlays)
+	}
+	if o := p.plan.Overlays[0]; o.Image || o.Path == "" || o.StartMS != 1000 || o.InMS != 500 || o.OutMS != 2500 || o.Volume != 80 || o.Scale != 40 {
+		t.Fatalf("叠加的片段版本 %+v", o)
 	}
 }

@@ -259,10 +259,6 @@ export function trackRemovedSegments(
   return [...removed.filter((id) => !now.has(id)), ...gone];
 }
 
-/** 附属轨（叠加、配音、BGM、字幕）上有没有片段 */
-export const attachedHasClips = (timeline: Pick<Timeline, "tracks">): boolean =>
-  timeline.tracks.some((track) => track.kind !== "main" && track.clips.length > 0);
-
 /** 「导出」按钮不能点的原因；能点为 null。任何一条轨上有失效素材都不能导出 */
 export function composeReason(input: {
   timeline: Timeline;

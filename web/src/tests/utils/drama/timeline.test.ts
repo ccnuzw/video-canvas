@@ -6,7 +6,6 @@ import { emptyTimeline, mainTrack } from "@/components/timeline-editor/model";
 import type { EditorClip, EditorTrack } from "@/components/timeline-editor/types";
 import {
   assetClip,
-  attachedHasClips,
   changeText,
   composeReason,
   defaultTimeline,
@@ -385,7 +384,7 @@ describe("导出前检查", () => {
     );
   });
 
-  test("附属轨上的文字片段不算失效；attachedHasClips 看附属轨有没有片段", () => {
+  test("附属轨上的文字片段不算失效", () => {
     const text = base("t", {
       type: "text",
       outMs: 2000,
@@ -394,8 +393,6 @@ describe("导出前检查", () => {
     });
     const withText = timelineOf([seg("a", "s1", "t1", 0, 15000)], { text1: [text] });
     expect(composeReason({ ...ok, timeline: withText })).toBeNull();
-    expect(attachedHasClips(ok.timeline)).toBe(false);
-    expect(attachedHasClips(withText)).toBe(true);
   });
 });
 

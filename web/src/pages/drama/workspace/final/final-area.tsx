@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { TimelineEditor } from "@/components/timeline-editor";
 import { finalFileName } from "@/components/drama/final-file";
@@ -12,7 +11,7 @@ import { activeComposeJob, finalState } from "@/utils/drama/compose";
 import { jobConflictReason } from "@/utils/drama/jobs";
 import { reloadSegments } from "@/utils/drama/segment-events";
 import type { WorkspaceStage } from "@/utils/drama/stages";
-import { attachedHasClips, composeReason } from "@/utils/drama/timeline";
+import { composeReason } from "@/utils/drama/timeline";
 
 import { useCompose } from "../../use-compose";
 import { useWorkspace } from "../context";
@@ -23,9 +22,6 @@ const NO_SEGMENTS: never[] = [];
 
 /** 片场改动多久没有新变化才去对账（毫秒）：生成中片段状态推送很频繁，只在内容稳定后对一次 */
 const RESYNC_DELAY = 600;
-
-/** 本轮后端合成只合成主轨：导出时附属轨上有片段就先提示 */
-const MAIN_ONLY_NOTICE = "本次导出只包含主轨，叠加、配音和字幕暂不会合成进成片";
 
 /**
  * 成片：剪辑台。素材 / 属性、预览和多轨时间线都在通用的多轨编辑器里，这里只负责短剧的部分：
@@ -212,7 +208,6 @@ export function FinalArea({
       if (final) void downloadFinal(final.url);
       return;
     }
-    if (attachedHasClips(timeline)) toast.warning(MAIN_ONLY_NOTICE);
     setExportStep("saving");
     const wasSaved = editor().save === "saved";
     if (!(await editor().flush())) return setExportStep(null);
