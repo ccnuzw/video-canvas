@@ -15,7 +15,13 @@ import {
   updateTrack,
 } from "../model";
 import { SNAP_PX } from "../types";
-import type { EditError, EditorTimeline, TimelinePanelProps, TrackKind } from "../types";
+import type {
+  EditError,
+  EditorTimeline,
+  TimelineEditorHost,
+  TimelinePanelProps,
+  TrackKind,
+} from "../types";
 import { ClipMenuContent } from "./clip-menu";
 import { dropTargetFor, type DropMark } from "./drag-logic";
 import {
@@ -39,7 +45,7 @@ import { TimelineScrollbar } from "./scrollbar";
 import { Toolbar } from "./toolbar";
 import { TrackRow } from "./track-row";
 import type { TrackToggle } from "./track-header";
-import { useTimelineDrag } from "./use-timeline-drag";
+import { useTimelineDrag, type Ghost } from "./use-timeline-drag";
 import { useTimelineShortcuts } from "./use-timeline-shortcuts";
 import { useTimelineView } from "./use-timeline-view";
 
@@ -148,7 +154,8 @@ export function TimelinePanel(props: TimelinePanelProps) {
   };
 
   const main = mainTrack(timeline);
-  const insertIndex = drag.insert ?? (dropMark?.kind === "main" ? dropMark.index : null);
+  // 黄色插入线只给从素材面板拖进主轨用；拖时间线上的片段时其余片段直接让位
+  const insertIndex = dropMark?.kind === "main" ? dropMark.index : null;
   const insertX =
     insertIndex === null
       ? null
@@ -343,6 +350,34 @@ export function TimelinePanel(props: TimelinePanelProps) {
           style={{ top: RULER_HEIGHT + 4, bottom: 16 }}
         />
       </div>
+      {drag.ghost && <ClipGhost ghost={drag.ghost} timeline={timeline} host={host} />}
     </section>
+  );
+}
+
+/** 片段拖进主轨时跟着指针走的影子：半透明的主色块加片段名字，落点处另有虚线占位槽 */
+function ClipGhost({
+  ghost,
+  timeline,
+  host,
+}: {
+  ghost: Ghost;
+  timeline: EditorTimeline;
+  host: TimelineEditorHost;
+}) {
+  const clip = findClip(timeline, ghost.id)?.clip;
+  const label = !clip
+    ? ""
+    : clip.type === "text"
+      ? (clip.text?.text ?? "")
+      : host.resolve(clip).label;
+  return (
+    <div
+      aria-hidden
+      style={{ left: ghost.x, top: ghost.y, width: ghost.width, height: ghost.height }}
+      className="bg-primary/25 ring-primary pointer-events-none fixed z-[60] overflow-hidden rounded-lg px-1.5 py-0.5 text-[11px] text-white shadow-lg ring-2 backdrop-blur-sm [text-shadow:0_1px_3px_rgb(0_0_0/0.8)]"
+    >
+      <span className="block truncate">{label}</span>
+    </div>
   );
 }

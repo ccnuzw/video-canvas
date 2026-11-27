@@ -72,7 +72,9 @@ export function TrackRow(props: TrackRowProps) {
   const { track, host, pps, width, selectedId, readOnly, drag } = props;
   const editable = !readOnly && !track.locked;
   const faded = track.hidden || (track.kind === "audio" && track.muted);
-  const moving = drag && (drag.mode === "move" || drag.mode === "moveMain") && drag.moving;
+  const moving = drag?.mode === "move" && drag.moving ? drag : null;
+  // 落点在主轨：被拖的那段画成占位槽，其余片段带过渡地让位；附属轨上被拖的片段直接跟着指针，不加过渡
+  const toMain = moving?.plan?.target.kind === "main";
   return (
     <div
       className="border-chrome-border/50 flex border-b"
@@ -110,14 +112,9 @@ export function TrackRow(props: TrackRowProps) {
               pps={pps}
               selected={selectedId === clip.id}
               badges={host.clipBadges?.(clip) ?? { pinned: false, marked: false }}
-              dragging={!!moving && drag.id === clip.id && drag.mode === "moveMain"}
-              invalidDrop={
-                drag?.mode === "move" &&
-                drag.moving &&
-                drag.id === clip.id &&
-                !!drag.preview &&
-                !drag.preview.ok
-              }
+              dragging={!!moving && toMain && moving.id === clip.id}
+              animate={!!moving && (moving.id !== clip.id || toMain)}
+              invalidDrop={!!moving && moving.id === clip.id && !!moving.plan && !moving.plan.ok}
               editable={editable}
               pill={pillOf(drag, track, clip.id)}
               onPointerDown={(event, part) => props.onClipPointerDown(event, clip.id, part)}

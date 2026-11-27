@@ -12,7 +12,8 @@ import {
   snapTime,
   trimEdge,
 } from "../model";
-import type { ClipType, EditorClip, EditorTimeline } from "../types";
+import { mainSlotAt, type MoveTarget } from "../move";
+import type { ClipType, EditorClip, EditorTimeline, TrackKind } from "../types";
 
 /**
  * 拖动相关的纯判定：素材落点、附属片段移动预览、带吸附的裁剪草稿。
@@ -55,41 +56,57 @@ export function dropTargetFor(
   };
 }
 
-/** 附属片段拖动中的落点 */
-export interface MovePreview {
-  /** 落在哪条轨 */
-  trackId: string;
-  /** 起点（毫秒） */
-  startMs: number;
-  /** 是否合法（不压到别的片段） */
+/** 片段拖动中的落点 */
+export interface MovePlan {
+  /** 移到哪里 */
+  target: MoveTarget;
+  /** 是否合法（附属轨上不压到别的片段；主轨插入总是合法） */
   ok: boolean;
   /** 吸附到的位置（毫秒）；没吸附为 null */
   snapAt: number | null;
 }
 
+/** 主轨和叠加轨都是画面，片段可以互换；其他轨只能在同类之间挪 */
+const sameFamily = (a: TrackKind, b: TrackKind) =>
+  a === b || (a === "main" && b === "overlay") || (a === "overlay" && b === "main");
+
 /**
- * 附属片段拖到 hoverTrackId 这条轨、起点 startMs 时的预览。
- * 只有悬停在同类且没锁定的另一条轨上才换轨，否则留在原轨；主轨片段返回 null。
+ * 拖着 id 这一段、指针悬停在 hoverTrackId 这条轨、片段起点在 startMs 时的落点。
+ * 悬停的轨能放（同类或主轨 ↔ 叠加、没锁、类型相符；从主轨拿去叠加轨还要 canLeaveMain）就换过去，否则留在原轨。
+ * 落在主轨按中心点给插入位置；落在附属轨起点吸附到 targets。找不到片段返回 null。
  */
-export function previewMove(
+export function planMove(
   timeline: EditorTimeline,
   id: string,
   hoverTrackId: string | null,
   startMs: number,
   targets: readonly number[],
   thresholdMs: number,
-): MovePreview | null {
+  canLeaveMain: boolean,
+): MovePlan | null {
   const found = findClip(timeline, id);
-  if (!found || found.track.kind === "main") return null;
+  if (!found) return null;
   const hover = timeline.tracks.find((track) => track.id === hoverTrackId);
-  const track = hover && hover.kind === found.track.kind && !hover.locked ? hover : found.track;
+  const usable =
+    !!hover &&
+    !hover.locked &&
+    sameFamily(hover.kind, found.track.kind) &&
+    accepts(hover.kind, found.clip.type) &&
+    !(found.track.kind === "main" && hover.kind !== "main" && !canLeaveMain);
+  const dest = usable ? hover : found.track;
   const len = clipLength(found.clip);
+  if (dest.kind === "main") {
+    return {
+      target: { kind: "main", index: mainSlotAt(timeline, id, startMs + len / 2) },
+      ok: true,
+      snapAt: null,
+    };
+  }
   const snapped = snapMove(startMs, len, targets, thresholdMs);
   const start = Math.max(0, snapped.start);
   return {
-    trackId: track.id,
-    startMs: start,
-    ok: !overlapsAt(track, start, len, id),
+    target: { kind: "track", trackId: dest.id, startMs: start },
+    ok: !overlapsAt(dest, start, len, id),
     snapAt: snapped.at,
   };
 }

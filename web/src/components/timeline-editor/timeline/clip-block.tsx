@@ -35,6 +35,8 @@ export interface ClipBlockProps {
   badges: ClipBadges;
   /** 是否正被拖动（变淡） */
   dragging: boolean;
+  /** 位置变化带过渡（拖动中其余片段让位时） */
+  animate: boolean;
   /** 拖动中的落点不合法（红框） */
   invalidDrop: boolean;
   /** 能编辑（没有只读、轨道没锁定） */
@@ -143,6 +145,7 @@ export function ClipBlock({
   selected,
   badges,
   dragging,
+  animate,
   invalidDrop,
   editable,
   pill,
@@ -176,7 +179,9 @@ export function ClipBlock({
                 : "border-transparent",
         placeholder &&
           "bg-[repeating-linear-gradient(135deg,var(--color-muted)_0_8px,transparent_8px_16px)]",
-        dragging && "opacity-35",
+        // 被拖到主轨上的那段画成虚线占位槽，影子另外跟着指针走
+        dragging && "border-primary border-dashed opacity-45",
+        animate && "transition-[left] duration-150 ease-out motion-reduce:transition-none",
       )}
     >
       <ClipBackground clip={clip} track={track} media={media} width={width} height={rowHeight} />

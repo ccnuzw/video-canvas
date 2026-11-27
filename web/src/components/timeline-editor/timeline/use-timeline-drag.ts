@@ -1,24 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-import {
-  MAX_FADE_MS,
-  findClip,
-  insertIndexAt,
-  moveAttached,
-  moveMain,
-  snapTargets,
-  updateClip,
-} from "../model";
+import { MAX_FADE_MS, findClip, snapTargets, updateClip } from "../model";
+import { moveClipTo } from "../move";
 import { SNAP_PX } from "../types";
-import type {
-  EditError,
-  EditorClip,
-  EditorTimeline,
-  PlayerHandle,
-  TimelineEditorHost,
-} from "../types";
-import { previewMove, relocate, sourceMaxOf, trimDraft, type MovePreview } from "./drag-logic";
+import type { EditorClip, EditorTimeline, PlayerHandle, TimelineEditorHost } from "../types";
+import { planMove, relocate, sourceMaxOf, trimDraft, type MovePlan } from "./drag-logic";
 
 /** 片段上可以按下去拖的部位：本体（移动）、左右边（裁剪）、淡入淡出手柄 */
 export type ClipPart = "body" | "start" | "end" | "fadeIn" | "fadeOut";
@@ -47,10 +34,48 @@ export type Drag =
       orig: EditorClip;
       draft: EditorTimeline;
     }
-  /** 拖主轨片段换顺序；insert 是插入位置 */
-  | { mode: "moveMain"; id: string; x0: number; moving: boolean; insert: number | null }
-  /** 拖附属片段（可跨同类轨） */
-  | { mode: "move"; id: string; x0: number; moving: boolean; preview: MovePreview | null };
+  /**
+   * 拖片段换位置：主轨内调顺序、主轨和叠加轨之间换轨、附属轨之间换轨。
+   * grabMs 是按下时指针离片段起点多少毫秒；plan 是当前落点；ghost 是主轨上跟着指针走的影子的尺寸和抓取点
+   */
+  | {
+      mode: "move";
+      id: string;
+      x0: number;
+      y0: number;
+      grabMs: number;
+      moving: boolean;
+      canLeaveMain: boolean;
+      plan: MovePlan | null;
+      pointer: { x: number; y: number };
+      ghost: GhostBox;
+    };
+
+/** 片段影子的尺寸和抓取点（像素）：抓取点是按下时指针相对片段左上角的位置 */
+export interface GhostBox {
+  /** 宽 */
+  width: number;
+  /** 高 */
+  height: number;
+  /** 抓取点横向偏移 */
+  offsetX: number;
+  /** 抓取点纵向偏移 */
+  offsetY: number;
+}
+
+/** 主轨上跟着指针走的影子：位置（视口坐标）、尺寸和是哪一段 */
+export interface Ghost {
+  /** 片段 ID */
+  id: string;
+  /** 左上角横坐标 */
+  x: number;
+  /** 左上角纵坐标 */
+  y: number;
+  /** 宽 */
+  width: number;
+  /** 高 */
+  height: number;
+}
 
 /** 拖动判定为「开始移动」的最小距离（像素） */
 const MOVE_THRESHOLD = 5;
@@ -82,7 +107,7 @@ interface DragInput {
 }
 
 /**
- * 时间线上所有指针拖动：seek、拖边裁剪、淡入淡出、主轨换顺序、附属片段移动。
+ * 时间线上所有指针拖动：seek、拖边裁剪、淡入淡出、片段换位置（主轨排序、换轨）。
  * 用 window 监听 move/up，拖动中片段换轨导致元素重建也不会丢事件。
  * 拖动中只画草稿，松手才一次性 onChange（一步撤销）。
  */
@@ -161,10 +186,26 @@ export function useTimelineDrag(input: DragInput) {
         orig: clip,
         draft: input.timeline,
       });
-    } else if (found.track.kind === "main") {
-      set({ mode: "moveMain", id, x0, moving: false, insert: null });
     } else {
-      set({ mode: "move", id, x0, moving: false, preview: null });
+      const rect = (event.target as HTMLElement).closest("[data-clip]")?.getBoundingClientRect();
+      set({
+        mode: "move",
+        id,
+        x0,
+        y0: event.clientY,
+        grabMs: input.timeAt(x0) - clip.startMs,
+        moving: false,
+        // 待采用的占位、素材失效的段不能离开主轨
+        canLeaveMain: clip.type !== "text" && input.host.resolve(clip).state === "ready",
+        plan: null,
+        pointer: { x: x0, y: event.clientY },
+        ghost: {
+          width: rect?.width ?? 0,
+          height: rect?.height ?? 0,
+          offsetX: rect ? x0 - rect.left : 0,
+          offsetY: rect ? event.clientY - rect.top : 0,
+        },
+      });
     }
   };
 
@@ -175,13 +216,13 @@ export function useTimelineDrag(input: DragInput) {
     shown = drag.draft;
     snapAt = drag.snapAt;
   } else if (drag?.mode === "fade") shown = drag.draft;
-  else if (drag?.mode === "move" && drag.moving && drag.preview) {
-    shown = relocate(input.timeline, drag.id, drag.preview.trackId, drag.preview.startMs);
-    snapAt = drag.preview.snapAt;
+  else if (drag?.mode === "move" && drag.moving && drag.plan) {
+    shown = movedView(input.timeline, drag.id, drag.plan);
+    snapAt = drag.plan.snapAt;
   }
-  const insert = drag?.mode === "moveMain" && drag.moving ? drag.insert : null;
+  const ghost = ghostOf(drag);
 
-  return { drag, shown, snapAt, insert, startSeek, startClip };
+  return { drag, shown, snapAt, ghost, startSeek, startClip };
 }
 
 /** 吸附阈值（毫秒） */
@@ -216,25 +257,45 @@ function applyMove(drag: Drag, event: PointerEvent, ctx: DragInput): Drag {
         : { fadeOutMs: Math.min(MAX_FADE_MS, drag.orig.fadeOutMs - deltaMs) };
     return { ...drag, draft: updateClip(timeline, drag.id, patch) };
   }
-  if (!drag.moving && Math.abs(event.clientX - drag.x0) < MOVE_THRESHOLD) return drag;
-  if (drag.mode === "moveMain") {
-    return { ...drag, moving: true, insert: insertIndexAt(timeline, ctx.timeAt(event.clientX)) };
+  const pointer = { x: event.clientX, y: event.clientY };
+  if (!drag.moving && Math.hypot(pointer.x - drag.x0, pointer.y - drag.y0) < MOVE_THRESHOLD) {
+    return drag;
   }
-  const found = findClip(timeline, drag.id);
-  if (!found) return drag;
-  const start = found.clip.startMs + deltaMs;
+  const start = ctx.timeAt(event.clientX) - drag.grabMs;
   const targets = ctx.snapOn ? snapTargets(timeline, ctx.player.time(), drag.id) : [];
+  const plan = planMove(
+    timeline,
+    drag.id,
+    ctx.laneAt(event.clientY),
+    start,
+    targets,
+    thresholdOf(pps),
+    drag.canLeaveMain,
+  );
+  return { ...drag, moving: true, plan, pointer };
+}
+
+/** 拖动中画的样子：落点合法就是松手后的结果（主轨其余片段已经让位），不合法就原样摆上去并标红 */
+function movedView(timeline: EditorTimeline, id: string, plan: MovePlan): EditorTimeline {
+  if (plan.ok) {
+    const result = moveClipTo(timeline, id, plan.target);
+    return "error" in result ? timeline : result.timeline;
+  }
+  return plan.target.kind === "track"
+    ? relocate(timeline, id, plan.target.trackId, plan.target.startMs)
+    : timeline;
+}
+
+/** 落点在主轨时，跟着指针走的影子；其余情况为 null（附属轨上片段本身就跟着指针走） */
+function ghostOf(drag: Drag | null): Ghost | null {
+  if (drag?.mode !== "move" || !drag.moving || drag.plan?.target.kind !== "main") return null;
+  if (drag.ghost.width <= 0) return null;
   return {
-    ...drag,
-    moving: true,
-    preview: previewMove(
-      timeline,
-      drag.id,
-      ctx.laneAt(event.clientY),
-      start,
-      targets,
-      thresholdOf(pps),
-    ),
+    id: drag.id,
+    x: drag.pointer.x - drag.ghost.offsetX,
+    y: drag.pointer.y - drag.ghost.offsetY,
+    width: drag.ghost.width,
+    height: drag.ghost.height,
   };
 }
 
@@ -249,20 +310,9 @@ function commit(drag: Drag, ctx: DragInput): void {
     if (changed(after, drag.orig)) ctx.onChange(drag.draft);
     return;
   }
-  if (drag.mode === "moveMain") {
-    if (!drag.moving || drag.insert === null) return;
-    const next = moveMain(ctx.timeline, drag.id, drag.insert);
-    if (next !== ctx.timeline) ctx.onChange(next);
-    return;
-  }
-  if (drag.mode === "move" && drag.moving && drag.preview) {
-    const result: { timeline: EditorTimeline } | EditError = moveAttached(
-      ctx.timeline,
-      drag.id,
-      drag.preview.trackId,
-      drag.preview.startMs,
-    );
+  if (drag.mode === "move" && drag.moving && drag.plan) {
+    const result = moveClipTo(ctx.timeline, drag.id, drag.plan.target);
     if ("error" in result) ctx.onError(result.error);
-    else ctx.onChange(result.timeline);
+    else if (result.timeline !== ctx.timeline) ctx.onChange(result.timeline);
   }
 }
