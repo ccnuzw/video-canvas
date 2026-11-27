@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"video-canvas/internal/drama"
 	"video-canvas/internal/handler"
 	"video-canvas/internal/middleware"
 	"video-canvas/internal/model"
@@ -170,12 +171,18 @@ func TestDramaHandler_Validation(t *testing.T) {
 func TestDramaHandler_Styles(t *testing.T) {
 	status, body := characterCall(t, httpDramaRouter(), "GET", "/drama-styles", "")
 	data := responseData(t, body)
-	if status != 200 || len(data["genres"].([]any)) != 12 || len(data["styles"].([]any)) != 12 {
-		t.Fatalf("风格契约：%+v", body)
+	genres, _ := data["genres"].([]any)
+	styles, _ := data["styles"].([]any)
+	// 数量不在这里写死：目录里每一条的名字与顺序由 catalog_test 逐条钉死，
+	// 这条只验证接口把内置目录完整透传出去，免得加一条画风就要改两处数字。
+	builtin := drama.Styles()
+	if status != 200 || len(genres) != len(builtin.Genres) || len(styles) != len(builtin.Styles) {
+		t.Fatalf("风格契约：status=%d 接口 %d / %d，内置 %d / %d：%+v",
+			status, len(genres), len(styles), len(builtin.Genres), len(builtin.Styles), body)
 	}
 	// 每条画风都要带 preview_url：前端按它渲染缩略图，不再按 key 拼路径（见 docs/design/短剧预设后台 §5.1）。
 	// 这里没有注入数据库目录，走的是内置兜底，所以地址应是前端静态相对路径。
-	for _, raw := range data["styles"].([]any) {
+	for _, raw := range styles {
 		style := raw.(map[string]any)
 		want := "/drama-styles/" + style["key"].(string) + ".webp"
 		if style["preview_url"] != want {
