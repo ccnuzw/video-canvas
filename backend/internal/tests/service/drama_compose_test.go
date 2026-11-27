@@ -583,3 +583,77 @@ func TestDramaCompose_OverlaySegmentTakeFrozenAsVideo(t *testing.T) {
 		t.Fatalf("叠加的片段版本 %+v", o)
 	}
 }
+
+// 导出规格：冻结进任务输入，合成时按它出分辨率、帧率和画质（standard/high/best → crf 23/20/17），
+// 成功后记在集上并出现在集视图里；不传规格时输入里没有 spec、合成用默认、集上没有记录。
+func TestDramaCompose_ExportSpec(t *testing.T) {
+	ctx := context.Background()
+	r := newComposeMemory()
+	p := &composeProcessor{}
+	s := composeService(r, &composeFiles{r: r}, p)
+	spec := &model.DramaExportSpec{ShortSide: 720, FPS: 24, Quality: "best"}
+	job, err := s.CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}, Spec: spec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(r.jobs[0].InputJSON), `"spec":{"short_side":720,"fps":24,"quality":"best"}`) {
+		t.Fatalf("规格应冻结进任务输入：%s", r.jobs[0].InputJSON)
+	}
+	if err := s.HandleDrama(ctx, 7, 1, uint64(job.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.plan.Spec; got.ShortSide != 720 || got.FPS != 24 || got.CRF != 17 {
+		t.Fatalf("合成应按规格：%+v", got)
+	}
+	view, err := s.Get(ctx, 7, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fs := view.Episodes[0].FinalSpec; fs == nil || *fs != *spec {
+		t.Fatalf("集视图应带成片规格：%+v", fs)
+	}
+
+	// 不传规格：旧行为
+	r2 := newComposeMemory()
+	p2 := &composeProcessor{}
+	s2 := composeService(r2, &composeFiles{r: r2}, p2)
+	job2, err := s2.CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(r2.jobs[0].InputJSON), "spec") {
+		t.Fatalf("不传规格时输入里不应有 spec：%s", r2.jobs[0].InputJSON)
+	}
+	if err := s2.HandleDrama(ctx, 7, 1, uint64(job2.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if p2.plan.Spec != (videoframe.ComposeSpec{}) {
+		t.Fatalf("不传规格应用默认（零值）：%+v", p2.plan.Spec)
+	}
+	view2, _ := s2.Get(ctx, 7, 1)
+	if view2.Episodes[0].FinalSpec != nil {
+		t.Fatalf("没有规格时集视图 final_spec 应为 null：%+v", view2.Episodes[0].FinalSpec)
+	}
+}
+
+// 只传了部分规格：帧率 0 按 30、画质空按 high，冻结和记录的都是补齐后的值。
+func TestDramaCompose_ExportSpecDefaultsFilled(t *testing.T) {
+	ctx := context.Background()
+	r := newComposeMemory()
+	p := &composeProcessor{}
+	s := composeService(r, &composeFiles{r: r}, p)
+	job, err := s.CreateJob(ctx, 7, 1, &model.DramaJobReq{Step: "compose", Episodes: []int{1}, Spec: &model.DramaExportSpec{ShortSide: 1080}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.HandleDrama(ctx, 7, 1, uint64(job.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.plan.Spec; got.ShortSide != 1080 || got.FPS != 30 || got.CRF != 20 {
+		t.Fatalf("补齐后的规格：%+v", got)
+	}
+	view, _ := s.Get(ctx, 7, 1)
+	if fs := view.Episodes[0].FinalSpec; fs == nil || *fs != (model.DramaExportSpec{ShortSide: 1080, FPS: 30, Quality: "high"}) {
+		t.Fatalf("记录的规格应补齐：%+v", fs)
+	}
+}

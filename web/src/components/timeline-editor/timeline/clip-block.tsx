@@ -166,21 +166,21 @@ export function ClipBlock({
       style={{ left, width }}
       onPointerDown={(event) => onPointerDown(event, "body")}
       className={cn(
-        "group absolute inset-y-1 overflow-hidden rounded-lg border-2 shadow-[inset_0_0_0_1px_rgb(0_0_0/0.25)]",
+        "group absolute inset-y-1 overflow-hidden rounded-[3px] before:pointer-events-none before:absolute before:inset-0 before:z-[3] before:rounded-[inherit] before:border-2",
         editable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
         invalidDrop
-          ? "border-destructive"
+          ? "before:border-destructive"
           : selected
-            ? "border-primary"
+            ? "before:border-primary"
             : broken
-              ? "border-destructive"
+              ? "before:border-destructive"
               : badges.marked
-                ? "border-sky-400"
-                : "border-transparent",
+                ? "before:border-sky-400"
+                : "before:border-transparent",
         placeholder &&
           "bg-[repeating-linear-gradient(135deg,var(--color-muted)_0_8px,transparent_8px_16px)]",
         // 被拖到主轨上的那段画成虚线占位槽，影子另外跟着指针走
-        dragging && "border-primary border-dashed opacity-45",
+        dragging && "opacity-45 before:border-dashed before:border-primary",
         animate && "transition-[left] duration-150 ease-out motion-reduce:transition-none",
       )}
     >

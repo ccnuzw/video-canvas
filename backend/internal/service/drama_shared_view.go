@@ -23,11 +23,12 @@ type dramaReadView struct {
 }
 
 type dramaReadEpisode struct {
-	No       int                `json:"no"`
-	Title    string             `json:"title"`
-	Script   string             `json:"script"`
-	Final    string             `json:"final,omitempty"`
-	Segments []dramaReadSegment `json:"segments"`
+	No        int                    `json:"no"`
+	Title     string                 `json:"title"`
+	Script    string                 `json:"script"`
+	Final     string                 `json:"final,omitempty"`
+	FinalSpec *model.DramaExportSpec `json:"final_spec"`
+	Segments  []dramaReadSegment     `json:"segments"`
 }
 
 type dramaReadSegment struct {
@@ -74,7 +75,7 @@ func sharedProjection(snapshot *repository.DramaSnapshot) (*dramaReadView, error
 }
 
 func readEpisode(ep model.DramaEpisode) dramaReadEpisode {
-	item := dramaReadEpisode{No: ep.No, Title: ep.Title, Script: ep.ScriptMD, Segments: []dramaReadSegment{}}
+	item := dramaReadEpisode{No: ep.No, Title: ep.Title, Script: ep.ScriptMD, FinalSpec: episodeFinalSpec(ep), Segments: []dramaReadSegment{}}
 	if ep.FinalAssetID != nil {
 		item.Final = readAssetID(*ep.FinalAssetID)
 	}

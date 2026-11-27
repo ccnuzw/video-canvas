@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { ExportSpec } from "@/api/drama/type";
 import { TimelineEditor } from "@/components/timeline-editor";
 import { finalFileName } from "@/components/drama/final-file";
 import { useSharedWorkspace } from "@/hooks/use-shared-workspace";
-import { useDramaJobsStore } from "@/store/drama";
+import { cn } from "@/lib/utils";
 import { segmentKey, useDramaSegmentsStore } from "@/store/drama-segments";
 import { useDramaTimelineStore } from "@/store/drama-timeline";
 import { downloadMedia } from "@/utils/canvas/download";
@@ -15,10 +16,16 @@ import { composeReason } from "@/utils/drama/timeline";
 
 import { useCompose } from "../../use-compose";
 import { useWorkspace } from "../context";
-import { cn } from "@/lib/utils";
 
 import { ExportDialog } from "./export-dialog";
-import { summarizeExport, type ExportPhase } from "./export-flow";
+import {
+  composedExportUrl,
+  readSpec,
+  sameSpec,
+  summarizeExport,
+  writeSpec,
+  type ExportPhase,
+} from "./export-flow";
 import { FinalBar } from "./final-bar";
 import { readFullscreen, writeFullscreen } from "./fullscreen";
 import { useFinalHost } from "./use-final-host";
@@ -63,8 +70,12 @@ export function FinalArea({
   /** 导出走到哪一步；弹窗关掉流程照跑 */
   const [phase, setPhase] = useState<ExportPhase>({ kind: "idle" });
   const [exportOpen, setExportOpen] = useState(false);
-  /** 这次导出提交的合成任务 ID，用来认出它结束了 */
-  const exportJob = useRef<string | null>(null);
+  /** 导出规格：按浏览器记住上次的选择 */
+  const [spec, setSpec] = useState<ExportSpec>(readSpec);
+  const changeSpec = (next: ExportSpec) => {
+    setSpec(next);
+    writeSpec(next);
+  };
 
   // 片段读自片段接口：进到成片页（或换集）时拉一次，之后靠推送保持新鲜
   useEffect(() => {
@@ -102,7 +113,7 @@ export function FinalArea({
       setPhase({ kind: "downloading" });
       try {
         await downloadMedia(url, finalFileName(drama.title, no));
-        setPhase({ kind: "done" });
+        setPhase({ kind: "done", url });
       } catch {
         setPhase({ kind: "failed", at: "downloading", message: "下载没有完成，请重试" });
       }
@@ -110,23 +121,19 @@ export function FinalArea({
     [drama.title, no],
   );
 
-  // 导出提交了合成任务：任务失败或取消就停在「合成」这一步；成功后等详情刷出新成片（不再过期）再下载
+  // 跟踪本次提交的任务；断线时用重新拉取的集详情恢复下载
   useEffect(() => {
-    if (phase.kind !== "composing") return;
-    const job = jobs.find((item) => item.id === exportJob.current);
+    if (phase.kind !== "composing" || !phase.jobId) return;
+    const job = jobs.find((item) => item.id === phase.jobId);
     if (job && (job.status === "failed" || job.status === "canceled")) {
-      exportJob.current = null;
       const message =
         job.status === "canceled" ? "合成已取消" : job.errorMessage || "合成失败，请重试";
       setPhase({ kind: "failed", at: "composing", message });
       return;
     }
-    if (job && job.status !== "succeeded") return;
-    if (episode?.final && !episode.finalStale) {
-      exportJob.current = null;
-      void downloadFinal(episode.final.url);
-    }
-  }, [phase.kind, jobs, episode, downloadFinal]);
+    const url = composedExportUrl(job, episode, spec, phase.previousAssetId);
+    if (url) void downloadFinal(url);
+  }, [phase, jobs, episode, downloadFinal, spec]);
 
   // 片场改了采用、增删片段、改顺序：内容稳定后对账一次
   const signature = segments
@@ -222,8 +229,10 @@ export function FinalArea({
       ? "时间线还没读完"
       : (composeReason({ timeline, segments, assets, invalid, save }) ?? busy);
 
-  /** 成片已是最新：时间线合成后没改过，直接下载上次的成片（共享只读只能下载已有的成片） */
-  const fresh = readOnly ? !!final : save === "saved" && !!final && state === "fresh";
+  /** 成片已是最新：时间线合成后没改过、规格也和上次一样，直接下载上次的成片（共享只读只能下载已有的成片） */
+  const fresh = readOnly
+    ? !!final
+    : save === "saved" && !!final && state === "fresh" && sameSpec(spec, episode.finalSpec);
 
   /**
    * 导出：先把没保存的剪辑存上（合成读的是服务端的时间线），再让后端按时间线合成，合成完自动下载；
@@ -239,13 +248,15 @@ export function FinalArea({
     if (!(await editor().flush())) {
       return setPhase({ kind: "failed", at: "saving", message: "时间线没保存成功，请重试" });
     }
-    if (wasSaved && final && state === "fresh") return void downloadFinal(final.url);
+    if (wasSaved && final && state === "fresh" && sameSpec(spec, episode.finalSpec)) {
+      return void downloadFinal(final.url);
+    }
     setPhase({ kind: "composing" });
-    if (!(await compose(no))) {
+    const job = await compose(no, spec);
+    if (!job) {
       return setPhase({ kind: "failed", at: "composing", message: "合成任务没有提交成功，请重试" });
     }
-    exportJob.current =
-      activeComposeJob(useDramaJobsStore.getState().byDrama[drama.id] ?? [], no)?.id ?? null;
+    setPhase({ kind: "composing", jobId: job.id, previousAssetId: final?.id });
   };
   /** 顶栏「导出」：打开弹窗；上次已结束（完成或失败）就回到导出单，进行中就看进度 */
   const openExport = () => {
@@ -309,9 +320,11 @@ export function FinalArea({
         fileName={finalFileName(drama.title, no)}
         ratio={drama.ratio}
         fresh={fresh}
+        spec={spec}
+        onSpecChange={changeSpec}
         onStart={() => void exportNow()}
         onRetry={() => void exportNow()}
-        onDownload={() => final && void downloadFinal(final.url)}
+        onDownload={() => phase.kind === "done" && void downloadFinal(phase.url)}
         onClose={() => setExportOpen(false)}
       />
     </div>

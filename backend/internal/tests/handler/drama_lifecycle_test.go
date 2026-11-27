@@ -8,11 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
+	"video-canvas/internal/handler"
+	"video-canvas/internal/middleware"
 	"video-canvas/internal/model"
 	"video-canvas/internal/pkg/idcodec"
 	"video-canvas/internal/provider"
 	"video-canvas/internal/provider/modelcfg"
 	"video-canvas/internal/repository"
+	"video-canvas/internal/service"
 )
 
 type httpDramaRegistry struct{}
@@ -151,6 +156,54 @@ func TestDramaHandler_EditJobsAndDelete(t *testing.T) {
 		status, body := characterCall(t, r, tc.method, tc.path, tc.body)
 		if status != tc.status || (status != 204 && responseCode(t, body) != tc.code) {
 			t.Fatalf("%s %s: status=%d body=%+v", tc.method, tc.path, status, body)
+		}
+	}
+}
+
+type exportHTTPRepo struct{ *httpDramaRepo }
+
+func (r *exportHTTPRepo) WithTx(_ context.Context, fn func(repository.DramaTx) error) error {
+	return fn(r)
+}
+
+func (r *exportHTTPRepo) Timeline(context.Context, uint64, uint64) (*model.DramaEpisodeTimeline, error) {
+	return &model.DramaEpisodeTimeline{
+		Tracks: []byte(`[{"id":"main","kind":"main","clips":[{"id":"clip","kind":"asset","asset_id":30,"media":"video","out_ms":1000,"volume":100}]}]`),
+	}, nil
+}
+
+func (r *exportHTTPRepo) TimelineAssets(context.Context, uint64, []uint64) ([]model.Asset, error) {
+	return []model.Asset{{ID: 30, Kind: "video", DurationMs: 1000}}, nil
+}
+
+func TestDramaHandler_ExportSpec(t *testing.T) {
+	now := time.Now()
+	repo := &exportHTTPRepo{&httpDramaRepo{
+		project: &model.DramaProject{BaseModel: model.BaseModel{ID: 7}, UserID: 1},
+		episode: &model.DramaEpisode{BaseModel: model.BaseModel{ID: 10}, UserID: 1, DramaID: 7, No: 1, LockedAt: &now},
+	}}
+	h := handler.NewDramaHandler(service.NewDramaService(service.DramaDeps{Repo: repo}))
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set(middleware.CtxUserIDKey, uint(1)); c.Next() })
+	r.POST("/dramas/:id/estimate", h.Estimate)
+	r.POST("/dramas/:id/jobs", h.CreateJob)
+	base := "/dramas/" + idcodec.Encode(7)
+	for _, tc := range []struct {
+		router       *gin.Engine
+		path, body   string
+		status, code int
+	}{
+		{httpDramaRouter(), base + "/estimate", `{"step":"breakdown","episodes":[1],"spec":{"fps":"无关字段"}}`, 200, 0},
+		{r, base + "/estimate", `{"step":"compose","episodes":[1],"spec":{"short_side":480}}`, 400, 10001},
+		{r, base + "/jobs", `{"step":"compose","episodes":[1],"spec":{"fps":60}}`, 400, 10001},
+		{r, base + "/jobs", `{"step":"compose","episodes":[1],"spec":{"quality":"low"}}`, 400, 10001},
+		{r, base + "/jobs", `{"step":"compose","episodes":[2],"spec":{"fps":24}}`, 400, 67006},
+		{r, base + "/estimate", `{"step":"compose","episodes":[1],"spec":{"fps":24}}`, 200, 0},
+		{r, base + "/jobs", `{"step":"compose","episodes":[1],"spec":{"short_side":720,"fps":24,"quality":"best"}}`, 202, 0},
+	} {
+		status, body := characterCall(t, tc.router, "POST", tc.path, tc.body)
+		if status != tc.status || responseCode(t, body) != tc.code {
+			t.Fatalf("%s %s: status=%d body=%+v", tc.path, tc.body, status, body)
 		}
 	}
 }

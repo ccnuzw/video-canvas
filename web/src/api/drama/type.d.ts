@@ -131,6 +131,8 @@ export interface BackendEpisodeSummary {
   /** 三期字段（契约 §14）：成片与是否过期；后端还没带时按「没有成片」处理 */
   final?: BackendAssetDto | null;
   final_stale?: boolean;
+  /** 成片导出时用的规格；旧成片没记录时为 null */
+  final_spec?: BackendExportSpec | null;
   /** 开场钩子；规划前建的老集为空 */
   hook?: string;
   /** 结尾悬念；规划前建的老集为空 */
@@ -272,6 +274,8 @@ export interface EpisodeSummary {
   final: AssetDto | null;
   /** 成片之后有片段改了采用 / 顺序 / 增删：提示「成片已过期，可重新合成」 */
   finalStale: boolean;
+  /** 成片导出时用的规格；旧成片没记录时为 null */
+  finalSpec: ExportSpec | null;
   /** 开场钩子，没有为空串 */
   hook: string;
   /** 结尾悬念，没有为空串 */
@@ -462,6 +466,28 @@ export interface DramaJobInput {
   maxSeconds?: number;
   /** storyboard：片场当前选的视频模型，后端按它的参考音频上限切段；缺省用项目视频模型 */
   videoModel?: string;
+  /** compose：导出规格；缺省按后端默认（跟随素材分辨率、30fps、高画质） */
+  spec?: ExportSpec;
+}
+
+/** 导出画质：标准 / 高 / 极高 */
+export type ExportQuality = "standard" | "high" | "best";
+
+/** 成片导出规格 */
+export interface ExportSpec {
+  /** 分辨率：画面短边像素（720 / 1080 / 1440） */
+  shortSide: 720 | 1080 | 1440;
+  /** 帧率（每秒帧数） */
+  fps: 24 | 25 | 30;
+  /** 画质 */
+  quality: ExportQuality;
+}
+
+/** 后端的导出规格（原样 snake_case）；short_side 为 0 表示跟随素材 */
+export interface BackendExportSpec {
+  short_side: number;
+  fps: number;
+  quality: string;
 }
 
 /** WebSocket drama.episode 事件载荷：该集剧本状态已保存，需重新读取短剧详情。 */

@@ -1,3 +1,5 @@
+import { mapExportSpec } from "@/api/drama";
+import type { DramaJob, EpisodeSummary, ExportSpec } from "@/api/drama/type";
 import { clipEnd, clipLength } from "@/components/timeline-editor/model";
 import type { ClipMedia, EditorClip, EditorTimeline } from "@/components/timeline-editor/types";
 
@@ -16,11 +18,11 @@ export type ExportPhase =
   /** 保存时间线 */
   | { kind: "saving" }
   /** 等后端合成 */
-  | { kind: "composing" }
+  | { kind: "composing"; jobId?: string; previousAssetId?: string }
   /** 下载成片 */
   | { kind: "downloading" }
   /** 完成 */
-  | { kind: "done" }
+  | { kind: "done"; url: string }
   /** 在某一步失败；message 直接给用户看 */
   | { kind: "failed"; at: ExportStep; message: string };
 
@@ -126,4 +128,98 @@ export function summarizeExport(
   }
   summary.durationMs = Math.max(mainMs, attachedEnd);
   return summary;
+}
+
+/** 默认导出规格：1080P、30fps、高画质 */
+export const DEFAULT_SPEC: ExportSpec = { shortSide: 1080, fps: 30, quality: "high" };
+
+/** 两份规格是否完全一样；旧成片没记规格（null）算不一样 */
+export const sameSpec = (a: ExportSpec, b: ExportSpec | null): boolean =>
+  !!b && a.shortSide === b.shortSide && a.fps === b.fps && a.quality === b.quality;
+
+/**
+ * 优先下载本次任务的结果；断线对账移除任务卡时，才从刷新后的集详情取新成片。
+ * @param job 本次提交的任务
+ * @param episode 刷新后的同一集
+ * @param spec 本次导出规格
+ * @param previousAssetId 提交前的成片素材 ID
+ */
+export function composedExportUrl(
+  job: { status: DramaJob["status"]; result: { asset: { url: string } } | null } | undefined,
+  episode:
+    | {
+        final: { id: string; url: string } | null;
+        finalStale: EpisodeSummary["finalStale"];
+        finalSpec: EpisodeSummary["finalSpec"];
+      }
+    | undefined,
+  spec: ExportSpec,
+  previousAssetId?: string,
+): string | null {
+  if (job) return job.status === "succeeded" ? (job.result?.asset.url ?? null) : null;
+  if (!episode?.final || episode.finalStale || episode.final.id === previousAssetId) return null;
+  return sameSpec(spec, episode.finalSpec) ? episode.final.url : null;
+}
+
+/** 取偶数（编码要求宽高是偶数） */
+const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
+
+/**
+ * 规格按项目比例换算成像素尺寸，如「1080 × 1920」；比例认不出来按 9:16
+ * @param spec 导出规格
+ * @param ratio 项目比例「宽:高」
+ */
+export function specSize(spec: ExportSpec, ratio: string): string {
+  const [w, h] = /^\d+:\d+$/.test(ratio) ? ratio.split(":").map(Number) : [9, 16];
+  const [rw, rh] = w > 0 && h > 0 ? [w, h] : [9, 16];
+  const short = spec.shortSide;
+  return rw <= rh
+    ? `${short} × ${even((short * rh) / rw)}`
+    : `${even((short * rw) / rh)} × ${short}`;
+}
+
+/** 存「上次选的规格」用的键 */
+const SPEC_KEY = "drama-export-spec";
+
+/** 读写规格用到的存储（默认 localStorage，测试可替换） */
+type SpecStorage = Pick<Storage, "getItem" | "setItem">;
+
+/** 当前环境的 localStorage；拿不到为 null */
+function defaultStorage(): SpecStorage | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 读上次选的导出规格；没存过、读不到或内容不合法都用默认值
+ * @param storage 存储，默认 localStorage
+ */
+export function readSpec(storage: SpecStorage | null = defaultStorage()): ExportSpec {
+  try {
+    const raw = JSON.parse(storage?.getItem(SPEC_KEY) ?? "null") as Partial<ExportSpec> | null;
+    const spec = mapExportSpec(
+      raw
+        ? { short_side: raw.shortSide ?? 0, fps: raw.fps ?? 0, quality: raw.quality ?? "" }
+        : null,
+    );
+    return spec ?? DEFAULT_SPEC;
+  } catch {
+    return DEFAULT_SPEC;
+  }
+}
+
+/**
+ * 记住这次选的导出规格；存储不可用时静默放弃
+ * @param spec 导出规格
+ * @param storage 存储，默认 localStorage
+ */
+export function writeSpec(spec: ExportSpec, storage: SpecStorage | null = defaultStorage()): void {
+  try {
+    storage?.setItem(SPEC_KEY, JSON.stringify(spec));
+  } catch {
+    /* 存不下就只在本次有效 */
+  }
 }

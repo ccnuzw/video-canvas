@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { mapEpisodeSummary, mapJob, toJobBody } from "@/api/drama";
+import { mapEpisodeSummary, mapExportSpec, mapJob, toJobBody } from "@/api/drama";
 import { DRAMA_ERR, dramaErrorMessage, jobFailureMessage } from "@/api/drama/errors";
 import type { BackendEpisodeSummary, BackendJobView } from "@/api/drama/type";
 import { ApiError } from "@/utils/requests/request";
@@ -82,5 +82,28 @@ describe("契约 §16：67010", () => {
     expect(jobFailureMessage({ errorCode: 67010, errorMessage: "" })).toBe(
       "这一集还没有可合成的片段",
     );
+  });
+});
+
+describe("导出规格", () => {
+  test("合成任务带上规格（snake_case），别的步骤不带", () => {
+    const spec = { shortSide: 720, fps: 24, quality: "best" } as const;
+    expect(toJobBody({ step: "compose", episodes: [1], spec })).toMatchObject({
+      spec: { short_side: 720, fps: 24, quality: "best" },
+    });
+    expect(toJobBody({ step: "compose", episodes: [1] })).not.toHaveProperty("spec");
+    expect(toJobBody({ step: "storyboard", episodes: [1], spec })).not.toHaveProperty("spec");
+  });
+
+  test("集视图里成片的规格：合法的转成前端规格，跟随素材（0）、旧成片没记录、不认识的值都为 null", () => {
+    expect(mapExportSpec({ short_side: 1080, fps: 30, quality: "high" })).toEqual({
+      shortSide: 1080,
+      fps: 30,
+      quality: "high",
+    });
+    expect(mapExportSpec({ short_side: 0, fps: 30, quality: "high" })).toBeNull();
+    expect(mapExportSpec({ short_side: 1080, fps: 60, quality: "high" })).toBeNull();
+    expect(mapExportSpec(null)).toBeNull();
+    expect(mapExportSpec(undefined)).toBeNull();
   });
 });

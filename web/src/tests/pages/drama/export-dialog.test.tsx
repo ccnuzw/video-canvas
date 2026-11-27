@@ -23,6 +23,8 @@ const render = (phase: ExportPhase, over: Partial<Parameters<typeof ExportPanel>
       fileName="闯入者-第1集.mp4"
       ratio="9:16"
       fresh={false}
+      spec={{ shortSide: 1080, fps: 30, quality: "high" }}
+      onSpecChange={noop}
       onStart={noop}
       onRetry={noop}
       onDownload={noop}
@@ -57,11 +59,29 @@ describe("导出弹窗：导出单", () => {
     );
   });
 
-  test("主按钮：需要合成是「开始导出」，成片已是最新是「下载」", () => {
-    expect(render({ kind: "idle" })).toContain("开始导出");
+  test("主按钮始终是「导出」；成片已是最新时标明直接下载、不重新合成", () => {
+    const normal = render({ kind: "idle" });
+    expect(normal).toMatch(/<button[^>]*>.*?导出<\/button>/s);
+    expect(normal).not.toContain("开始导出");
+    expect(normal).not.toContain("与上次导出一致");
     const fresh = render({ kind: "idle" }, { fresh: true });
-    expect(fresh).toContain(">下载<");
-    expect(fresh).not.toContain("开始导出");
+    expect(fresh).toContain("与上次导出一致");
+    expect(fresh).not.toContain(">下载<");
+  });
+
+  test("导出设置：分辨率、帧率、画质三组单选，当前规格选中，分辨率旁显示像素尺寸", () => {
+    const html = render({ kind: "idle" });
+    expect(html).toContain('aria-label="导出设置"');
+    for (const group of ["分辨率", "帧率", "画质"]) {
+      expect(html).toContain(`role="radiogroup" aria-label="${group}"`);
+    }
+    for (const option of ["720P", "1080P", "2K", "24", "25", "30", "标准", "高", "极高"]) {
+      expect(html).toContain(`>${option}<`);
+    }
+    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>1080P</);
+    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>30</);
+    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>高</);
+    expect(html).toContain("1080 × 1920");
   });
 });
 
@@ -78,7 +98,7 @@ describe("导出弹窗：进度和结果", () => {
   });
 
   test("完成：显示完成和文件名，可以再次下载", () => {
-    const html = render({ kind: "done" });
+    const html = render({ kind: "done", url: "/final.mp4" });
     expect(html).toContain("导出完成");
     expect(html).toContain("闯入者-第1集.mp4");
     expect(html).toContain("再次下载");

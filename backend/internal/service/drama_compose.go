@@ -62,6 +62,8 @@ type dramaComposeInput struct {
 	Clips          []composeClip `json:"clips,omitempty"`
 	// Tracks 叠加、配音/BGM、字幕等附属轨；没有任何附属轨内容时为空，结构与只有主轨的任务一致
 	Tracks *composeTracks `json:"tracks,omitempty"`
+	// Spec 固定提交时的输出规格；旧任务和未指定规格的请求沿用转码默认值
+	Spec *model.DramaExportSpec `json:"spec,omitempty"`
 }
 
 // composeClip 冻结后的一段：具体素材 + 入出点；Muted 已合并整轨静音。
@@ -100,6 +102,7 @@ func enqueueCompose(ctx context.Context, tx repository.DramaTx, p *model.DramaPr
 	if err != nil {
 		return nil, err
 	}
+	input.Spec = normalizeDramaExportSpec(req.Spec)
 	raw, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
@@ -109,6 +112,36 @@ func enqueueCompose(ctx context.Context, tx repository.DramaTx, p *model.DramaPr
 		return nil, err
 	}
 	return job, nil
+}
+
+// normalizeDramaExportSpec 补齐显式规格中的默认值，短边为 0 时保留跟随素材的语义。
+func normalizeDramaExportSpec(spec *model.DramaExportSpec) *model.DramaExportSpec {
+	if spec == nil {
+		return nil
+	}
+	resolved := *spec
+	if resolved.FPS == 0 {
+		resolved.FPS = 30
+	}
+	if resolved.Quality == "" {
+		resolved.Quality = "high"
+	}
+	return &resolved
+}
+
+// composeRenderSpec 把画质档位映射到 x264 的 CRF。
+func composeRenderSpec(spec *model.DramaExportSpec) videoframe.ComposeSpec {
+	if spec == nil {
+		return videoframe.ComposeSpec{}
+	}
+	crf := 20
+	switch spec.Quality {
+	case "standard":
+		crf = 23
+	case "best":
+		crf = 17
+	}
+	return videoframe.ComposeSpec{ShortSide: spec.ShortSide, FPS: spec.FPS, CRF: crf}
 }
 
 // composeInput 读时间线并对账后冻结成剪辑清单：待采用占位跳过并记下序号；任何一条轨上有失效段整体拒绝（67048），
@@ -227,7 +260,9 @@ func (s *DramaService) renderCompose(ctx context.Context, job *model.DramaJob) (
 		}
 	}
 	dst := filepath.Join(dir, "final.mp4")
-	if err := s.compose.ComposeTimeline(ctx, input.Tracks.planOf(clips, paths), input.Ratio, dst); err != nil {
+	plan := input.Tracks.planOf(clips, paths)
+	plan.Spec = composeRenderSpec(input.Spec)
+	if err := s.compose.ComposeTimeline(ctx, plan, input.Ratio, dst); err != nil {
 		return nil, nil, withCause(errcode.ErrInternal.WithMsg("转码失败：无法合成视频"), err, "compose_transcode")
 	}
 	if err := s.dramaProgress(ctx, job, 80); err != nil {
@@ -340,6 +375,13 @@ func (s *DramaService) commitComposeTx(ctx context.Context, tx repository.DramaT
 		return nil, false, err
 	}
 	ep.FinalAssetID, ep.FinalSegmentVersion = &asset.ID, input.SegmentVersion
+	ep.FinalSpec = nil
+	if input.Spec != nil {
+		ep.FinalSpec, err = json.Marshal(input.Spec)
+		if err != nil {
+			return nil, false, err
+		}
+	}
 	if err := tx.SaveEpisode(ctx, ep, ep.Revision); err != nil {
 		return nil, false, err
 	}

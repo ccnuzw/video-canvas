@@ -8,6 +8,7 @@ import {
   TOOLBAR_HEIGHT,
   anchoredScroll,
   clampPps,
+  clipBox,
   fitPanelHeight,
   fitPps,
   laneWidth,
@@ -52,6 +53,16 @@ describe("时间线布局换算", () => {
   test("缩放锚点：缩放后滚动位置让播放头停在原来的屏幕位置，不会小于 0", () => {
     expect(anchoredScroll(10_000, 100, 20)).toBe(LANE_PAD + 200 - 100);
     expect(anchoredScroll(0, 500, 20)).toBe(0);
+  });
+
+  test("首尾相接的片段只留一像素分隔，实际间隔随缩放显示", () => {
+    for (const pps of [14, 160]) {
+      const first = clipBox(1000, 3000, pps);
+      const next = clipBox(4000, 3000, pps);
+      const later = clipBox(4500, 3000, pps);
+      expect(next.left - (first.left + first.width)).toBeCloseTo(1);
+      expect(later.left - next.left).toBeCloseTo(pps / 2);
+    }
   });
 });
 

@@ -44,6 +44,8 @@ type ComposePlan struct {
 	Overlays []ComposeOverlay
 	Audios   []ComposeAudio
 	Texts    []ComposeText
+	// Spec 输出规格（短边、帧率、画质）；零值即默认，与指定规格之前的行为一致
+	Spec ComposeSpec
 }
 
 // hasAttached 有没有任何附属轨内容。
@@ -56,7 +58,7 @@ func (p ComposePlan) hasAttached() bool {
 // 整个操作受 Options.Timeout 限制，失败清理半成片，所有路径清理中间文件。
 func (e *Extractor) ComposeTimeline(ctx context.Context, plan ComposePlan, ratio, destination string) (err error) {
 	if !plan.hasAttached() {
-		return e.ComposeClips(ctx, plan.Main, ratio, destination)
+		return e.composeClipsSpec(ctx, plan.Main, ratio, plan.Spec, destination)
 	}
 	if len(plan.Main) == 0 {
 		return fmt.Errorf("%w: 没有待合成视频", ErrDecode)
@@ -77,11 +79,12 @@ func (e *Extractor) ComposeTimeline(ctx context.Context, plan ComposePlan, ratio
 		}
 	}()
 	base := filepath.Join(dir, "base.mp4")
-	target, baseSecs, err := e.composeBase(ctx, dir, plan.Main, ratio, base)
+	target, baseSecs, err := e.composeBase(ctx, dir, plan.Main, ratio, plan.Spec, base)
 	if err != nil {
 		return err
 	}
 	g, err := e.graphOf(ctx, plan, target, int64(baseSecs*1000+0.5))
+	g.spec = plan.Spec.withDefaults()
 	if err != nil {
 		return err
 	}
@@ -191,13 +194,14 @@ func (e *Extractor) composeProbeAudio(ctx context.Context, source string) (float
 func (e *Extractor) renderGraph(ctx context.Context, base string, g graphSpec, scriptPath, destination string) error {
 	args := []string{"-nostdin", "-v", "error", "-protocol_whitelist", "file", "-i", base}
 	for _, o := range g.overlays {
-		args = append(args, overlayInputArgs(o)...)
+		args = append(args, overlayInputArgs(o, g.spec.FPS)...)
 	}
 	for _, a := range g.audios {
 		args = append(args, trimmedInputArgs(a.c.InMS, g.lenOf(a), a.c.Path)...)
 	}
 	tail := []string{"-map", "[vout]", "-map", "[aout]",
-		"-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+		"-c:v", "libx264", "-preset", "veryfast", "-crf", strconv.Itoa(g.spec.CRF), "-pix_fmt", "yuv420p",
+		"-r", strconv.Itoa(g.spec.FPS),
 		"-c:a", "aac", "-ar", "48000", "-ac", "2", "-t", secs(g.totalMS), "-movflags", "+faststart", "-y", destination}
 	var err error
 	for _, option := range []string{"-/filter_complex", "-filter_complex_script"} {
@@ -218,10 +222,10 @@ func unknownOption(err error) bool {
 	return strings.Contains(msg, "Unrecognized option") || strings.Contains(msg, "Option not found")
 }
 
-// overlayInputArgs 叠加画面的输入参数：图片循环成固定时长，视频按入点和时长截取。
-func overlayInputArgs(o graphOverlay) []string {
+// overlayInputArgs 叠加画面的输入参数：图片按成片帧率循环成固定时长，视频按入点和时长截取。
+func overlayInputArgs(o graphOverlay, fps int) []string {
 	if o.c.Image {
-		return []string{"-loop", "1", "-framerate", "30", "-t", secs(o.lenMS), "-i", o.c.Path}
+		return []string{"-loop", "1", "-framerate", strconv.Itoa(fps), "-t", secs(o.lenMS), "-i", o.c.Path}
 	}
 	return trimmedInputArgs(o.c.InMS, o.lenMS, o.c.Path)
 }

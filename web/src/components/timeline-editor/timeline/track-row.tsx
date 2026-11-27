@@ -7,7 +7,7 @@ import { clipLength } from "../model";
 import type { EditorTrack, TimelineEditorHost } from "../types";
 import { ClipBlock } from "./clip-block";
 import { DROP_PREVIEW_MS } from "./drag-logic";
-import { LANE_PAD, ROW_HEIGHT, formatSeconds, msToX } from "./layout";
+import { LANE_PAD, ROW_HEIGHT, clipBox, formatSeconds } from "./layout";
 import { TrackHeader, type TrackToggle } from "./track-header";
 import type { ClipPart, Drag } from "./use-timeline-drag";
 
@@ -129,10 +129,7 @@ export function TrackRow(props: TrackRowProps) {
         )}
         {props.dropBox && (
           <div
-            style={{
-              left: msToX(props.dropBox.startMs, pps),
-              width: Math.max((DROP_PREVIEW_MS / 1000) * pps - 2, 6),
-            }}
+            style={clipBox(props.dropBox.startMs, DROP_PREVIEW_MS, pps)}
             className={cn(
               "pointer-events-none absolute inset-y-1 z-10 rounded-lg border-2 border-dashed",
               props.dropBox.ok

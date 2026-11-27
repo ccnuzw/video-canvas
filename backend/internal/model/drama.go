@@ -57,21 +57,23 @@ func (DramaProject) TableName() string { return "drama_projects" }
 // DramaEpisode 集号定位的剧本，拆解后锁定正文和梗概。
 type DramaEpisode struct {
 	BaseModel
-	UserID              uint64 `gorm:"not null;index"`
-	DramaID             uint64 `gorm:"not null;uniqueIndex:uk_drama_episode_no,priority:1"`
-	No                  int    `gorm:"not null;uniqueIndex:uk_drama_episode_no,priority:2"`
-	Title               string `gorm:"size:255;not null;default:''"`
-	UnitFrom            int    `gorm:"not null;default:0"`
-	UnitTo              int    `gorm:"not null;default:0"`
-	Hook                string `gorm:"type:text;not null;default:''"`
-	Cliffhanger         string `gorm:"type:text;not null;default:''"`
-	Synopsis            string `gorm:"type:text;not null;default:''"`
-	ScriptMD            string `gorm:"type:text;not null;default:''"`
-	ScriptStatus        string `gorm:"size:16;not null;default:empty"`
-	StoryboardStatus    string `gorm:"size:16;not null;default:empty"`
-	FinalAssetID        *uint64
-	SegmentVersion      int64 `gorm:"not null;default:0"`
-	FinalSegmentVersion int64 `gorm:"not null;default:0"`
+	UserID           uint64 `gorm:"not null;index"`
+	DramaID          uint64 `gorm:"not null;uniqueIndex:uk_drama_episode_no,priority:1"`
+	No               int    `gorm:"not null;uniqueIndex:uk_drama_episode_no,priority:2"`
+	Title            string `gorm:"size:255;not null;default:''"`
+	UnitFrom         int    `gorm:"not null;default:0"`
+	UnitTo           int    `gorm:"not null;default:0"`
+	Hook             string `gorm:"type:text;not null;default:''"`
+	Cliffhanger      string `gorm:"type:text;not null;default:''"`
+	Synopsis         string `gorm:"type:text;not null;default:''"`
+	ScriptMD         string `gorm:"type:text;not null;default:''"`
+	ScriptStatus     string `gorm:"size:16;not null;default:empty"`
+	StoryboardStatus string `gorm:"size:16;not null;default:empty"`
+	FinalAssetID     *uint64
+	// FinalSpec 成片导出时用的规格（DramaExportSpec 的 JSON）；旧成片没有记录为 NULL
+	FinalSpec           datatypes.JSON `gorm:"type:jsonb"`
+	SegmentVersion      int64          `gorm:"not null;default:0"`
+	FinalSegmentVersion int64          `gorm:"not null;default:0"`
 	LockedAt            *time.Time
 	Revision            int64 `gorm:"not null;default:1"`
 }
@@ -210,6 +212,14 @@ type UpdateDramaEpisodeReq struct {
 	ScriptMD    *string `json:"script_md"`
 }
 
+// DramaExportSpec 成片导出规格：画面短边（0 跟随第一段视频素材）、帧率（0 按 30）、画质（空按 high）。
+// 画质 standard / high / best 对应 x264 crf 23 / 20 / 17。
+type DramaExportSpec struct {
+	ShortSide int    `json:"short_side" binding:"oneof=0 720 1080 1440" label:"分辨率"`
+	FPS       int    `json:"fps" binding:"oneof=0 24 25 30" label:"帧率"`
+	Quality   string `json:"quality" binding:"omitempty,oneof=standard high best" label:"画质"`
+}
+
 // DramaJobReq 提交或估价的步骤与范围。
 type DramaJobReq struct {
 	Step       string `json:"step" binding:"required,oneof=scripts breakdown asset_prompts storyboard compose"`
@@ -218,6 +228,8 @@ type DramaJobReq struct {
 	MaxSeconds int    `json:"max_seconds" binding:"omitempty,min=4,max=60"`
 	// VideoModel 是片场当前选的视频模型，分镜按它的时长与参考音频上限切段；空串用项目视频模型
 	VideoModel string `json:"video_model" binding:"omitempty,max=128"`
+	// Spec 只对 compose 有意义：导出规格；不传按默认（跟随素材分辨率、30 帧、高画质）
+	Spec *DramaExportSpec `json:"spec"`
 	// MaxAudios 由服务端按视频模型解析，不收请求
 	MaxAudios int `json:"-"`
 }
@@ -255,6 +267,8 @@ type DramaEpisodeSummary struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 	Final          *AssetView `json:"final"`
 	FinalStale     bool       `json:"final_stale"`
+	// FinalSpec 成片导出时用的规格；旧成片没有记录为 null
+	FinalSpec *DramaExportSpec `json:"final_spec"`
 }
 
 // DramaEpisodeView 单集正文。

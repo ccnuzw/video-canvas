@@ -77,14 +77,14 @@ export function rulerTicks(widthPx: number, pps: number): number[] {
 export const anchoredScroll = (timeMs: number, anchorX: number, pps: number): number =>
   Math.max(0, msToX(timeMs, pps) - anchorX);
 
-/** 一段在轨道内容里的位置和宽度（像素）；宽度留 2px 缝隙，最窄 6px */
+/** 一段在轨道内容里的位置和宽度（像素）；用 1px 分隔相接的片段，最窄 6px */
 export const clipBox = (
   startMs: number,
   lenMs: number,
   pps: number,
 ): { left: number; width: number } => ({
   left: msToX(startMs, pps),
-  width: Math.max((lenMs / 1000) * pps - 2, 6),
+  width: Math.max((lenMs / 1000) * pps - 1, 6),
 });
 
 /** 秒 → 「mm:ss」 */

@@ -533,7 +533,19 @@ func episodeView(e model.DramaEpisode) model.DramaEpisodeView {
 	if status == "" {
 		status = "empty"
 	}
-	return model.DramaEpisodeView{DramaEpisodeSummary: model.DramaEpisodeSummary{No: e.No, Hook: e.Hook, Cliffhanger: e.Cliffhanger, UnitFrom: e.UnitFrom, UnitTo: e.UnitTo, Title: e.Title, Synopsis: e.Synopsis, ScriptStatus: e.ScriptStatus, StoryboardStatus: status, Locked: e.LockedAt != nil, Revision: e.Revision, UpdatedAt: e.UpdatedAt}, ScriptMD: e.ScriptMD}
+	return model.DramaEpisodeView{DramaEpisodeSummary: model.DramaEpisodeSummary{No: e.No, Hook: e.Hook, Cliffhanger: e.Cliffhanger, UnitFrom: e.UnitFrom, UnitTo: e.UnitTo, Title: e.Title, Synopsis: e.Synopsis, ScriptStatus: e.ScriptStatus, StoryboardStatus: status, Locked: e.LockedAt != nil, Revision: e.Revision, UpdatedAt: e.UpdatedAt, FinalSpec: episodeFinalSpec(e)}, ScriptMD: e.ScriptMD}
+}
+
+// episodeFinalSpec 读取成片规格，兼容缺少记录的旧成片。
+func episodeFinalSpec(ep model.DramaEpisode) *model.DramaExportSpec {
+	if ep.FinalAssetID == nil || len(ep.FinalSpec) == 0 {
+		return nil
+	}
+	var spec *model.DramaExportSpec
+	if json.Unmarshal(ep.FinalSpec, &spec) != nil {
+		return nil
+	}
+	return spec
 }
 
 // dramaEpisodeView 读一次画布上的故事板，再映射单集的实时聚合。

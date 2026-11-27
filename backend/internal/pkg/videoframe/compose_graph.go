@@ -36,6 +36,8 @@ type graphSpec struct {
 	audios          []graphAudio
 	// assPath 字幕文件；没有字幕为空
 	assPath string
+	// spec 输出规格（已补默认值），帧率和画质用它
+	spec ComposeSpec
 }
 
 // secs 毫秒转成 ffmpeg 用的秒，如 1500 → "1.500"。

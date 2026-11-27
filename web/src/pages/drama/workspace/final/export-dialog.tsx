@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import type { ExportSpec } from "@/api/drama/type";
 import { DialogSession } from "@/components/dialog-session";
+import { Segmented } from "@/components/timeline-editor";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -18,6 +20,7 @@ import { cn } from "@/lib/utils";
 import {
   isRunning,
   overallProgress,
+  specSize,
   stepStates,
   type ExportPhase,
   type ExportSummary,
@@ -52,8 +55,12 @@ interface ExportPanelProps {
   fileName: string;
   /** 项目画面比例，如「9:16」 */
   ratio: string;
-  /** 成片已是最新（时间线合成后没改过）：直接下载，不用再合成 */
+  /** 成片已是最新（时间线合成后没改过、规格也和上次一样）：直接下载，不用再合成 */
   fresh: boolean;
+  /** 当前选的导出规格 */
+  spec: ExportSpec;
+  /** 改了导出规格 */
+  onSpecChange: (spec: ExportSpec) => void;
   /** 开始导出 */
   onStart: () => void;
   /** 失败后重试 */
@@ -104,7 +111,16 @@ export function ExportPanel(props: ExportPanelProps) {
 }
 
 /** 导出单：封面 + 文件信息，有会被跳过的片段时提示 */
-function ReadyView({ summary, fileName, ratio, fresh, onStart, onClose }: ExportPanelProps) {
+function ReadyView({
+  summary,
+  fileName,
+  ratio,
+  fresh,
+  spec,
+  onSpecChange,
+  onStart,
+  onClose,
+}: ExportPanelProps) {
   const parts = [
     `主轨 ${summary.main} 段`,
     summary.overlay > 0 && `叠加 ${summary.overlay} 段`,
@@ -136,12 +152,18 @@ function ReadyView({ summary, fileName, ratio, fresh, onStart, onClose }: Export
               <span className="font-mono">{clock(summary.durationMs)}</span>
             </Info>
             <Info label="画面">{ratio}</Info>
-            <Info label="格式">MP4 · H.264 · AAC</Info>
             <Info label="内容">
               <span className="text-muted-foreground">{parts.join(" · ")}</span>
             </Info>
           </dl>
         </div>
+        <SpecSettings spec={spec} ratio={ratio} onChange={onSpecChange} />
+        {fresh && (
+          <div className="bg-status-success/10 text-status-success flex items-center gap-2 rounded-xl px-3 py-2.5 text-[12.5px]">
+            <CircleCheck className="size-3.5 shrink-0" />
+            <span>与上次导出一致，直接下载已有成片</span>
+          </div>
+        )}
         {summary.skipped.length > 0 && (
           <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2.5 text-[12.5px] text-amber-600 dark:text-amber-400">
             <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
@@ -155,10 +177,92 @@ function ReadyView({ summary, fileName, ratio, fresh, onStart, onClose }: Export
         </Button>
         <Button className="min-w-28 rounded-full" onClick={onStart}>
           <Download />
-          {fresh ? "下载" : "开始导出"}
+          导出
         </Button>
       </Footer>
     </>
+  );
+}
+
+/** 导出设置：分辨率、帧率、画质三组单选，格式固定 */
+function SpecSettings({
+  spec,
+  ratio,
+  onChange,
+}: {
+  spec: ExportSpec;
+  ratio: string;
+  onChange: (spec: ExportSpec) => void;
+}) {
+  const row = (label: string, control: ReactNode, extra?: ReactNode) => (
+    <div className="grid min-h-8 grid-cols-[52px_1fr] items-center gap-2.5 text-[12.5px]">
+      <span className="text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 items-center gap-2.5">
+        {control}
+        {extra}
+      </div>
+    </div>
+  );
+  return (
+    <section
+      role="group"
+      aria-label="导出设置"
+      className="bg-chrome-hover/40 ring-chrome-border/60 flex flex-col gap-2.5 rounded-xl p-3 ring-1 [corner-shape:squircle]"
+    >
+      <h5 className="text-[12.5px] font-semibold">导出设置</h5>
+      {row(
+        "分辨率",
+        <Segmented<"720" | "1080" | "1440">
+          label="分辨率"
+          value={String(spec.shortSide) as "720" | "1080" | "1440"}
+          options={[
+            { value: "720", label: "720P" },
+            { value: "1080", label: "1080P" },
+            { value: "1440", label: "2K" },
+          ]}
+          disabled={false}
+          onChange={(v) => onChange({ ...spec, shortSide: Number(v) as ExportSpec["shortSide"] })}
+        />,
+        <span className="text-muted-foreground w-[88px] shrink-0 text-right font-mono text-[11.5px]">
+          {specSize(spec, ratio)}
+        </span>,
+      )}
+      {row(
+        "帧率",
+        <Segmented<"24" | "25" | "30">
+          label="帧率"
+          value={String(spec.fps) as "24" | "25" | "30"}
+          options={[
+            { value: "24", label: "24" },
+            { value: "25", label: "25" },
+            { value: "30", label: "30" },
+          ]}
+          disabled={false}
+          onChange={(v) => onChange({ ...spec, fps: Number(v) as ExportSpec["fps"] })}
+        />,
+        <span className="text-muted-foreground w-[88px] shrink-0 text-right text-[11.5px]">
+          fps
+        </span>,
+      )}
+      {row(
+        "画质",
+        <Segmented<ExportSpec["quality"]>
+          label="画质"
+          value={spec.quality}
+          options={[
+            { value: "standard", label: "标准" },
+            { value: "high", label: "高" },
+            { value: "best", label: "极高" },
+          ]}
+          disabled={false}
+          onChange={(quality) => onChange({ ...spec, quality })}
+        />,
+        <span className="text-muted-foreground w-[88px] shrink-0 text-right text-[11.5px]">
+          {spec.quality === "best" ? "文件更大" : spec.quality === "standard" ? "文件更小" : "推荐"}
+        </span>,
+      )}
+      {row("格式", <span>MP4 · H.264 · AAC</span>)}
+    </section>
   );
 }
 

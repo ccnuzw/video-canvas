@@ -1,13 +1,34 @@
 package handler
 
 import (
+	"encoding/json"
+
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 
 	"video-canvas/internal/model"
 	"video-canvas/internal/pkg/errcode"
 	"video-canvas/internal/pkg/idcodec"
 	"video-canvas/internal/pkg/response"
 )
+
+// bindDramaJob 只在合成步骤解析规格，其他步骤沿用原来的请求校验。
+func bindDramaJob(c *gin.Context, req *model.DramaJobReq) bool {
+	body := struct {
+		*model.DramaJobReq
+		Spec json.RawMessage `json:"spec"`
+	}{DramaJobReq: req}
+	if !BindJSON(c, &body) {
+		return false
+	}
+	if req.Step != "compose" || len(body.Spec) == 0 {
+		return true
+	}
+	if !bindWith(c, json.Unmarshal(body.Spec, &req.Spec)) {
+		return false
+	}
+	return binding.Validator == nil || bindWith(c, binding.Validator.ValidateStruct(req.Spec))
+}
 
 // Estimate 返回所选步骤的积分估算，前置和模型规则与实际提交一致。
 func (h *DramaHandler) Estimate(c *gin.Context) {
@@ -16,7 +37,7 @@ func (h *DramaHandler) Estimate(c *gin.Context) {
 		return
 	}
 	var req model.DramaJobReq
-	if !BindJSON(c, &req) {
+	if !bindDramaJob(c, &req) {
 		return
 	}
 	credits, err := h.svc.Estimate(c.Request.Context(), currentUserID(c), id, &req)
@@ -39,7 +60,7 @@ func (h *DramaHandler) CreateJob(c *gin.Context) {
 		return
 	}
 	var req model.DramaJobReq
-	if !BindJSON(c, &req) {
+	if !bindDramaJob(c, &req) {
 		return
 	}
 	v, err := h.svc.CreateJob(c.Request.Context(), currentUserID(c), id, &req)

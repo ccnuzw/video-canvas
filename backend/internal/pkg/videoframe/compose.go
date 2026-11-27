@@ -36,6 +36,33 @@ type ComposeClip struct {
 // composeTarget 统一后的画面尺寸。
 type composeTarget struct{ width, height int }
 
+// 默认输出规格：30 帧、crf 20（与指定规格之前的行为一致）。
+const (
+	defaultFPS = 30
+	defaultCRF = 20
+)
+
+// ComposeSpec 成片的输出规格；各字段为 0 表示用默认（短边跟随第一段视频、30 帧、crf 20）。
+type ComposeSpec struct {
+	// ShortSide 画面短边像素；0 跟随第一段视频素材的短边（没有视频取 720）
+	ShortSide int
+	// FPS 帧率；0 按 30
+	FPS int
+	// CRF x264 的画质参数（越小越清晰、文件越大）；0 按 20
+	CRF int
+}
+
+// withDefaults 把零值换成默认值（短边保持 0，表示跟随素材）。
+func (s ComposeSpec) withDefaults() ComposeSpec {
+	if s.FPS <= 0 {
+		s.FPS = defaultFPS
+	}
+	if s.CRF <= 0 {
+		s.CRF = defaultCRF
+	}
+	return s
+}
+
 // Compose 将本地片段整段按顺序拼接，尺寸统一为第一段的分辨率；等同于不裁剪、不改比例的 ComposeClips。
 func (e *Extractor) Compose(ctx context.Context, sources []string, destination string) error {
 	clips := make([]ComposeClip, 0, len(sources))
@@ -48,7 +75,12 @@ func (e *Extractor) Compose(ctx context.Context, sources []string, destination s
 // ComposeClips 逐段截取、统一为 ratio 比例（空串沿用第一段视频的比例）、30fps、H.264/AAC，再按顺序拼接。
 // 短边取第一段视频的短边（没有视频取 720）；比例不同的素材加黑边居中；无音轨或静音段补立体声静音。
 // 整个操作受 Options.Timeout 限制，失败清理半成片，所有路径清理中间文件。
-func (e *Extractor) ComposeClips(ctx context.Context, clips []ComposeClip, ratio, destination string) (err error) {
+func (e *Extractor) ComposeClips(ctx context.Context, clips []ComposeClip, ratio, destination string) error {
+	return e.composeClipsSpec(ctx, clips, ratio, ComposeSpec{}, destination)
+}
+
+// composeClipsSpec 同 ComposeClips，按 spec 指定短边、帧率和画质。
+func (e *Extractor) composeClipsSpec(ctx context.Context, clips []ComposeClip, ratio string, spec ComposeSpec, destination string) (err error) {
 	if len(clips) == 0 {
 		return fmt.Errorf("%w: 没有待合成视频", ErrDecode)
 	}
@@ -67,23 +99,24 @@ func (e *Extractor) ComposeClips(ctx context.Context, clips []ComposeClip, ratio
 			_ = os.Remove(destination) // 不保留可能被误认为可播放成片的半成品。
 		}
 	}()
-	_, _, err = e.composeBase(ctx, dir, clips, ratio, destination)
+	_, _, err = e.composeBase(ctx, dir, clips, ratio, spec, destination)
 	return err
 }
 
 // composeBase 把各段逐个转码成统一规格再拼接到 destination，返回统一后的画面尺寸和成片总秒数；
 // dir 放中间文件，由调用方清理。
-func (e *Extractor) composeBase(ctx context.Context, dir string, clips []ComposeClip, ratio, destination string) (composeTarget, float64, error) {
+func (e *Extractor) composeBase(ctx context.Context, dir string, clips []ComposeClip, ratio string, spec ComposeSpec, destination string) (composeTarget, float64, error) {
 	infos, err := e.composeProbeAll(ctx, clips)
 	if err != nil {
 		return composeTarget{}, 0, err
 	}
-	target := composeTargetOf(clips, infos, ratio)
+	spec = spec.withDefaults()
+	target := composeTargetOf(clips, infos, ratio, spec.ShortSide)
 	var playlist strings.Builder
 	var total float64
 	for i, clip := range clips {
 		name := fmt.Sprintf("part-%06d.mp4", i)
-		if err := e.composeTranscode(ctx, clip, infos[i], target, filepath.Join(dir, name)); err != nil {
+		if err := e.composeTranscode(ctx, clip, infos[i], target, spec, filepath.Join(dir, name)); err != nil {
 			return composeTarget{}, 0, err
 		}
 		length, _ := clipLength(clip, infos[i]) // 探测阶段已校验过
@@ -135,7 +168,8 @@ func clipLength(clip ComposeClip, info composeInfo) (float64, error) {
 }
 
 // composeTargetOf 算统一尺寸：短边取第一段视频的短边（没有视频取 720），比例取 ratio，宽高都取偶数。
-func composeTargetOf(clips []ComposeClip, infos []composeInfo, ratio string) composeTarget {
+// shortSide 大于 0 时短边按它，否则跟随第一段视频（没有视频取 720）；ratio 认不出时沿用第一段视频的比例。
+func composeTargetOf(clips []ComposeClip, infos []composeInfo, ratio string, shortSide int) composeTarget {
 	var first *composeInfo
 	for i := range clips {
 		if !clips[i].Image {
@@ -145,10 +179,16 @@ func composeTargetOf(clips []ComposeClip, infos []composeInfo, ratio string) com
 	}
 	rw, rh, ok := parseRatio(ratio)
 	if first != nil && !ok {
-		return composeTarget{even(first.width), even(first.height)}
+		rw, rh, ok = first.width, first.height, true
+		if shortSide <= 0 {
+			return composeTarget{even(first.width), even(first.height)}
+		}
 	}
 	short := 720
-	if first != nil {
+	switch {
+	case shortSide > 0:
+		short = shortSide
+	case first != nil:
 		short = min(first.width, first.height)
 	}
 	if !ok {
@@ -214,7 +254,7 @@ func (e *Extractor) composeProbe(ctx context.Context, source string, image bool)
 }
 
 // composeTranscode 把一段截取并转换成统一的尺寸、帧率、像素格式、音频采样率与声道布局。
-func (e *Extractor) composeTranscode(ctx context.Context, clip ComposeClip, info composeInfo, target composeTarget, destination string) error {
+func (e *Extractor) composeTranscode(ctx context.Context, clip ComposeClip, info composeInfo, target composeTarget, spec ComposeSpec, destination string) error {
 	length, err := clipLength(clip, info)
 	if err != nil {
 		return err
@@ -223,7 +263,7 @@ func (e *Extractor) composeTranscode(ctx context.Context, clip ComposeClip, info
 	args := []string{"-nostdin", "-v", "error", "-protocol_whitelist", "file"}
 	switch {
 	case clip.Image:
-		args = append(args, "-loop", "1", "-framerate", "30", "-t", seconds, "-i", clip.Path)
+		args = append(args, "-loop", "1", "-framerate", strconv.Itoa(spec.FPS), "-t", seconds, "-i", clip.Path)
 	case clip.InMS > 0:
 		args = append(args, "-ss", strconv.FormatFloat(float64(clip.InMS)/1000, 'f', 3, 64), "-i", clip.Path)
 	default:
@@ -235,7 +275,7 @@ func (e *Extractor) composeTranscode(ctx context.Context, clip ComposeClip, info
 		audio = "1:a:0"
 	}
 	lengthMS := int64(length*1000 + 0.5)
-	filter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30", target.width, target.height, target.width, target.height)
+	filter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=%d", target.width, target.height, target.width, target.height, spec.FPS)
 	filter += videoFadeFilters(clip.FadeInMS, clip.FadeOutMS, lengthMS)
 	// 声音：先音量和淡变，再补静音到整段长度；用静音源时没有可调的声音
 	audioChain := []string{"apad"}
@@ -243,7 +283,7 @@ func (e *Extractor) composeTranscode(ctx context.Context, clip ComposeClip, info
 		audioChain = append(gainFilters(clip.Volume, clip.FadeInMS, clip.FadeOutMS, lengthMS), "apad")
 	}
 	args = append(args, "-map", "0:v:0", "-map", audio, "-vf", filter,
-		"-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+		"-c:v", "libx264", "-preset", "veryfast", "-crf", strconv.Itoa(spec.CRF), "-pix_fmt", "yuv420p",
 		"-c:a", "aac", "-ar", "48000", "-ac", "2", "-af", strings.Join(audioChain, ","),
 		"-t", seconds, "-video_track_timescale", "90000", "-y", destination)
 	_, err = e.run(ctx, e.ffmpeg, args...)

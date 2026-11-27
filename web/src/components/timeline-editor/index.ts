@@ -4,7 +4,7 @@
  */
 export { TimelineEditor } from "./timeline-editor";
 /** 属性面板的分区卡片：宿主在 inspectorExtra 里追加内容时用它，和内置分区长得一样 */
-export { InspectorSection } from "./inspector-fields";
+export { InspectorSection, Segmented } from "./inspector-fields";
 export { endMediaDrag, startMediaDrag } from "./drag";
 export { emptyHistory, HISTORY_LIMIT, pushHistory, redoHistory, undoHistory } from "./history";
 export type { History } from "./history";

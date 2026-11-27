@@ -2,6 +2,7 @@ import { mapAsset } from "@/api/asset";
 import service from "@/utils/requests/service";
 
 import type {
+  BackendExportSpec,
   BackendScriptEntityDto,
   BackendScriptViewDto,
   BackendDramaStyles,
@@ -49,6 +50,7 @@ import type {
   UpdateDramaInput,
   UpdateEpisodeInput,
   UpdateSegmentInput,
+  ExportSpec,
 } from "./type";
 
 export const mapDramaSummary = (raw: BackendDramaSummary): DramaSummary => ({
@@ -77,6 +79,7 @@ export const mapEpisodeSummary = (raw: BackendEpisodeSummary): EpisodeSummary =>
   doneBoardCount: raw.done_board_count ?? 0,
   final: raw.final ? mapAsset(raw.final) : null,
   finalStale: raw.final_stale ?? false,
+  finalSpec: mapExportSpec(raw.final_spec),
   hook: raw.hook ?? "",
   cliffhanger: raw.cliffhanger ?? "",
   unitFrom: raw.unit_from ? raw.unit_from : null,
@@ -290,7 +293,28 @@ export const toJobBody = (input: DramaJobInput) =>
     ratio: input.ratio || undefined,
     max_seconds: input.step === "storyboard" ? input.maxSeconds : undefined,
     video_model: input.step === "storyboard" ? input.videoModel || undefined : undefined,
+    spec:
+      input.step === "compose" && input.spec
+        ? { short_side: input.spec.shortSide, fps: input.spec.fps, quality: input.spec.quality }
+        : undefined,
   });
+
+const SHORT_SIDES = [720, 1080, 1440] as const;
+const FPS = [24, 25, 30] as const;
+const QUALITIES = ["standard", "high", "best"] as const;
+
+/**
+ * 后端导出规格 → 前端；不在可选范围里（含跟随素材的 0、旧成片没记录）为 null
+ * @param raw 后端规格
+ * @returns 前端规格或 null
+ */
+export function mapExportSpec(raw: BackendExportSpec | null | undefined): ExportSpec | null {
+  if (!raw) return null;
+  const shortSide = SHORT_SIDES.find((v) => v === raw.short_side);
+  const fps = FPS.find((v) => v === raw.fps);
+  const quality = QUALITIES.find((v) => v === raw.quality);
+  return shortSide && fps && quality ? { shortSide, fps, quality } : null;
+}
 
 /** PATCH /drama-segments/:sid 请求体 */
 export const toSegmentUpdateBody = (input: UpdateSegmentInput) =>
