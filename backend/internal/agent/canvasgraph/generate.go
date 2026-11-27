@@ -255,7 +255,7 @@ var promptRef = regexp.MustCompile(`@\[([^\]\n]*)\]\((?:node:)?([^)\s]+)\)`)
 // refWord 是素材引用在提示词里的叫法：「图片1」「视频2」「音频1」。
 var refWord = map[string]string{"image": "图片", "video": "视频", "audio": "音频"}
 
-// ComposePrompt 按最终参考素材编号展开 @，追加上游文字及视频人物与音色对应说明。
+// ComposePrompt 按最终参考素材编号展开 @，追加上游文字及人物参考（视频另加音色对应）说明。
 // refs 必须是实际提交的素材数组，不能用截断、去重前的素材估算编号。
 func ComposePrompt(s *GenSource, refs map[string][]uint64) string {
 	numbers := assetNumbers(s.Assets, refs)
@@ -266,17 +266,26 @@ func ComposePrompt(s *GenSource, refs map[string][]uint64) string {
 			texts[t.NodeID] = text
 		}
 	}
+	// spoken 是台词 / 字幕里的人物写法：图片生成写纯名字，台词和字幕容易被画进图里；
+	// 视频保持原样（同样带编号，留待单独处理）
+	spoken := names
+	if s.Kind != KindVideo {
+		spoken = map[string]string{}
+	}
 	for _, c := range s.Characters {
 		if names[c.NodeID] == "" {
 			names[c.NodeID] = c.Name
 		}
+		if spoken[c.NodeID] == "" {
+			spoken[c.NodeID] = c.Name
+		}
 	}
 	for id, text := range texts {
 		// 文本节点整段都是台词 / 字幕 / 屏幕文字：要被人念出来或看见，引用只还原名字，不给画面编号
-		texts[id] = expandRefsIn(text, names, nil)
+		texts[id] = expandRefsIn(text, spoken, nil)
 	}
 	cited := map[string]bool{}
-	body := expandScriptPrompt(s.Prompt, texts, names, numbers, cited)
+	body := expandScriptPrompt(s.Prompt, texts, names, spoken, numbers, cited)
 	parts := []string{strings.TrimSpace(body)}
 	for _, t := range s.Texts {
 		if text := texts[t.NodeID]; text != "" && !cited[t.NodeID] {
@@ -297,14 +306,15 @@ func ComposePrompt(s *GenSource, refs map[string][]uint64) string {
 var speechQuote = regexp.MustCompile(`“[^”\n]*”|「[^」\n]*」|"[^"\n]*"`)
 
 // expandScriptPrompt 展开整段提示词：引号外按素材编号（画面要看的是第几张图），
-// 引号里是台词与字幕，视频模型会照着念，把道具念成「图片2」就是噪声，那里只还原名字。
+// 引号里是台词与字幕，视频模型会照着念，把道具念成「图片2」就是噪声，那里只还原名字；
+// 引号里的人物按 spoken 写（图片生成是纯名字）。
 // 被 @ 到的文本节点换成它的正文并记为已引用，调用方据此避免重复追加。
-func expandScriptPrompt(prompt string, texts, names, numbers map[string]string, cited map[string]bool) string {
+func expandScriptPrompt(prompt string, texts, names, spoken, numbers map[string]string, cited map[string]bool) string {
 	var b strings.Builder
 	last := 0
 	for _, loc := range speechQuote.FindAllStringIndex(prompt, -1) {
 		b.WriteString(expandPromptRefs(prompt[last:loc[0]], texts, names, numbers, cited))
-		b.WriteString(expandPromptRefs(prompt[loc[0]:loc[1]], texts, names, nil, cited))
+		b.WriteString(expandPromptRefs(prompt[loc[0]:loc[1]], texts, spoken, nil, cited))
 		last = loc[1]
 	}
 	b.WriteString(expandPromptRefs(prompt[last:], texts, names, numbers, cited))
@@ -406,11 +416,12 @@ func characterVoice(c GenCharacter, subject string, audio int) string {
 	return ""
 }
 
-// characterPrompt 按角色节点编译人物及声音说明，只用于视频，不注入人物设定或试音台词。
+// characterPrompt 按角色节点编译人物及声音说明，用于视频和图片，不注入人物设定或试音台词。
 // 没有主图的角色（旁白、画外音）只写音色对应，不进【人物参考】，也不当作画面里的人物。
+// 图片生成同样带角色主图，正文里的人物要写成图片编号；不带音色。
 func (s *GenSource) characterPrompt(refs map[string][]uint64) (map[string]string, []string) {
 	names := map[string]string{}
-	if s.Kind != KindVideo {
+	if s.Kind != KindVideo && s.Kind != KindImage {
 		return names, nil
 	}
 	var visuals, voices []string
@@ -419,6 +430,9 @@ func (s *GenSource) characterPrompt(refs map[string][]uint64) (map[string]string
 		if subject != "" {
 			names[c.NodeID] = subject
 			visuals = append(visuals, line)
+		}
+		if s.Kind != KindVideo {
+			continue
 		}
 		if voice := characterVoice(c, subject, referenceIndex(refs, KindAudio, c.VoiceAssetID)); voice != "" {
 			voices = append(voices, voice)
