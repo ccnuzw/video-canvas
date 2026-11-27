@@ -383,3 +383,13 @@ describe("快速添加与字幕", () => {
     ]);
   });
 });
+
+describe("没有主轨的时间线（如加载中的空值）", () => {
+  test("mainTrack 不返回 undefined，给一条空主轨；依赖它的查询都不崩", () => {
+    const empty = { tracks: [] };
+    expect(mainTrack(empty).kind).toBe("main");
+    expect(mainTrack(empty).clips).toEqual([]);
+    expect(timelineEnd(empty)).toBe(0);
+    expect(normalize(empty).tracks).toEqual([]);
+  });
+});

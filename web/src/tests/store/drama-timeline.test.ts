@@ -224,3 +224,15 @@ describe("编辑器改动落到时间线上", () => {
     expect(store().timeline.tracks.length).toBeGreaterThan(0);
   });
 });
+
+describe("加载中的初始时间线", () => {
+  test("打开另一集、接口还没返回时，时间线就带默认轨道（含主轨），界面能安全取主轨", async () => {
+    let release: () => void = () => {};
+    getImpl = () => new Promise((resolve) => (release = () => resolve(view())));
+    const opening = store().open("d1", 2);
+    expect(store().status).toBe("loading");
+    expect(store().timeline.tracks.some((track) => track.kind === "main")).toBe(true);
+    release();
+    await opening;
+  });
+});

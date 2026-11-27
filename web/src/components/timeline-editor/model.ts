@@ -81,9 +81,12 @@ export const emptyTimeline = (): EditorTimeline => ({
   ],
 });
 
-/** 主轨 */
+/** 没有主轨时（如加载中的空时间线）返回的空主轨；只读，不会被写回时间线 */
+const NO_MAIN: EditorTrack = blankTrack("main", "main", "主轨");
+
+/** 主轨；时间线里没有主轨（如还在加载）时返回一条空主轨，调用方不用判空 */
 export const mainTrack = (timeline: EditorTimeline): EditorTrack =>
-  timeline.tracks.find((track) => track.kind === "main") ?? timeline.tracks[0];
+  timeline.tracks.find((track) => track.kind === "main") ?? NO_MAIN;
 
 /** 找一段和它所在的轨道、在轨内的下标；找不到为 null */
 export function findClip(

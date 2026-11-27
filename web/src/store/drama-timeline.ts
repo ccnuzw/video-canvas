@@ -12,14 +12,15 @@ import {
   undoHistory,
   type History,
 } from "@/components/timeline-editor/history";
-import { mainTrack } from "@/components/timeline-editor/model";
+import { emptyTimeline, mainTrack } from "@/components/timeline-editor/model";
 import type { EditorClip, EditorTimeline } from "@/components/timeline-editor/types";
 import type { AutosaveStatus } from "@/utils/drama/autosave";
 import { defaultTimeline, trackRemovedSegments } from "@/utils/drama/timeline";
 
 /** 停手多久后自动保存（毫秒） */
 const SAVE_DELAY = 1000;
-const EMPTY: Timeline = { tracks: [], removedSegmentIds: [], imports: [] };
+/** 还没读到时间线时的空值：带默认轨道（含主轨），界面在读完之前也能安全取主轨 */
+const EMPTY: Timeline = { ...emptyTimeline(), removedSegmentIds: [], imports: [] };
 
 /** 片场同步提示里的一条：变化本身，加上当时变化后的主轨段（已移除为 null），文案由界面按片段列表生成 */
 export type SyncItem = { change: TimelineChange; clip: EditorClip | null };
