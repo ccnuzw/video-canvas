@@ -7,6 +7,7 @@ import {
   Library,
   Music2,
   Pencil,
+  Trash2,
   Unlink,
   UserRound,
 } from "lucide-react";
@@ -163,11 +164,12 @@ const CHIP =
 
 /**
  * 生成历史的一张卡：悬停时底部浮出提示词与「模型 · 日期」；视频带时长角标；
- * 已在资产库的显示角标；⋯ 菜单里有「加入资产库…」与「在画布中打开」。不提供删除。
+ * 已在资产库的显示角标；⋯ 菜单里有「加入资产库…」「在画布中打开」与「删除」（只从生成历史隐藏）。
  * @param item 生成历史条目
  * @param onPreview 点击卡片：打开只读预览
  * @param onAddToLibrary 菜单里的「加入资产库…」，已在库里时不出现
  * @param onOpenCanvas 菜单里的「在画布中打开」，来源画布存在时才可点
+ * @param onDelete 菜单里的「删除」，不传就没有这一项
  * @param select 选择模式：给了就变成可勾选的卡片，预览与 ⋯ 菜单都收起（此时上面三个回调可省略）
  * @param natural 按素材真实画幅显示（资产页瀑布流）
  */
@@ -176,6 +178,7 @@ export function HistoryAssetCard({
   onPreview,
   onAddToLibrary,
   onOpenCanvas,
+  onDelete,
   select,
   natural,
 }: {
@@ -184,6 +187,7 @@ export function HistoryAssetCard({
   onPreview?: () => void;
   onAddToLibrary?: () => void;
   onOpenCanvas?: (canvasId: string) => void;
+  onDelete?: () => void;
   select?: CardSelect;
 }) {
   const { asset, canvas } = item;
@@ -233,7 +237,7 @@ export function HistoryAssetCard({
           {[item.modelLabel, formatAssetDay(item.createdAt)].filter(Boolean).join(" · ")}
         </span>
       </span>
-      {!select && onAddToLibrary && onOpenCanvas && (!inLibrary || canvas) && (
+      {!select && onAddToLibrary && onOpenCanvas && (!inLibrary || canvas || onDelete) && (
         <CardMenu>
           {!inLibrary && (
             <DropdownMenuItem onClick={onAddToLibrary}>
@@ -253,6 +257,12 @@ export function HistoryAssetCard({
                 在画布中打开
               </DropdownMenuItem>
             ))}
+          {onDelete && (
+            <DropdownMenuItem variant="destructive" onClick={onDelete}>
+              <Trash2 />
+              删除
+            </DropdownMenuItem>
+          )}
         </CardMenu>
       )}
     </motion.div>
@@ -260,12 +270,12 @@ export function HistoryAssetCard({
 }
 
 /**
- * 个人资产库的一张素材卡：封面 + 底部常显的文件名；⋯ 菜单里有「移动到…」与「移出资产库」。
+ * 个人资产库的一张素材卡：封面 + 底部常显的文件名；⋯ 菜单里有「移动到…」与「删除」（移出资产库，不删文件）。
  * @param item 资产库条目
  * @param onPreview 点击卡片：打开预览
  * @param onRename 菜单里的「重命名」
  * @param onMove 菜单里的「移动到…」
- * @param onRemove 菜单里的「移出资产库」
+ * @param onRemove 菜单里的「删除」：调用方先弹确认框，再移出资产库
  * @param select 选择模式：给了就变成可勾选的卡片，预览与 ⋯ 菜单都收起（此时上面三个回调可省略）
  * @param natural 按素材真实画幅显示（资产页瀑布流）
  */
@@ -349,9 +359,9 @@ export function LibraryAssetCard({
             <FolderInput />
             移动到…
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={onRemove}>
-            <Unlink />
-            移出资产库
+          <DropdownMenuItem variant="destructive" onClick={onRemove}>
+            <Trash2 />
+            删除
           </DropdownMenuItem>
         </CardMenu>
       )}

@@ -122,7 +122,7 @@ type GeneratedAssetFilter struct {
 }
 
 // ListGeneratedByUser 返回该用户的生成历史：source=generated 的素材，左联所属任务取出提示词、模型和画布来源，
-// 排除运营试跑任务（is_test）的产物。按 (created_at, id) 排序并游标翻页，最多 f.Limit 条。
+// 排除运营试跑任务（is_test）的产物与用户已从历史里删除（history_hidden_at）的素材。按 (created_at, id) 排序并游标翻页，最多 f.Limit 条。
 // 用左联而不是内联：个别没有任务记录的生成产物（历史数据）仍然保留在历史里，只是没有提示词与来源。
 func (r *AssetRepository) ListGeneratedByUser(ctx context.Context, userID uint64, f GeneratedAssetFilter) ([]model.GeneratedAssetRow, error) {
 	db := r.db.WithContext(ctx).Table("assets").
@@ -130,7 +130,8 @@ func (r *AssetRepository) ListGeneratedByUser(ctx context.Context, userID uint64
 		Select("assets.*, t.canvas_project_id AS task_canvas_project_id, t.input_json AS task_input_json, "+
 			"t.config_snapshot AS task_config_snapshot, COALESCE(t.model_id, '') AS task_model_key").
 		Where("assets.user_id = ? AND assets.source = ? AND assets.kind = ?", userID, model.AssetSourceGenerated, f.Kind).
-		Where("COALESCE(t.is_test, false) = false")
+		Where("COALESCE(t.is_test, false) = false").
+		Where("assets.history_hidden_at IS NULL")
 	switch {
 	case f.CanvasID != 0:
 		db = db.Where("t.canvas_project_id = ?", f.CanvasID)
@@ -157,4 +158,19 @@ func (r *AssetRepository) ListGeneratedByUser(ctx context.Context, userID uint64
 		return nil, err
 	}
 	return rows, nil
+}
+
+// HideGeneratedFromHistory 把该用户的一个生成产物从生成历史里隐藏：只写 history_hidden_at，不删素材行与文件。
+// 已隐藏的再调用保持原时间、照样成功；素材不存在、不属于该用户或不是生成来源返回 ErrNotFound。
+func (r *AssetRepository) HideGeneratedFromHistory(ctx context.Context, userID, id uint64) error {
+	res := r.db.WithContext(ctx).Model(&model.Asset{}).
+		Where("id = ? AND user_id = ? AND source = ?", id, userID, model.AssetSourceGenerated).
+		Update("history_hidden_at", gorm.Expr("COALESCE(history_hidden_at, ?)", time.Now()))
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

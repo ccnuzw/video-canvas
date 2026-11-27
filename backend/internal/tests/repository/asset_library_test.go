@@ -153,6 +153,46 @@ func TestAssetRepository_ListGeneratedByUser(t *testing.T) {
 	})
 }
 
+func TestAssetRepository_HideGeneratedFromHistory(t *testing.T) {
+	db := isolatedDB(t, &model.Asset{}, &model.GenerationTask{})
+	r := NewAssetRepository(db)
+	ctx := context.Background()
+	const me, other = uint64(1), uint64(2)
+	n := 0
+	mk := func(user uint64, source string) uint64 {
+		n++
+		a := &model.Asset{UserID: user, Kind: "image", Source: source, StorageKey: "h/" + string(rune('a'+n)), MimeType: "image/png"}
+		if err := r.Create(ctx, a); err != nil {
+			t.Fatal(err)
+		}
+		return a.ID
+	}
+	kept, hidden := mk(me, model.AssetSourceGenerated), mk(me, model.AssetSourceGenerated)
+	upload, others := mk(me, model.AssetSourceUpload), mk(other, model.AssetSourceGenerated)
+
+	if err := r.HideGeneratedFromHistory(ctx, me, hidden); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := r.ListGeneratedByUser(ctx, me, GeneratedAssetFilter{Kind: "image", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].ID != kept {
+		t.Fatalf("隐藏后生成历史只应剩 %d，实际 %+v", kept, rows)
+	}
+	if a, err := r.GetByID(ctx, me, hidden); err != nil || a.ID != hidden {
+		t.Fatalf("隐藏不删素材行：%v", err)
+	}
+	if err := r.HideGeneratedFromHistory(ctx, me, hidden); err != nil {
+		t.Fatalf("重复隐藏应幂等成功：%v", err)
+	}
+	for name, id := range map[string]uint64{"上传来源": upload, "别人的": others, "不存在": 9999} {
+		if err := r.HideGeneratedFromHistory(ctx, me, id); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("%s 应返回 ErrNotFound，实际 %v", name, err)
+		}
+	}
+}
+
 func TestAssetFolderRepository(t *testing.T) {
 	db := isolatedDB(t, &model.AssetFolder{}, &model.AssetLibraryItem{})
 	fr := NewAssetFolderRepository(db)

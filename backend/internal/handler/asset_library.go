@@ -55,6 +55,19 @@ func (h *AssetLibraryHandler) ListGenerated(c *gin.Context) {
 	response.OK(c, page)
 }
 
+// HideGenerated 生成历史里删除一条：只从历史隐藏，不删素材（素材 id 是数字）
+func (h *AssetLibraryHandler) HideGenerated(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.HideGenerated(c.Request.Context(), currentUserID(c), id); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, nil)
+}
+
 // ListFolders 当前用户的全部文件夹（不分页）
 func (h *AssetLibraryHandler) ListFolders(c *gin.Context) {
 	v, err := h.svc.ListFolders(c.Request.Context(), currentUserID(c))

@@ -74,8 +74,10 @@ type AssetLibraryAssets interface {
 	GetByID(ctx context.Context, userID, id uint64) (*model.Asset, error)
 	// ListByIDs 按 id 批量查询，不存在的缺席。
 	ListByIDs(ctx context.Context, ids []uint64) ([]model.Asset, error)
-	// ListGeneratedByUser 返回该用户的生成历史（已排除试跑任务），最多 f.Limit 条。
+	// ListGeneratedByUser 返回该用户的生成历史（已排除试跑任务与已隐藏的），最多 f.Limit 条。
 	ListGeneratedByUser(ctx context.Context, userID uint64, f repository.GeneratedAssetFilter) ([]model.GeneratedAssetRow, error)
+	// HideGeneratedFromHistory 从生成历史隐藏一个生成产物（幂等），不存在、不属于该用户或不是生成来源返回 repository.ErrNotFound。
+	HideGeneratedFromHistory(ctx context.Context, userID, id uint64) error
 }
 
 // AssetLibraryCanvases 是生成历史依赖的画布查询接口（真实实现是 repository.CanvasProjectRepository）。
@@ -402,6 +404,18 @@ func (s *AssetLibraryService) RemoveItem(ctx context.Context, userID, id uint64)
 	if err := s.items.Delete(ctx, userID, id); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return errcode.ErrLibraryItemNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+// HideGenerated 生成历史里的「删除」：只把素材从生成历史隐藏，素材文件、画布与对话里的引用、资产库归属都不动。
+// 重复删除照样成功；不存在、不属于当前用户或不是生成产物返回 404。
+func (s *AssetLibraryService) HideGenerated(ctx context.Context, userID, assetID uint64) error {
+	if err := s.assets.HideGeneratedFromHistory(ctx, userID, assetID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return errcode.ErrAssetNotFound
 		}
 		return err
 	}

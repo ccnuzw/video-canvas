@@ -260,6 +260,19 @@ type libAssets struct {
 	rows      map[uint64]*model.Asset
 	generated []model.GeneratedAssetRow // 已按「最新优先」排好，游标按 id 截断
 	lastF     repository.GeneratedAssetFilter
+	hidden    map[uint64]bool // 从生成历史隐藏过的素材
+}
+
+func (a *libAssets) HideGeneratedFromHistory(_ context.Context, userID, id uint64) error {
+	r, ok := a.rows[id]
+	if !ok || r.UserID != userID || r.Source != model.AssetSourceGenerated {
+		return repository.ErrNotFound
+	}
+	if a.hidden == nil {
+		a.hidden = map[uint64]bool{}
+	}
+	a.hidden[id] = true
+	return nil
 }
 
 func (a *libAssets) GetByID(_ context.Context, userID, id uint64) (*model.Asset, error) {
@@ -723,5 +736,32 @@ func TestAssetLibraryService_ListGenerated(t *testing.T) {
 	empty, err := e.svc.ListGenerated(ctx, 99, GeneratedListInput{Kind: "image"})
 	if err != nil || empty.Items == nil || len(empty.Items) != 0 || empty.NextCursor != "" {
 		t.Fatalf("别的用户没有历史，items 应是空数组：%+v %v", empty, err)
+	}
+}
+
+func TestAssetLibraryService_HideGenerated(t *testing.T) {
+	ctx := context.Background()
+	const me, other = uint64(1), uint64(2)
+	e := newLibEnv()
+	e.assets.rows[1] = &model.Asset{ID: 1, UserID: me, Kind: "image", Source: model.AssetSourceGenerated, StorageKey: "g1"}
+	e.assets.rows[2] = &model.Asset{ID: 2, UserID: other, Kind: "image", Source: model.AssetSourceGenerated, StorageKey: "g2"}
+	lib, _, err := e.svc.AddItem(ctx, me, 1, 0, "") // 已在资产库：隐藏后库里照旧
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := e.svc.HideGenerated(ctx, me, 1); err != nil {
+		t.Fatal(err)
+	}
+	if !e.assets.hidden[1] {
+		t.Fatal("应标记为从生成历史隐藏")
+	}
+	if _, ok := e.items.rows[uint64(lib.ID)]; !ok {
+		t.Fatal("从生成历史隐藏不应移出资产库")
+	}
+	for _, id := range []uint64{2, 99} {
+		if err := e.svc.HideGenerated(ctx, me, id); !libIsCode(err, errcode.ErrAssetNotFound) {
+			t.Fatalf("素材 %d 应返回素材不存在，实际 %v", id, err)
+		}
 	}
 }

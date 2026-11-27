@@ -207,6 +207,14 @@ func (r hLibAssets) ListByIDs(_ context.Context, ids []uint64) ([]model.Asset, e
 	}
 	return out, nil
 }
+func (r hLibAssets) HideGeneratedFromHistory(_ context.Context, u, id uint64) error {
+	a, ok := r.l.assets[id]
+	if !ok || a.UserID != u || a.Source != model.AssetSourceGenerated {
+		return repository.ErrNotFound
+	}
+	delete(r.l.assets, id)
+	return nil
+}
 func (r hLibAssets) ListGeneratedByUser(_ context.Context, u uint64, f repository.GeneratedAssetFilter) ([]model.GeneratedAssetRow, error) {
 	var out []model.GeneratedAssetRow
 	for _, g := range r.l.generated {
@@ -243,6 +251,7 @@ func newLibRouter() (*gin.Engine, *hLib) {
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.CtxUserIDKey, uint(1)); c.Next() })
 	r.GET("/assets/generated", h.ListGenerated)
+	r.DELETE("/assets/generated/:id", h.HideGenerated)
 	r.GET("/asset-folders", h.ListFolders)
 	r.POST("/asset-folders", h.CreateFolder)
 	r.PATCH("/asset-folders/:id", h.RenameFolder)
@@ -470,5 +479,23 @@ func TestAssetLibraryHandler_ListGenerated(t *testing.T) {
 	code, _ = libCall(t, r, http.MethodGet, "/assets/generated?kind=image&source=canvas&canvas_id="+idcodec.Encode(canvas)+"&created_from=2026-10-01T00:00:00%2B08:00&order=asc&q=雪", "")
 	if code != 200 {
 		t.Fatalf("合法的全部参数应 200：%d", code)
+	}
+}
+
+func TestAssetLibraryHandler_HideGenerated(t *testing.T) {
+	r, l := newLibRouter()
+	l.assets[7] = &model.Asset{ID: 7, UserID: 1, Kind: "image", Source: model.AssetSourceGenerated}
+
+	code, resp := libCall(t, r, http.MethodDelete, "/assets/generated/7", "")
+	if code != 200 || resp["code"].(float64) != 0 || resp["data"] != nil {
+		t.Fatalf("%d %v", code, resp)
+	}
+	code, resp = libCall(t, r, http.MethodDelete, "/assets/generated/7", "")
+	if code != http.StatusNotFound || int(resp["code"].(float64)) != errcode.ErrAssetNotFound.Code {
+		t.Fatalf("%d %v", code, resp)
+	}
+	code, resp = libCall(t, r, http.MethodDelete, "/assets/generated/abc", "")
+	if code != http.StatusBadRequest || int(resp["code"].(float64)) != errcode.ErrInvalidParams.Code {
+		t.Fatalf("%d %v", code, resp)
 	}
 }
