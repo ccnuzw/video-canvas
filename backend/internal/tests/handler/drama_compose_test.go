@@ -33,6 +33,12 @@ func (r *composeHTTPRepo) Segments(_ context.Context, user, episode uint64) ([]m
 func (r *composeHTTPRepo) SegmentTasks(_ context.Context, user, canvas uint64, node string) ([]model.GenerationTask, error) {
 	return []model.GenerationTask{{ID: 20, UserID: user, CanvasProjectID: &canvas, NodeID: node, Kind: model.KindVideo, Status: model.TaskSucceeded, OutputJSON: []byte(`[{"asset_id":30,"media_type":"video"}]`)}}, nil
 }
+func (r *composeHTTPRepo) Timeline(context.Context, uint64, uint64) (*model.DramaEpisodeTimeline, error) {
+	return nil, repository.ErrNotFound
+}
+func (r *composeHTTPRepo) TimelineAssets(_ context.Context, user uint64, _ []uint64) ([]model.Asset, error) {
+	return []model.Asset{{ID: 30, UserID: user, Kind: "video", DurationMs: 5000}}, nil
+}
 func TestDramaHandler_Compose(t *testing.T) {
 	for _, tc := range []struct {
 		name, body   string

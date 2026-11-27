@@ -331,6 +331,8 @@ func New(mode, jwtSecret string, h Handlers) *gin.Engine {
 		dramas.GET("/:id/episodes/:no/segments", h.DramaSegment.List)
 		dramas.POST("/:id/episodes/:no/segments", h.DramaSegment.Create)
 		dramas.PUT("/:id/episodes/:no/segments/order", h.DramaSegment.Order)
+		dramas.GET("/:id/episodes/:no/timeline", h.DramaSegment.Timeline)     // 成片粗剪时间线（对账后）
+		dramas.PUT("/:id/episodes/:no/timeline", h.DramaSegment.SaveTimeline) // 带 revision 保存时间线
 		segments := auth.Group("/drama-segments")
 		segments.PATCH("/:sid", h.DramaSegment.Update)
 		segments.DELETE("/:sid", h.DramaSegment.Delete)

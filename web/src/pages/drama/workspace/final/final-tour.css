@@ -1,0 +1,118 @@
+/*
+ * 成片新手引导的气泡：把 driver.js 默认的白卡片改成剪辑台的清透胶囊（docs/design/成片粗剪 第 15.5 节）。
+ * 气泡挂在 body 上、不在 .drama-theme 根节点里，所以 use-final-tour 给它也挂上 drama-theme 拿主题变量。
+ * 颜色只用 token；时长和曲线由 use-final-tour 从 lib/motion 写进 --motion-in / --motion-ease。
+ */
+.driver-popover.vc-tour {
+  width: min(280px, calc(100vw - 32px));
+  max-width: none;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--chrome);
+  color: var(--foreground);
+  font-family: inherit;
+  box-shadow:
+    0 0 0 1px var(--chrome-border),
+    0 12px 32px oklch(0 0 0 / 0.25);
+  backdrop-filter: blur(24px) saturate(1.5);
+  animation: vc-tour-in var(--motion-in) var(--motion-ease);
+}
+
+.driver-popover.vc-tour .driver-popover-arrow {
+  display: none;
+}
+
+.driver-popover.vc-tour .driver-popover-title {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.driver-popover.vc-tour .driver-popover-description {
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.driver-popover.vc-tour .driver-popover-close-btn {
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  color: var(--muted-foreground);
+  transition: background-color var(--motion-in) var(--motion-ease);
+}
+
+.driver-popover.vc-tour .driver-popover-close-btn:hover {
+  background: var(--chrome-hover);
+  color: var(--foreground);
+}
+
+.driver-popover.vc-tour .driver-popover-close-btn:focus-visible,
+.driver-popover.vc-tour .driver-popover-navigation-btns button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.driver-popover.vc-tour .driver-popover-footer {
+  margin-top: 14px;
+  align-items: center;
+}
+
+.driver-popover.vc-tour .driver-popover-progress-text {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+.driver-popover.vc-tour .driver-popover-navigation-btns button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12.5px;
+  text-shadow: none;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-in) var(--motion-ease),
+    transform var(--motion-in) var(--motion-ease);
+}
+
+.driver-popover.vc-tour .driver-popover-navigation-btns button:active {
+  transform: scale(0.96);
+}
+
+.driver-popover.vc-tour .driver-popover-prev-btn:hover {
+  background: var(--chrome-hover);
+}
+
+.driver-popover.vc-tour .driver-popover-next-btn {
+  margin-left: 4px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 600;
+}
+
+.driver-popover.vc-tour .driver-popover-next-btn:hover {
+  background: color-mix(in oklch, var(--primary) 88%, var(--foreground));
+}
+
+@keyframes vc-tour-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes vc-tour-in {
+    from {
+      opacity: 0;
+    }
+  }
+}

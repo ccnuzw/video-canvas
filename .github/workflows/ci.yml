@@ -80,8 +80,9 @@ jobs:
       - name: Build
         run: go build ./...
 
-      - name: 安装 ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      # 中文字幕烧录测试使用与生产镜像相同的 Noto CJK 字体。
+      - name: 安装 ffmpeg 和中文字幕字体
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg fonts-noto-cjk
 
       - name: Test
         run: go test -race ./...

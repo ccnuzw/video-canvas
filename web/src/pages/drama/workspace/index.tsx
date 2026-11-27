@@ -18,7 +18,7 @@ import { BreakdownDialog } from "./breakdown-dialog";
 import { CommandPalette } from "./command-palette";
 import { DramaWorkspaceContext } from "./context";
 import { EpisodeRail } from "./episode-rail";
-import { FinalArea } from "./final-area";
+import { FinalArea } from "./final/final-area";
 import { OverviewArea } from "./overview-area";
 import { ProjectSettingsDialog } from "./project-settings-dialog";
 import { ScriptArea } from "./script-area";
@@ -149,7 +149,13 @@ function Workspace({ id, viewer }: { id: string; viewer: boolean }) {
                     onDoc={nav.openDoc}
                   />
                 )}
-                <main className="relative min-w-0 flex-1 overflow-y-auto">
+                <main
+                  className={
+                    stage === "final"
+                      ? "relative min-w-0 flex-1"
+                      : "relative min-w-0 flex-1 overflow-y-auto"
+                  }
+                >
                   {stage === "overview" && (
                     <OverviewArea
                       onGo={nav.go}

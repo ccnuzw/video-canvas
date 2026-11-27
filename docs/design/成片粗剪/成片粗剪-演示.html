@@ -1,0 +1,1553 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>成片粗剪演示</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+    <style>
+      :root {
+        --radius: 0.625rem;
+        --background: 0 0% 100%;
+        --foreground: 240 10% 3.9%;
+        --card: 0 0% 100%;
+        --muted: 240 4.8% 95.9%;
+        --muted-foreground: 240 3.8% 46.1%;
+        --primary: 240 5.9% 10%;
+        --primary-foreground: 0 0% 98%;
+        --accent: 240 4.8% 95.9%;
+        --border: 240 5.9% 90%;
+        --ok: 5 150 105;
+        --bad: 220 38 38;
+        --warn: 180 83 9;
+        --info: 2 132 199;
+        --violet: 124 58 237;
+        /* 原型里的产品色：和成片页截图一致的琥珀黄 */
+        --brand: 222 160 30;
+        --app-bg: 0 0% 98%;
+        --app-panel: 0 0% 100%;
+        --app-raised: 240 5% 94%;
+        --app-track: 240 5% 90%;
+        --app-line: 240 6% 86%;
+        color-scheme: light;
+      }
+      .dark {
+        --background: 240 10% 3.9%;
+        --foreground: 0 0% 98%;
+        --card: 240 10% 5.5%;
+        --muted: 240 3.7% 15.9%;
+        --muted-foreground: 240 5% 64.9%;
+        --primary: 0 0% 98%;
+        --primary-foreground: 240 5.9% 10%;
+        --accent: 240 3.7% 15.9%;
+        --border: 240 3.7% 17%;
+        --ok: 52 211 153;
+        --bad: 248 113 113;
+        --warn: 251 191 36;
+        --info: 56 189 248;
+        --violet: 167 139 250;
+        --brand: 242 182 48;
+        --app-bg: 0 0% 4%;
+        --app-panel: 0 0% 8.5%;
+        --app-raised: 0 0% 13%;
+        --app-track: 0 0% 15%;
+        --app-line: 0 0% 18%;
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        font-family: Geist, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.55;
+        overflow-x: hidden;
+      }
+      code, .mono { font-family: "Geist Mono", "SF Mono", Consolas, monospace; }
+      code { font-size: 0.92em; background: hsl(var(--muted)); padding: 1px 5px; border-radius: 5px; }
+      [data-lucide] { width: 1em; height: 1em; flex: none; }
+      h1, h2, h3, h4, p { margin: 0; }
+      button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+      table { border-collapse: collapse; width: 100%; }
+      th { font-weight: 500; text-align: left; }
+      [hidden] { display: none !important; }
+      .muted { color: hsl(var(--muted-foreground)); }
+      .row { display: flex; align-items: center; gap: 8px; }
+      .wrapflex { flex-wrap: wrap; }
+      .spacer { margin-left: auto; }
+
+      .top { position: sticky; top: 0; z-index: 30; background: hsl(var(--background) / 0.92); backdrop-filter: blur(8px); border-bottom: 1px solid hsl(var(--border)); }
+      .top-in { max-width: 1160px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; gap: 16px; height: 56px; }
+      .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; white-space: nowrap; }
+      .logo { width: 28px; height: 28px; border-radius: 8px; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); display: grid; place-items: center; }
+      .tabs { display: flex; gap: 2px; margin-left: 8px; overflow-x: auto; }
+      .tab { height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 500; color: hsl(var(--muted-foreground)); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s, color 0.15s; }
+      .tab:hover { background: hsl(var(--accent)); color: hsl(var(--foreground)); }
+      .tab[aria-selected="true"] { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+      .btn { height: 32px; padding: 0 10px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
+      .btn:hover { background: hsl(var(--accent)); }
+      .btn-outline { border: 1px solid hsl(var(--border)); }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .switch { width: 34px; height: 20px; border-radius: 999px; background: hsl(var(--border)); position: relative; transition: background 0.15s; }
+      .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+      .switch[aria-checked="true"] { background: rgb(var(--violet)); }
+      .switch[aria-checked="true"]::after { transform: translateX(14px); }
+
+      .wrap { max-width: 1160px; margin: 0 auto; padding: 32px 20px 80px; }
+      .h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+      .lead { margin-top: 10px; max-width: 840px; font-size: 15px; color: hsl(var(--muted-foreground)); }
+      .lead b { color: hsl(var(--foreground)); }
+      .sec { margin-top: 36px; }
+      .sec > h2 { font-size: 18px; font-weight: 600; }
+      .sec > .sub { margin: 4px 0 14px; max-width: 840px; font-size: 13.5px; color: hsl(var(--muted-foreground)); }
+      .card { border: 1px solid hsl(var(--border)); background: hsl(var(--card)); border-radius: var(--radius); padding: 16px; }
+      .grid { display: grid; gap: 12px; }
+      .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      @media (max-width: 920px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 820px) { .g2, .g4 { grid-template-columns: 1fr; } .top-in { padding: 0 12px; } .wrap { padding: 24px 16px 64px; } .demo-grid { grid-template-columns: 1fr !important; } }
+      ul.list { margin: 0; padding-left: 18px; font-size: 13.5px; }
+
+      .tag { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+      .t-ok { background: rgb(var(--ok) / 0.12); color: rgb(var(--ok)); }
+      .t-bad { background: rgb(var(--bad) / 0.12); color: rgb(var(--bad)); }
+      .t-warn { background: rgb(var(--warn) / 0.12); color: rgb(var(--warn)); }
+      .t-info { background: rgb(var(--info) / 0.12); color: rgb(var(--info)); }
+      .t-vio { background: rgb(var(--violet) / 0.12); color: rgb(var(--violet)); }
+      .t-mute { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+
+      .callout { display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--radius); font-size: 13.5px; border: 1px solid; }
+      .callout > i { margin-top: 3px; }
+      .c-info { background: rgb(var(--info) / 0.07); border-color: rgb(var(--info) / 0.3); }
+      .c-info > i { color: rgb(var(--info)); }
+      .c-warn { background: rgb(var(--warn) / 0.07); border-color: rgb(var(--warn) / 0.3); }
+      .c-warn > i { color: rgb(var(--warn)); }
+      .c-ok { background: rgb(var(--ok) / 0.07); border-color: rgb(var(--ok) / 0.3); }
+      .c-ok > i { color: rgb(var(--ok)); }
+
+      .flow { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; padding: 14px; border-radius: var(--radius); }
+      .flow .node { flex: 1 1 140px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+      .flow .node b { display: block; font-size: 13px; margin-bottom: 2px; }
+      .flow .node.hl { border-color: hsl(var(--primary)); box-shadow: 0 0 0 1px hsl(var(--primary)); }
+      .flow .arrow { display: grid; place-items: center; color: hsl(var(--muted-foreground)); }
+
+      .cmp-wrap { overflow-x: auto; border: 1px solid hsl(var(--border)); border-radius: var(--radius); }
+      .cmp th, .cmp td { padding: 9px 12px; font-size: 13px; vertical-align: top; border-bottom: 1px solid hsl(var(--border)); }
+      .cmp tr:last-child th, .cmp tr:last-child td { border-bottom: 0; }
+      .cmp thead th { background: hsl(var(--muted)); font-size: 12.5px; white-space: nowrap; }
+      .cmp tbody th { width: 150px; color: hsl(var(--muted-foreground)); font-weight: 500; }
+      .cmp .y { color: rgb(var(--ok)); }
+      .cmp .m { color: rgb(var(--warn)); font-weight: 500; }
+
+      .steps { list-style: none; counter-reset: s; display: grid; gap: 12px; }
+      .steps li { counter-increment: s; position: relative; padding-left: 32px; font-size: 13.5px; }
+      .steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+      .steps li small { display: block; color: hsl(var(--muted-foreground)); font-size: 12.5px; }
+
+      .codeblock { background: hsl(var(--muted)); border-radius: var(--radius); padding: 14px; font-family: "Geist Mono", "SF Mono", Consolas, monospace; font-size: 12.5px; overflow-x: auto; }
+
+      .frame { border: 1px solid hsl(var(--border)); border-radius: 12px; overflow: hidden; background: hsl(var(--background)); }
+      .frame-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: hsl(var(--muted)); font-size: 12px; color: hsl(var(--muted-foreground)); }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: hsl(var(--border)); }
+
+      .note { outline: 1.5px dashed rgb(var(--violet)); outline-offset: 3px; position: relative; }
+      .note-txt { display: none; margin-top: 6px; font-size: 11.5px; line-height: 1.5; color: rgb(var(--violet)); }
+      .show-notes .note-txt { display: block; }
+      body:not(.show-notes) .note { outline: none; }
+      .pin-note { position: absolute; z-index: 15; max-width: 230px; background: rgb(var(--violet)); color: #fff; font-size: 11px; line-height: 1.45; padding: 5px 8px; border-radius: 6px; pointer-events: none; display: none; }
+      .show-notes .pin-note { display: block; }
+
+      .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 80; pointer-events: none; }
+      .toast > div { display: flex; align-items: center; gap: 8px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); border-radius: 10px; padding: 10px 14px; font-size: 13px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); }
+
+      /* ---------- 原型宽框：比正文更宽 ---------- */
+      .wide { position: relative; width: min(1440px, calc(100vw - 32px)); left: 50%; transform: translateX(-50%); }
+      .sim { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; align-items: center; }
+      .sim .lbl { font-size: 12px; color: hsl(var(--muted-foreground)); margin-right: 4px; }
+      .chip { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px dashed hsl(var(--border)); font-size: 12px; display: inline-flex; align-items: center; gap: 5px; color: hsl(var(--muted-foreground)); }
+      .chip:hover { color: hsl(var(--foreground)); border-color: hsl(var(--muted-foreground)); }
+      .chip[aria-pressed="true"] { border-style: solid; border-color: rgb(var(--violet)); color: rgb(var(--violet)); background: rgb(var(--violet) / 0.08); }
+
+      /* ---------- 产品界面（原型） ---------- */
+      .proto-scroll { overflow-x: auto; }
+      .app { min-width: 1120px; height: 780px; display: flex; flex-direction: column; background: hsl(var(--app-bg)); color: hsl(var(--foreground)); position: relative; user-select: none; font-size: 13px; }
+      .app-top { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid hsl(var(--app-line)); flex: none; }
+      .app-top .title { font-weight: 600; font-size: 14px; }
+      .pillbar { display: flex; gap: 2px; padding: 3px; border: 1px solid hsl(var(--app-line)); border-radius: 999px; background: hsl(var(--app-panel) / 0.6); margin: 0 auto; }
+      .pillbar span { padding: 4px 12px; border-radius: 999px; font-size: 12.5px; color: hsl(var(--muted-foreground)); }
+      .pillbar span.on { background: hsl(var(--app-raised)); color: hsl(var(--foreground)); font-weight: 600; }
+      .app-body { flex: 1; min-height: 0; display: flex; }
+      .rail { width: 64px; border-right: 1px solid hsl(var(--app-line)); display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 10px; flex: none; }
+      .rail .ep { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; font-family: "Geist Mono", monospace; font-weight: 600; font-size: 14px; color: hsl(var(--muted-foreground)); }
+      .rail .ep.on { background: hsl(var(--app-raised)); color: hsl(var(--foreground)); }
+      .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; flex: none; }
+      .bar h2 { font-size: 16px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+      .stat { display: inline-flex; align-items: baseline; gap: 5px; padding: 4px 10px; border-radius: 999px; background: hsl(var(--app-raised) / 0.8); font-size: 12px; color: hsl(var(--muted-foreground)); white-space: nowrap; }
+      .stat b { font-family: "Geist Mono", monospace; color: hsl(var(--foreground)); font-size: 13px; }
+      .pill { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+      .p-ok { background: rgb(var(--ok) / 0.15); color: rgb(var(--ok)); }
+      .p-brand { background: rgb(var(--brand) / 0.16); color: rgb(var(--brand)); }
+      .p-bad { background: rgb(var(--bad) / 0.15); color: rgb(var(--bad)); }
+      .p-mute { color: hsl(var(--muted-foreground)); }
+      .abtn { height: 32px; padding: 0 12px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; border: 1px solid hsl(var(--app-line)); background: hsl(var(--app-panel) / 0.7); white-space: nowrap; }
+      .abtn:hover:not(:disabled) { background: hsl(var(--app-raised)); }
+      .abtn:disabled { opacity: 0.45; cursor: not-allowed; }
+      .abtn.primary { background: rgb(var(--brand)); color: #1a1405; border-color: transparent; font-weight: 600; }
+      .abtn.primary:hover:not(:disabled) { background: rgb(var(--brand) / 0.88); }
+      .progress { width: 190px; }
+      .progress .track { height: 4px; border-radius: 999px; background: hsl(var(--app-raised)); overflow: hidden; margin-top: 4px; }
+      .progress .fill { height: 100%; background: rgb(var(--brand)); transition: width 0.2s; }
+      .banner { margin: 0 16px 8px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: rgb(var(--info) / 0.1); border: 1px solid rgb(var(--info) / 0.25); font-size: 12.5px; flex: none; }
+      .banner i { color: rgb(var(--info)); }
+      .banner .lk { color: rgb(var(--info)); font-weight: 500; }
+      .mid { flex: 1; min-height: 0; display: flex; gap: 10px; padding: 0 16px 10px; }
+      .panel { width: 300px; flex: none; border-radius: 16px; background: hsl(var(--app-panel)); border: 1px solid hsl(var(--app-line)); display: flex; flex-direction: column; min-height: 0; }
+      .seg-tabs { display: flex; gap: 4px; padding: 10px 10px 6px; }
+      .seg-tabs button { padding: 5px 11px; border-radius: 999px; font-size: 12.5px; color: hsl(var(--muted-foreground)); }
+      .seg-tabs button.on { background: hsl(var(--app-raised)); color: hsl(var(--foreground)); font-weight: 600; }
+      .filters { display: flex; align-items: center; gap: 12px; padding: 2px 14px 8px; font-size: 12.5px; }
+      .filters button { color: hsl(var(--muted-foreground)); padding-bottom: 3px; border-bottom: 2px solid transparent; }
+      .filters button.on { color: hsl(var(--foreground)); border-color: hsl(var(--foreground)); }
+      .plist { flex: 1; overflow-y: auto; padding: 4px 10px 12px; }
+      .sgroup { margin-bottom: 10px; }
+      .sgroup h4 { font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); margin: 4px 2px 6px; display: flex; gap: 6px; align-items: center; }
+      .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      .tile { position: relative; aspect-ratio: 9/16; border-radius: 9px; overflow: hidden; cursor: grab; border: 1.5px solid transparent; }
+      .tile:hover { border-color: hsl(var(--muted-foreground) / 0.6); }
+      .tile .meta { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 5px 4px; font-size: 10.5px; color: #fff; background: linear-gradient(transparent, rgb(0 0 0 / 0.7)); line-height: 1.3; }
+      .tile .badge { position: absolute; top: 4px; left: 4px; font-size: 9.5px; padding: 1px 5px; border-radius: 5px; background: rgb(var(--ok) / 0.9); color: #04140d; font-weight: 600; }
+      .tile .badge.on-tl { left: auto; right: 4px; background: rgb(0 0 0 / 0.55); color: #fff; font-weight: 500; }
+      .tile .add { position: absolute; right: 4px; bottom: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgb(255 255 255 / 0.9); color: #111; display: none; place-items: center; font-size: 12px; }
+      .tile:hover .add { display: grid; }
+      .tile.uploading::after { content: ""; position: absolute; inset: 0; background: rgb(0 0 0 / 0.55); }
+      .tile .up { position: absolute; inset: 0; display: grid; place-items: center; z-index: 2; color: #fff; font-size: 11px; text-align: center; }
+      .pempty { padding: 40px 10px; text-align: center; color: hsl(var(--muted-foreground)); font-size: 12.5px; }
+      .preview { flex: 1; min-width: 0; border-radius: 16px; background: hsl(var(--app-panel)); border: 1px solid hsl(var(--app-line)); display: flex; flex-direction: column; position: relative; }
+      .pv-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 0; }
+      .seg2 { display: inline-flex; padding: 2px; border-radius: 999px; background: hsl(var(--app-raised)); }
+      .seg2 button { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+      .seg2 button.on { background: hsl(var(--app-panel)); color: hsl(var(--foreground)); font-weight: 600; }
+      .seg2 button:disabled { opacity: 0.4; cursor: not-allowed; }
+      .stage { flex: 1; min-height: 0; display: grid; place-items: center; padding: 8px; }
+      .screen { height: 100%; max-height: 100%; aspect-ratio: 9/16; border-radius: 12px; overflow: hidden; position: relative; background: #000; box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.8); display: grid; place-items: center; color: #fff; text-align: center; }
+      .screen .big { font-size: 20px; font-weight: 700; text-shadow: 0 2px 10px rgb(0 0 0 / 0.5); }
+      .screen .small { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+      .screen .mutemark { position: absolute; top: 8px; right: 8px; background: rgb(0 0 0 / 0.5); border-radius: 999px; padding: 3px 7px; font-size: 11px; display: flex; gap: 4px; align-items: center; }
+      .pv-ctrl { display: flex; align-items: center; gap: 12px; padding: 6px 14px 10px; }
+      .pv-ctrl .tc { font-family: "Geist Mono", monospace; font-size: 12.5px; }
+      .ibtn { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: hsl(var(--foreground)); }
+      .ibtn:hover:not(:disabled) { background: hsl(var(--app-raised)); }
+      .ibtn:disabled { opacity: 0.3; cursor: not-allowed; }
+      .ibtn.on { color: rgb(var(--brand)); }
+      .ibtn [data-lucide] { width: 16px; height: 16px; }
+      .tl { flex: none; height: 232px; margin: 0 16px 14px; border-radius: 16px; background: hsl(var(--app-panel)); border: 1px solid hsl(var(--app-line)); display: flex; flex-direction: column; position: relative; }
+      .tl-tools { display: flex; align-items: center; gap: 2px; padding: 6px 10px; border-bottom: 1px solid hsl(var(--app-line)); }
+      .tl-tools .sep { width: 1px; height: 18px; background: hsl(var(--app-line)); margin: 0 6px; }
+      .zoom { width: 110px; accent-color: hsl(var(--foreground)); }
+      .tl-body { flex: 1; min-height: 0; display: flex; }
+      .tl-left { width: 52px; flex: none; display: flex; flex-direction: column; }
+      .tl-left .rule-sp { height: 28px; }
+      .tl-left .trk { height: 76px; display: grid; place-items: center; margin-top: 8px; }
+      .tl-scroll { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; position: relative; }
+      .tl-inner { position: relative; height: 100%; }
+      .ruler { height: 28px; position: relative; cursor: pointer; border-bottom: 1px solid hsl(var(--app-line) / 0.6); }
+      .tick { position: absolute; top: 0; height: 100%; border-left: 1px solid hsl(var(--muted-foreground) / 0.35); font-size: 10.5px; color: hsl(var(--muted-foreground)); padding: 6px 0 0 4px; font-family: "Geist Mono", monospace; }
+      .tick.minor { height: 6px; top: auto; bottom: 0; padding: 0; }
+      .track { position: absolute; top: 36px; height: 76px; left: 0; right: 0; border-radius: 10px; }
+      .track-bg { position: absolute; top: 36px; height: 76px; left: 12px; border-radius: 10px; background: hsl(var(--app-track) / 0.7); }
+      .clip { position: absolute; top: 0; height: 76px; border-radius: 9px; overflow: hidden; cursor: grab; border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25); }
+      .clip .frames { position: absolute; inset: 0; }
+      .clip .lab { position: absolute; left: 6px; top: 4px; font-size: 11px; color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / 0.8); display: flex; gap: 4px; align-items: center; white-space: nowrap; max-width: calc(100% - 10px); overflow: hidden; }
+      .clip .dur { position: absolute; left: 6px; bottom: 4px; font-size: 10.5px; color: #fff; font-family: "Geist Mono", monospace; text-shadow: 0 1px 3px rgb(0 0 0 / 0.8); }
+      .clip .icons { position: absolute; right: 6px; bottom: 4px; display: flex; gap: 3px; color: #fff; }
+      .clip .icons [data-lucide] { width: 12px; height: 12px; }
+      .clip.sel { border-color: rgb(var(--brand)); }
+      .clip.dragging { opacity: 0.35; }
+      .clip.placeholder { background: repeating-linear-gradient(135deg, hsl(var(--app-raised)) 0 8px, hsl(var(--app-track)) 8px 16px); }
+      .clip.placeholder .lab, .clip.placeholder .dur { color: hsl(var(--muted-foreground)); text-shadow: none; }
+      .clip.invalid { border-color: rgb(var(--bad)); }
+      .clip.invalid .frames { filter: grayscale(1) brightness(0.5); }
+      .clip .h { position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize; display: none; z-index: 3; }
+      .clip .h::after { content: ""; position: absolute; top: 22px; bottom: 22px; left: 3px; width: 4px; border-radius: 2px; background: #fff; }
+      .clip .h-l { left: 0; background: rgb(var(--brand)); }
+      .clip .h-r { right: 0; background: rgb(var(--brand)); }
+      .clip.sel .h, .clip:hover .h { display: block; }
+      .clip:not(.sel):hover .h { background: rgb(255 255 255 / 0.3); }
+      .ro .clip .h { display: none !important; }
+      .durpill { position: absolute; top: -26px; transform: translateX(-50%); background: hsl(var(--foreground)); color: hsl(var(--background)); font-size: 11px; font-family: "Geist Mono", monospace; padding: 2px 7px; border-radius: 999px; white-space: nowrap; z-index: 6; }
+      .ins { position: absolute; top: 32px; height: 84px; width: 3px; margin-left: -1.5px; background: rgb(var(--brand)); border-radius: 2px; z-index: 5; box-shadow: 0 0 10px rgb(var(--brand)); }
+      .playhead { position: absolute; top: 0; bottom: 0; width: 0; z-index: 7; pointer-events: none; }
+      .playhead::before { content: ""; position: absolute; top: 0; bottom: 0; left: -1px; width: 2px; background: hsl(var(--foreground)); }
+      .playhead .knob { position: absolute; top: 2px; left: -6px; width: 12px; height: 14px; border-radius: 3px 3px 6px 6px; background: hsl(var(--foreground)); pointer-events: auto; cursor: ew-resize; }
+      .ghost { position: fixed; z-index: 90; pointer-events: none; width: 54px; aspect-ratio: 9/16; border-radius: 8px; opacity: 0.85; box-shadow: 0 10px 30px rgb(0 0 0 / 0.4); }
+      .menu { position: absolute; z-index: 40; min-width: 200px; padding: 5px; border-radius: 12px; background: hsl(var(--app-panel)); border: 1px solid hsl(var(--app-line)); box-shadow: 0 16px 40px rgb(0 0 0 / 0.35); font-size: 12.5px; }
+      .menu .mi { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 9px; border-radius: 8px; text-align: left; }
+      .menu .mi:hover:not(:disabled) { background: hsl(var(--app-raised)); }
+      .menu .mi:disabled { opacity: 0.4; cursor: not-allowed; }
+      .menu .mh { padding: 6px 9px 3px; font-size: 11px; color: hsl(var(--muted-foreground)); }
+      .menu .sw { width: 22px; height: 30px; border-radius: 4px; flex: none; }
+      .menu hr { border: 0; border-top: 1px solid hsl(var(--app-line)); margin: 4px 0; }
+      .empty { display: grid; place-items: center; text-align: center; gap: 8px; }
+      .empty .ic { width: 56px; height: 56px; border-radius: 18px; background: hsl(var(--app-raised)); display: grid; place-items: center; margin: 0 auto 6px; color: hsl(var(--muted-foreground)); }
+      .empty .ic [data-lucide] { width: 24px; height: 24px; }
+      .savest { font-size: 12px; display: inline-flex; align-items: center; gap: 5px; color: hsl(var(--muted-foreground)); white-space: nowrap; }
+      .savest .d { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+      .savest.err { color: rgb(var(--bad)); }
+
+      /* 交互演示：对账沙盒 */
+      .opt { text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid hsl(var(--border)); font-size: 13px; }
+      .opt:hover { background: hsl(var(--accent)); }
+      .opt[aria-selected="true"] { border-color: hsl(var(--primary)); box-shadow: 0 0 0 1px hsl(var(--primary)); }
+      .opt small { display: block; color: hsl(var(--muted-foreground)); font-size: 12px; }
+      .strip { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+      .sc { padding: 6px 8px; border-radius: 8px; font-size: 12px; color: #fff; min-width: 70px; line-height: 1.3; }
+      .sc small { display: block; opacity: 0.8; font-size: 10.5px; }
+      .sc.ph { background: repeating-linear-gradient(135deg, hsl(var(--muted)) 0 6px, hsl(var(--border)) 6px 12px); color: hsl(var(--muted-foreground)); }
+      .sc.bad { outline: 2px solid rgb(var(--bad)); filter: grayscale(0.7); }
+      .sc.chg { outline: 2px solid rgb(var(--info)); }
+
+      .p-info { background: rgb(var(--info) / 0.14); color: rgb(var(--info)); cursor: pointer; }
+      .p-info:hover { background: rgb(var(--info) / 0.22); }
+      .p-info [data-lucide] { width: 12px; height: 12px; }
+      .syncwrap { position: relative; }
+      .syncpop { position: absolute; top: 32px; left: 0; z-index: 45; width: 320px; padding: 8px; border-radius: 14px; background: hsl(var(--app-panel)); border: 1px solid hsl(var(--app-line)); box-shadow: 0 16px 40px rgb(0 0 0 / 0.35); font-size: 12.5px; }
+      .sp-h { font-size: 11.5px; color: hsl(var(--muted-foreground)); padding: 4px 6px 6px; }
+      .sp-i { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 7px 6px; border-radius: 8px; }
+      .sp-i:hover:not(:disabled) { background: hsl(var(--app-raised)); }
+      .sp-i:disabled { cursor: default; color: hsl(var(--muted-foreground)); }
+      .sp-i .d { width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--info)); flex: none; }
+      .sp-i:disabled .d { background: hsl(var(--muted-foreground)); }
+      .sp-i span:nth-child(2) { flex: 1; }
+      .sp-i [data-lucide] { width: 13px; height: 13px; color: hsl(var(--muted-foreground)); }
+      .sp-f { display: flex; align-items: center; gap: 6px; border-top: 1px solid hsl(var(--app-line)); margin-top: 6px; padding-top: 8px; }
+      .clip.synced:not(.sel) { border-color: rgb(var(--info)); }
+      .clip .syncdot { position: absolute; top: 5px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--info)); box-shadow: 0 0 0 2px rgb(0 0 0 / 0.35); z-index: 2; }
+    </style>
+  </head>
+
+  <body class="show-notes">
+    <header class="top">
+      <div class="top-in">
+        <div class="brand"><span class="logo"><i data-lucide="scissors"></i></span>成片粗剪</div>
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" data-tab="overview" aria-selected="true"><i data-lucide="map"></i>总览</button>
+          <button class="tab" role="tab" data-tab="demo" aria-selected="false"><i data-lucide="git-merge"></i>片场同步规则</button>
+          <button class="tab" role="tab" data-tab="proto" aria-selected="false"><i data-lucide="layout-dashboard"></i>可点击原型</button>
+          <button class="tab" role="tab" data-tab="impl" aria-selected="false"><i data-lucide="database"></i>数据与接口</button>
+        </div>
+        <div class="spacer row">
+          <label class="row muted" style="font-size: 12px">设计标注<button class="switch" id="notesSw" role="switch" aria-checked="true" onclick="toggleNotes()"></button></label>
+          <button class="btn" onclick="document.documentElement.classList.toggle('dark')" aria-label="切换明暗主题"><i data-lucide="sun-moon"></i></button>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <!-- ============ 1. 总览 ============ -->
+      <section id="tab-overview">
+        <h1 class="h1">在「成片」页里直接粗剪一集</h1>
+        <p class="lead">
+          现在「合成整集」只能把每个片段采用的视频<b>整段、按顺序</b>拼起来。这次把成片页变成一个剪辑台：时间线按片段顺序自动铺好，可以裁头尾、拆分、删除、换顺序、换版本、插入画布素材或本地视频/图片、静音，然后照旧点「合成第 N 集」。
+          <b>只做一条视频轨的粗剪，不做音乐轨、转场、字幕。</b>不剪直接合成，结果和今天完全一样。
+        </p>
+
+        <div class="callout c-info" style="margin-top: 16px">
+          <i data-lucide="info"></i>
+          <div>
+            <b>阅读说明。</b>现状来自仓库 <code>origin/master</code> 的代码（成片页 <code>final-area.tsx</code>、合成任务 <code>drama_compose.go</code>）；剪辑台、接口、数据表都是<b>提案，尚未实现</b>。原型里的视频是色块示意，不调用任何服务。完整依据见 <code>成片粗剪.md</code>。<br />
+            <span class="muted">核实度图例：</span>
+            <span class="tag t-ok">已核对代码</span>
+            <span class="tag t-info">调研检索，未逐条复核</span>
+            <span class="tag t-warn">未验证 · 需实测</span>
+            <span class="tag t-vio">提案</span>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>一集从片场到成片怎么走</h2>
+          <p class="sub">剪辑台只多了一份「剪辑清单」，渲染仍交给已有的后端合成任务。</p>
+          <div class="flow note">
+            <div class="node"><b>片场采用</b>每个片段选一条 take <span class="tag t-ok">现有</span></div>
+            <div class="arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="node"><b>时间线自动铺好</b>按片段顺序、全长，跟随采用 <span class="tag t-vio">提案</span></div>
+            <div class="arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="node hl"><b>粗剪</b>裁、拆、删、移、换、插、静音；停手 1 秒自动保存清单 <span class="tag t-vio">提案</span></div>
+            <div class="arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="node"><b>合成第 N 集</b>提交时把清单冻结成「素材 + 入出点」 <span class="tag t-vio">提案</span></div>
+            <div class="arrow"><i data-lucide="arrow-right"></i></div>
+            <div class="node"><b>后端 ffmpeg</b>逐段裁剪、统一到项目比例、拼接，不扣积分 <span class="tag t-ok">现有，需改造</span></div>
+          </div>
+          <div class="note-txt">设计：时间线只存决定（非破坏），原片段和素材不动；渲染放后端是因为成片要落进素材库、能被下载和分享，并且现有合成任务已经处理了进度推送、取消、重试和失败回收。浏览器渲染被放弃：编码时不能关页、长片吃内存、Safari 支持差。</div>
+          <div class="callout c-warn" style="margin-top: 10px">
+            <i data-lucide="corner-down-right"></i>
+            <div>
+              <b>兜底：</b>这一集从没剪过 → 后端现算一份默认时间线（全部片段顺序全长），合成结果与今天一致。片段还没采用 → 轨上是「待采用」斜纹占位，合成时跳过并提示。固定的版本或素材被删 → 段标红，<b>合成按钮禁用</b>直到换掉或删掉。缩略图取不到 → 段显示纯色，不影响剪辑和合成。
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>时间线上会出现四种段</h2>
+          <p class="sub">段的来源决定它会不会被片场的改动带着走。</p>
+          <div class="grid g4">
+            <div class="card">
+              <div class="row"><i data-lucide="link"></i><b>片段 · 跟随</b></div>
+              <div class="row wrapflex" style="margin-top: 6px"><span class="tag t-mute">默认</span></div>
+              <p class="muted" style="font-size: 13px; margin-top: 8px"><b>绑定分镜片段的当前采用。</b>片场换了采用版本，这段自动换素材，入出点尽量保留。</p>
+            </div>
+            <div class="card">
+              <div class="row"><i data-lucide="pin"></i><b>片段 · 固定版本</b></div>
+              <div class="row wrapflex" style="margin-top: 6px"><span class="tag t-warn">不跟随片场</span></div>
+              <p class="muted" style="font-size: 13px; margin-top: 8px"><b>在时间线里手动换过版本。</b>片场再换采用也不动它；右键「跟随采用」可恢复。</p>
+            </div>
+            <div class="card">
+              <div class="row"><i data-lucide="image"></i><b>素材</b></div>
+              <div class="row wrapflex" style="margin-top: 6px"><span class="tag t-info">画布 / 本地导入</span></div>
+              <p class="muted" style="font-size: 13px; margin-top: 8px"><b>视频或图片。</b>视频可裁入出点；图片拖边改时长，默认 3 秒，0.5–30 秒。</p>
+            </div>
+            <div class="card">
+              <div class="row"><i data-lucide="hourglass"></i><b>待采用占位</b></div>
+              <div class="row wrapflex" style="margin-top: 6px"><span class="tag t-mute">合成时跳过</span></div>
+              <p class="muted" style="font-size: 13px; margin-top: 8px"><b>片段还没有采用视频。</b>按片段秒数占位，片场采用后自动变成跟随段。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>三个方向的对比</h2>
+          <p class="sub">访谈里逐一确认后选了 A。</p>
+          <div class="cmp-wrap">
+            <table class="cmp">
+              <thead><tr><th></th><th>A. 成片页剪辑台 + 后端渲染（采用）</th><th>B. 全屏弹窗 + 后端渲染</th><th>C. 浏览器 Mediabunny 渲染</th></tr></thead>
+              <tbody>
+                <tr><th>进入成本</th><td class="y">点进成片就能剪</td><td class="m">多一次打开、关闭</td><td class="y">同 A</td></tr>
+                <tr><th>成片可靠性</th><td class="y">复用合成任务，关页不丢、可重试</td><td class="y">同 A</td><td class="m">编码时不能关页，长片吃内存</td></tr>
+                <tr><th>浏览器兼容</th><td class="y">只需能播放 mp4</td><td class="y">同 A</td><td class="m">依赖 WebCodecs，Safari 不全</td></tr>
+                <tr><th>空间</th><td class="m">分集栏占一列，时间线稍窄</td><td class="y">全屏最宽</td><td>—</td></tr>
+                <tr><th>改动量</th><td>新表 + 合成改造 + 新页面</td><td>同 A</td><td>后端小，前端大</td></tr>
+                <tr><th>核实度</th><td><span class="tag t-ok">现状已核对代码</span> <span class="tag t-vio">方案为提案</span></td><td><span class="tag t-vio">提案</span></td><td><span class="tag t-info">参考视频修剪的调研</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>剪过之后又去片场改了，会发生什么</h2>
+          <p class="sub">时间线跟着片场走，但不覆盖你在时间线里亲手做的选择。可以去「片场同步规则」页逐条试。</p>
+          <div class="grid g2">
+            <div class="card">
+              <ol class="steps" style="margin: 0; padding: 0">
+                <li><b>在成片页把片段 02 掐掉了开头 2 秒</b><small>清单里记 in=2s；自动保存</small></li>
+                <li><b>回片场把片段 02 改采用「版本 3」，又新增了片段 05</b><small>片场推送 <code>drama.segment</code></small></li>
+                <li><b>回到成片页：标题旁出现「片场更新 2」小胶囊，改动的段带蓝色描边</b><small>片段 02 换成版本 3，仍掐掉开头 2 秒；片段 05 插在片段 04 后面（还没采用就是占位）</small></li>
+                <li><b>点开胶囊可逐条定位；不满意点「撤销同步」或 ⌘Z</b><small>同步被当成一步操作放进撤销栈</small></li>
+              </ol>
+            </div>
+            <div class="card">
+              <div class="callout c-warn">
+                <i data-lucide="triangle-alert"></i>
+                <div>
+                  <b>边界：入出点是按旧素材定的</b>
+                  <ul class="list" style="margin-top: 6px">
+                    <li>新版本更短：出点收回到新长度；入点也越界就恢复全长。</li>
+                    <li>新版本内容完全不同，原来的掐头位置可能不再合适，需要用户自己再看一遍。</li>
+                    <li>在时间线里删掉的片段，片场再改也不会被自动加回来；可以从左侧「片段」重新拖入。</li>
+                    <li>合成正在跑时继续剪不会影响这次合成（输入已冻结），但新成片一出来就显示「已过期」。</li>
+                  </ul>
+                </div>
+              </div>
+              <p class="muted" style="font-size: 12.5px; margin-top: 10px">上线时要告诉用户：「合成第 N 集」现在按时间线合成；没动过时间线的集行为不变。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 2. 片场同步规则 ============ -->
+      <section id="tab-demo" hidden>
+        <h1 class="h1">片场同步规则（对账）</h1>
+        <p class="lead">
+          每次打开成片页、或者收到片场的推送，后端都会拿时间线和当前片段列表对一次账。左边选一种片场变化，右边看时间线怎么变。<b>规则和后端 <code>reconcile</code> 伪代码是同一份</b>（见「数据与接口」页）。
+        </p>
+        <div class="grid demo-grid" style="margin-top: 20px; grid-template-columns: 260px minmax(0, 1fr)">
+          <div id="optList" class="grid" style="align-content: start"></div>
+          <div id="optPanel" class="card"></div>
+        </div>
+      </section>
+
+      <!-- ============ 3. 可点击原型 ============ -->
+      <section id="tab-proto" hidden>
+        <h1 class="h1">剪辑台原型</h1>
+        <p class="lead">
+          数据在内存里，刷新复原，视频用色块示意。已预置「第 1 集 · 湖底沉箱」4 个片段各 15 秒、已全部采用。可以直接：选中段拖两边裁剪、点空格播放、按 <code>S</code> 拆分、长按段拖动换位置、从左边拖素材进轨道、右键段换版本或静音。
+          <b>想看失败：</b>打开下面的「下次合成失败」「下次保存失败」，或点「片场：片段 01 的版本 2 被删除」（先把某段换成片段 01 的版本 2）。
+        </p>
+        <div class="wide">
+          <div class="sim" id="sim"></div>
+          <div class="frame" style="margin-top: 10px">
+            <div class="frame-bar">
+              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              <span style="margin-left: 8px">video-canvas / 短剧 / 消失的情人 / 成片 · 第 1 集</span>
+              <span class="spacer">窄屏请横向滚动查看</span>
+            </div>
+            <div class="proto-scroll"><div class="app" id="app"></div></div>
+          </div>
+          <div class="note-txt" style="font-size: 12px">
+            设计标注（紫色）：① 右侧原合成面板拆散——统计和合成按钮进顶栏，缺视频提示变成轨上的占位段，片段清单变成左侧「片段」标签；② 轨道永远首尾相接（磁吸），没有空隙，不需要对齐；③ 素材面板三标签取代参考图的两标签，多出的「片段」是为了「换版本」和把删掉的片段拖回来；④ 预览「时间线 / 成片」切换，避免剪完看不到已合成的成片。
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 4. 数据与接口（提案） ============ -->
+      <section id="tab-impl" hidden>
+        <h1 class="h1">数据与接口（提案）</h1>
+        <p class="lead">下面都是设计提案，尚未实现，对应 <code>成片粗剪.md</code> 第 8 节。<b>复用</b>现有的合成任务（<code>step: "compose"</code>）、进度推送、成片过期判断（<code>SegmentVersion</code>）、素材上传和 Mediabunny 取缩略图；<b>新增</b>一张时间线表、三个接口和合成的入出点支持。</p>
+
+        <div class="sec">
+          <h2>关系</h2>
+          <p class="sub">时间线是「一集」的派生数据，不放进画布 payload。</p>
+          <div class="cmp-wrap">
+            <table class="cmp">
+              <thead><tr><th>对象</th><th>关系</th><th>为什么</th></tr></thead>
+              <tbody>
+                <tr><th>集 ↔ 时间线</th><td><code>1 : 0..1</code>，<code>episode_id</code> 唯一</td><td>没保存过就现算默认时间线，第一次保存才落库</td></tr>
+                <tr><th>时间线段 → 片段</th><td><code>segment_id</code>，可多段指向同一片段</td><td>拆分后两段同源；片段被删时对账移除</td></tr>
+                <tr><th>时间线段 → take</th><td><code>task_id</code> + <code>pinned</code></td><td>跟随时由对账写入当前采用；固定时由用户选</td></tr>
+                <tr><th>时间线段 → 素材</th><td><code>asset_id</code>（画布素材或本地导入）</td><td>合成按 asset 下载，必须校验归属当前用户</td></tr>
+                <tr><th>时间线 ↔ 画布</th><td>无直接关系</td><td>画布有自己的 revision，剪辑高频保存不能和画布编辑互相冲突</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>数据模型</h2>
+          <p class="sub">沿用后端的 GORM 模型 + 迁移目录；乐观锁和 <code>drama_episodes.revision</code> 独立，避免改集标题时和剪辑互相冲突。</p>
+          <div class="cmp-wrap">
+            <table class="cmp">
+              <thead><tr><th colspan="2"><code>drama_episode_timelines</code> 表</th></tr></thead>
+              <tbody>
+                <tr><th><code>id</code></th><td>bigint 主键</td></tr>
+                <tr><th><code>user_id</code></th><td>bigint，索引；所有查询带上做隔离</td></tr>
+                <tr><th><code>episode_id</code></th><td>bigint，<b>唯一</b>；删除集时级联删除；短剧复制/转移时一起复制</td></tr>
+                <tr><th><code>clips</code></th><td>jsonb，<code>TimelineClip[]</code>，最多 200 段，总时长 ≤ 30 分钟</td></tr>
+                <tr><th><code>muted</code></th><td>bool，默认 false；整轨静音</td></tr>
+                <tr><th><code>removed_segment_ids</code></th><td>jsonb <code>uint64[]</code>；用户主动删掉的片段，对账不自动加回</td></tr>
+                <tr><th><code>imports</code></th><td>jsonb <code>uint64[]</code>；「已导入」标签里的素材，最多 200</td></tr>
+                <tr><th><code>revision</code></th><td>bigint，默认 1，<b>乐观锁</b></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="cmp-wrap" style="margin-top: 12px">
+            <table class="cmp">
+              <thead><tr><th colspan="2"><code>TimelineClip</code>（jsonb 元素）</th></tr></thead>
+              <tbody>
+                <tr><th><code>id</code></th><td>string ≤ 32，前端生成，清单内唯一</td></tr>
+                <tr><th><code>kind</code></th><td><code>"segment"</code> | <code>"asset"</code></td></tr>
+                <tr><th><code>segment_id</code> / <code>task_id</code> / <code>pinned</code></th><td>kind=segment 时必填；<code>task_id</code> 空 = 待采用占位；<code>pinned</code> = 固定版本</td></tr>
+                <tr><th><code>asset_id</code> / <code>media</code></th><td>kind=asset 时必填；<code>media</code> 为 <code>"video"</code> | <code>"image"</code></td></tr>
+                <tr><th><code>in_ms</code> / <code>out_ms</code></th><td>视频：入出点，<code>0 ≤ in &lt; out ≤ 素材时长</code>，<code>out - in ≥ 500</code>；图片：in 恒 0，out 即时长 500–30000</td></tr>
+                <tr><th><code>muted</code></th><td>bool，单段静音</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>接口</h2>
+          <div class="cmp-wrap">
+            <table class="cmp">
+              <thead><tr><th>方法与路径</th><th>说明</th><th>业务错误</th></tr></thead>
+              <tbody>
+                <tr><th><code>GET /dramas/:id/episodes/:no/timeline</code></th><td>返回对账后的 <code>{timeline, revision, changes[], invalid_clip_ids[]}</code>；<code>revision = 0</code> 表示还没保存过。对账结果<b>不写库</b>，下次保存时落库</td><td>404 剧或集不存在</td></tr>
+                <tr><th><code>PUT /dramas/:id/episodes/:no/timeline</code></th><td>请求 <code>{revision, clips, muted, removed_segment_ids, imports}</code>；校验归属、类型、时长；成功返回新 <code>revision</code>，并让 <code>episode.SegmentVersion++</code>（已有成片随之显示过期）</td><td><code>67031</code> 版本冲突（409）；<code>67032</code> 清单不合法（400，Msg 写明第几段）</td></tr>
+                <tr><th><code>GET /dramas/:id/canvas-media?kind=&amp;cursor=</code></th><td>本剧画布上有素材的图片/视频节点（排除片段 take 节点），每页 50</td><td>404</td></tr>
+                <tr><th><code>POST /dramas/:id/jobs {step:"compose"}</code></th><td><b>接口不变</b>；后端改为读时间线 → 对账 → 冻结成 <code>clips</code> 输入</td><td>新增 <code>67033</code> 有失效段（400）；<code>67010</code> 没有可合成内容沿用</td></tr>
+                <tr><th>导入素材</th><td>复用 <code>POST /assets</code> / 直传；成功后把 id 写进 <code>imports</code>，随下次 PUT 保存；视频 ≤ 200MB 在选文件时拦截</td><td>沿用上传错误</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>对账与合成伪代码</h2>
+          <div class="codeblock"><pre style="margin: 0; font: inherit; white-space: pre-wrap">// reconcile（提案）—— GET 时间线与合成任务共用同一份 Go 实现
+func reconcile(tl, segments) (tl2, changes):
+  for clip in tl.clips where clip.kind == "segment":
+    seg := segments[clip.segment_id]
+    if seg == nil:                         移除 clip；changes += "片段 NN 已删除"
+    else if !clip.pinned:
+      if seg.chosen == "":                 clip.task_id = ""（变占位）；changes += "片段 NN 取消了采用"
+      else if seg.chosen != clip.task_id:  clip.task_id = seg.chosen；clampTrim(clip, dur(seg.chosen))
+                                           changes += "片段 NN 换了采用版本"
+    else if take 不再成功或素材缺失:        标记 invalid
+  for seg in segments 按 seq:
+    if 轨上没有 seg 且 seg.id ∉ removed_segment_ids:
+      插到「最后一个 seq 比它小的片段段」之后（没有就放最前），全长、跟随
+      changes += "新增片段 NN"
+  removed_segment_ids 去掉已不存在的片段
+
+clampTrim(clip, dur): clip.out = min(clip.out, dur)；if clip.in > clip.out - 500 { clip.in, clip.out = 0, dur }
+
+// 合成输入（提案）：dramaComposeInput 新增 Clips，保留 AssetIDs 兼容队列中的旧任务
+composeInput(ep):
+  tl := reconcile(loadOrDefault(ep), segments)
+  if 有 invalid: return 67033
+  clips := 跳过占位段（记 SkippedSeqs），每段解析成 {asset_id, media, in_ms, out_ms, muted: clip.muted || tl.muted}
+  if len(clips) == 0: return 67010
+
+// ffmpeg（提案）：目标尺寸 = 项目比例 + 第一段视频短边（无视频 720），取偶数
+视频段:  -ss in -t (out-in) -i src  → scale+pad 到目标, fps=30；muted 或无音轨 → anullsrc
+图片段:  -loop 1 -framerate 30 -t dur -i img → 同上 + 静音音轨
+然后沿用现有 concat + faststart；超时 = max(10 分钟, 总时长×2)，上限 30 分钟（需实测）</pre></div>
+        </div>
+
+        <div class="sec">
+          <h2>前端模块</h2>
+          <div class="cmp-wrap">
+            <table class="cmp">
+              <thead><tr><th>模块</th><th>职责</th></tr></thead>
+              <tbody>
+                <tr><th><code>utils/drama/timeline.ts</code></th><td>纯函数：总时长、按时间找段、split / trimLeft / trimRight / move / insert / remove / swapTake / clamp，全部单测</td></tr>
+                <tr><th><code>store/drama-timeline.ts</code></th><td>zustand：清单、选中、播放头、缩放、撤销栈（100 步）、保存状态；停手 1 秒防抖保存</td></tr>
+                <tr><th><code>api/drama/timeline.ts</code></th><td>GET / PUT / canvas-media，snake ↔ camel</td></tr>
+                <tr><th><code>pages/drama/workspace/final/</code></th><td><code>final-area</code> 布局、<code>media-panel</code>、<code>timeline-preview</code>（两个 &lt;video&gt; 交替预加载）、<code>timeline-track</code>（指针拖拽）、<code>timeline-toolbar</code>、<code>compose-bar</code></td></tr>
+                <tr><th>复用</th><td><code>trimEngine.thumbnails</code> 缩略图、<code>VideoPlayer</code> 看成片、<code>useCompose</code>、<code>composeNotice</code>、上传 runner</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>已确认的决定</h2>
+          <div class="card">
+            <ol class="list" style="padding-left: 18px; display: grid; gap: 6px">
+              <li><b>后端 ffmpeg 渲染，时间线只存剪辑清单</b>：复用现有合成任务，关页不丢。</li>
+              <li><b>四类操作都做</b>：裁头尾 + 拆分 + 删除、拖动排序、换用同片段其他版本、插入外部素材（画布 / 本地导入的视频和图片）。</li>
+              <li><b>声音只做单轨 + 静音</b>：整轨和单段静音；音乐轨<b>已搁置</b>，将来加一条音频轨、合成改 amix。</li>
+              <li><b>成片页直接变剪辑台</b>：不做全屏弹窗。</li>
+              <li><b>自动跟随片场 + 提示</b>：时间线里手动换过版本的段不跟随；「冻结 + 手动同步」<b>已搁置</b>。</li>
+              <li><b>自研时间线与预览</b>：不引 Remotion Player、react-timeline-editor；复用 Mediabunny 取缩略图。</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toastBox"></div>
+
+    <script>
+      const $ = (s, r = document) => r.querySelector(s);
+      const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+      const icons = () => { if (window.lucide) lucide.createIcons(); };
+      const pad2 = (n) => String(n).padStart(2, "0");
+      const fmt = (t) => `${pad2(Math.floor(t / 60))}:${pad2(Math.floor(t % 60))}`;
+      const fmtF = (t) => `${pad2(Math.floor(t / 60))}:${pad2(Math.floor(t % 60))}.${pad2(Math.floor((t % 1) * 30))}`;
+      const sec1 = (t) => `${(Math.round(t * 10) / 10).toFixed(1)}s`;
+      const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+      const clone = (o) => JSON.parse(JSON.stringify(o));
+      let uidN = 0;
+      const uid = () => "c" + ++uidN;
+
+      function toggleNotes() {
+        const on = document.body.classList.toggle("show-notes");
+        $("#notesSw").setAttribute("aria-checked", String(on));
+      }
+      let toastTimer;
+      function toast(msg, kind = "ok") {
+        const icon = { ok: "circle-check", bad: "circle-x", warn: "triangle-alert", info: "info" }[kind] || "info";
+        const color = kind === "info" ? "info" : kind;
+        $("#toastBox").innerHTML = `<div><i data-lucide="${icon}" style="color: rgb(var(--${color}))"></i>${esc(msg)}</div>`;
+        icons();
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => ($("#toastBox").innerHTML = ""), 2600);
+      }
+      let currentTab = "overview";
+      function showTab(id) {
+        currentTab = id;
+        document.querySelectorAll("main > section").forEach((s) => (s.hidden = s.id !== "tab-" + id));
+        document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tab === id)));
+        window.scrollTo(0, 0);
+        if (id === "proto") requestAnimationFrame(() => { renderApp(); if (S.fit) { fitZoom(); renderTimeline(); } });
+      }
+      document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+
+      /* ================= 共用：对账规则（与「数据与接口」伪代码一致） ================= */
+      const MIN = 0.5;
+      const segLabel = (seg) => `片段 ${pad2(seg.seq + 1)}`;
+      const takeOf = (segs, tid) => { for (const s of segs) for (const t of s.takes) if (t.id === tid) return { seg: s, take: t }; return null; };
+      function clampTrim(c, dur) {
+        c.out = Math.min(c.out, dur);
+        if (c.in > c.out - MIN) { c.in = 0; c.out = dur; }
+      }
+      function reconcile(clips, removed, segs) {
+        const out = [];
+        const changes = [];
+        const refs = [];
+        const byId = Object.fromEntries(segs.map((s) => [s.id, s]));
+        const changedSeg = new Set();
+        for (const c0 of clips) {
+          const c = clone(c0);
+          if (c.kind !== "segment") { out.push(c); continue; }
+          const seg = byId[c.seg];
+          if (!seg) {
+            if (!changedSeg.has(c.seg)) { changes.push(`${c.segName || "片段"} 已删除，已从时间线移除`); refs.push(null); }
+            changedSeg.add(c.seg);
+            continue;
+          }
+          c.segName = segLabel(seg);
+          const chosenOk = seg.chosen && seg.takes.some((t) => t.id === seg.chosen && !t.deleted);
+          if (!c.pinned) {
+            if (!chosenOk) {
+              if (c.take) {
+                if (!changedSeg.has(seg.id)) { changes.push(`${segLabel(seg)} 取消了采用，变成待采用占位`); refs.push(c.id); }
+                changedSeg.add(seg.id);
+                c.take = ""; c.in = 0; c.out = seg.seconds;
+              }
+            } else if (seg.chosen !== c.take) {
+              const t = seg.takes.find((x) => x.id === seg.chosen);
+              if (!changedSeg.has(seg.id)) { changes.push(c.take ? `${segLabel(seg)} 换成了采用的版本 ${t.v}` : `${segLabel(seg)} 已采用版本 ${t.v}`); refs.push(c.id); }
+              changedSeg.add(seg.id);
+              if (!c.take) { c.in = 0; c.out = t.dur; } else clampTrim(c, t.dur);
+              c.take = seg.chosen;
+            }
+          }
+          out.push(c);
+        }
+        const sorted = [...segs].sort((a, b) => a.seq - b.seq);
+        for (const seg of sorted) {
+          if (out.some((c) => c.kind === "segment" && c.seg === seg.id) || removed.includes(seg.id)) continue;
+          let at = 0;
+          out.forEach((c, i) => { if (c.kind === "segment" && byId[c.seg] && byId[c.seg].seq < seg.seq) at = i + 1; });
+          const chosenOk = seg.chosen && seg.takes.some((t) => t.id === seg.chosen && !t.deleted);
+          const t = chosenOk ? seg.takes.find((x) => x.id === seg.chosen) : null;
+          const nid = uid();
+          out.splice(at, 0, { id: nid, kind: "segment", seg: seg.id, segName: segLabel(seg), take: t ? t.id : "", pinned: false, in: 0, out: t ? t.dur : seg.seconds, muted: false, isNew: true });
+          changes.push(`新增${segLabel(seg)}${t ? "" : "（待采用）"}`);
+          refs.push(nid);
+        }
+        return { clips: out, removed: removed.filter((id) => byId[id]), changes, refs };
+      }
+
+      /* ================= 2. 片场同步规则沙盒 ================= */
+      const DEMO_SEGS = () => [
+        { id: "s1", seq: 0, seconds: 15, chosen: "a1", takes: [{ id: "a1", v: 1, dur: 15, hue: 210 }, { id: "a2", v: 2, dur: 12, hue: 190 }] },
+        { id: "s2", seq: 1, seconds: 15, chosen: "b1", takes: [{ id: "b1", v: 1, dur: 15, hue: 30 }, { id: "b2", v: 2, dur: 15, hue: 45 }, { id: "b3", v: 3, dur: 10, hue: 15 }] },
+        { id: "s3", seq: 2, seconds: 15, chosen: "c1", takes: [{ id: "c1", v: 1, dur: 15, hue: 270 }] },
+        { id: "s4", seq: 3, seconds: 15, chosen: "", takes: [] },
+      ];
+      const DEMO_CLIPS = () => [
+        { id: "d1", kind: "segment", seg: "s1", segName: "片段 01", take: "a1", pinned: false, in: 0, out: 15 },
+        { id: "d2", kind: "segment", seg: "s2", segName: "片段 02", take: "b1", pinned: false, in: 2, out: 14 },
+        { id: "d3", kind: "asset", name: "空镜·湖面", hue: 200, in: 0, out: 3 },
+        { id: "d4", kind: "segment", seg: "s3", segName: "片段 03", take: "c1", pinned: false, in: 0, out: 15 },
+        { id: "d5", kind: "segment", seg: "s4", segName: "片段 04", take: "", pinned: false, in: 0, out: 15 },
+      ];
+      const DEMO_OPTS = [
+        { k: "swap", t: "换了采用版本", d: "片场把片段 02 改采用版本 3（10 秒）", apply: (s) => { s[1].chosen = "b3"; } },
+        { k: "adopt", t: "占位的片段采用了", d: "片段 04 生成并采用了版本 1（12 秒）", apply: (s) => { s[3].takes.push({ id: "d1v", v: 1, dur: 12, hue: 140 }); s[3].chosen = "d1v"; } },
+        { k: "add", t: "新增片段", d: "在片段 02 后插入新片段（原 03、04 顺延）", apply: (s) => { s[2].seq = 3; s[3].seq = 4; s.push({ id: "s5", seq: 2, seconds: 8, chosen: "", takes: [] }); } },
+        { k: "del", t: "删除片段", d: "片场删除了片段 03", apply: (s) => { s.splice(2, 1); s[2].seq = 2; } },
+        { k: "unadopt", t: "取消采用", d: "片段 01 的采用被清空", apply: (s) => { s[0].chosen = ""; } },
+        { k: "removed", t: "删掉过的片段", d: "用户在时间线里删过片段 03，片场又改了它", apply: (s) => { s[2].takes.push({ id: "c2", v: 2, dur: 15, hue: 290 }); s[2].chosen = "c2"; }, removed: true },
+      ];
+      let demoSel = "swap";
+      let demoPinned = false;
+      function chipHTML(c, segs, mark) {
+        if (c.kind === "asset") return `<div class="sc" style="background:hsl(${c.hue} 45% 32%)">${esc(c.name)}<small>素材 · ${sec1(c.out - c.in)}</small></div>`;
+        if (!c.take) return `<div class="sc ph ${mark ? "chg" : ""}">${esc(c.segName)}<small>待采用 · ${sec1(c.out - c.in)}</small></div>`;
+        const found = takeOf(segs, c.take);
+        const hue = found ? found.take.hue : 0;
+        const v = found ? found.take.v : "?";
+        return `<div class="sc ${mark ? "chg" : ""}" style="background:hsl(${hue} 45% 32%)">${esc(c.segName)}${c.pinned ? " 📌" : ""}<small>版本 ${v} · ${c.in ? "入 " + sec1(c.in) + " · " : ""}${sec1(c.out - c.in)}</small></div>`;
+      }
+      function renderDemo() {
+        $("#optList").innerHTML = DEMO_OPTS.map((o) => `<button class="opt" data-k="${o.k}" aria-selected="${o.k === demoSel}"><b>${esc(o.t)}</b><small>${esc(o.d)}</small></button>`).join("");
+        const o = DEMO_OPTS.find((x) => x.k === demoSel);
+        let before = DEMO_CLIPS();
+        let removed = [];
+        if (o.removed) { before = before.filter((c) => c.seg !== "s3"); removed = ["s3"]; }
+        if (demoPinned) before[1].pinned = true;
+        const segs0 = DEMO_SEGS();
+        const segs1 = DEMO_SEGS();
+        o.apply(segs1);
+        const r = reconcile(before, removed, segs1);
+        const changedIds = new Set(r.clips.filter((c) => { const b = before.find((x) => x.id === c.id); return !b || b.take !== c.take || b.out !== c.out || b.in !== c.in; }).map((c) => c.id));
+        $("#optPanel").innerHTML = `
+          <label class="row" style="font-size:13px"><input type="checkbox" id="demoPin" ${demoPinned ? "checked" : ""}/> 片段 02 在时间线里被手动固定为版本 1（📌）</label>
+          <div style="margin-top:14px;font-size:12.5px" class="muted">变更前的时间线 ${removed.length ? "（片段 03 已被用户删掉，记在 removed_segment_ids）" : ""}</div>
+          <div class="strip">${before.map((c) => chipHTML(c, segs0)).join("")}</div>
+          <div class="callout c-info" style="margin-top:12px"><i data-lucide="radio"></i><div><b>片场：</b>${esc(o.d)}</div></div>
+          <div style="margin-top:14px;font-size:12.5px" class="muted">对账后（蓝框 = 有变化）</div>
+          <div class="strip">${r.clips.map((c) => chipHTML(c, segs1, changedIds.has(c.id))).join("")}</div>
+          <div class="callout ${r.changes.length ? "c-ok" : "c-warn"}" style="margin-top:12px"><i data-lucide="${r.changes.length ? "bell" : "bell-off"}"></i><div>
+            <b>${r.changes.length ? `顶栏胶囊：片场更新 ${r.changes.length}（浮层逐条列出）` : "没有变化，不出胶囊"}</b>
+            ${r.changes.length ? `<ul class="list" style="margin-top:4px">${r.changes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<div class="muted" style="font-size:12.5px">${demoPinned && demoSel === "swap" ? "片段 02 被固定为版本 1，不跟随片场的采用。" : "用户删掉的片段不会被自动加回；可从左侧「片段」重新拖入。"}</div>`}
+          </div></div>
+          <p class="muted" style="font-size:12px;margin-top:10px">规则要点：跟随段换素材时入出点保留，超出新长度就收回（片段 02 版本 3 只有 10 秒，原来入 2s 出 14s → 入 2s 出 10s）；新片段插在「最后一个序号比它小的片段」后面。</p>`;
+        icons();
+      }
+      $("#optList").addEventListener("click", (e) => { const b = e.target.closest(".opt"); if (!b) return; demoSel = b.dataset.k; renderDemo(); });
+      $("#optPanel").addEventListener("change", (e) => { if (e.target.id === "demoPin") { demoPinned = e.target.checked; renderDemo(); } });
+      renderDemo();
+
+      /* ================= 3. 原型 ================= */
+      const SEED_SEGS = () => [
+        { id: "s1", seq: 0, seconds: 15, chosen: "t11", takes: [{ id: "t11", v: 1, dur: 15, hue: 212 }, { id: "t12", v: 2, dur: 12, hue: 188 }] },
+        { id: "s2", seq: 1, seconds: 15, chosen: "t21", takes: [{ id: "t21", v: 1, dur: 15, hue: 32 }, { id: "t22", v: 2, dur: 15, hue: 48 }, { id: "t23", v: 3, dur: 10, hue: 12 }] },
+        { id: "s3", seq: 2, seconds: 15, chosen: "t31", takes: [{ id: "t31", v: 1, dur: 15, hue: 262 }, { id: "t32", v: 2, dur: 14, hue: 285 }] },
+        { id: "s4", seq: 3, seconds: 15, chosen: "t41", takes: [{ id: "t41", v: 1, dur: 15, hue: 160 }] },
+      ];
+      const CANVAS_MEDIA = [
+        { id: "m1", name: "空镜·湖面", media: "video", dur: 6, hue: 198 },
+        { id: "m2", name: "片头字卡", media: "image", hue: 45 },
+        { id: "m3", name: "林夏定妆", media: "image", hue: 335 },
+        { id: "m4", name: "雨夜街道", media: "video", dur: 8, hue: 236 },
+        { id: "m5", name: "沉箱特写", media: "image", hue: 120 },
+      ];
+      const defaultClips = (segs) => [...segs].sort((a, b) => a.seq - b.seq).map((s) => {
+        const t = s.takes.find((x) => x.id === s.chosen);
+        return { id: uid(), kind: "segment", seg: s.id, segName: segLabel(s), take: t ? t.id : "", pinned: false, in: 0, out: t ? t.dur : s.seconds, muted: false };
+      });
+
+      let S;
+      function resetProto() {
+        stopPlay();
+        const segs = SEED_SEGS();
+        S = {
+          segs, clips: defaultClips(segs), muted: false, removed: [], imports: [],
+          sel: null, t: 0, playing: false, pps: 14, fit: true,
+          undo: [], redo: [], save: "saved", rev: 1,
+          final: null, composing: null, preview: "timeline",
+          panel: "segments", filter: "all", sync: null, menu: null,
+          drag: null, flags: { failSave: false, failCompose: false, failImport: false, shared: false, empty: false },
+        };
+        renderSim();
+        if (currentTab === "proto") { fitZoom(); renderApp(); }
+      }
+
+      /* ---- 解析段 ---- */
+      function resolve(c) {
+        if (c.kind === "segment") {
+          const seg = S.segs.find((s) => s.id === c.seg);
+          if (!c.take) return { type: "ph", label: c.segName, hue: 0, dur: seg ? seg.seconds : c.out };
+          const take = seg && seg.takes.find((t) => t.id === c.take);
+          if (!take || take.deleted) return { type: "bad", label: `${c.segName} · 版本已删除`, hue: take ? take.hue : 0, dur: c.out };
+          return { type: "video", label: c.segName, v: take.v, hue: take.hue, dur: take.dur };
+        }
+        const m = CANVAS_MEDIA.find((x) => x.id === c.asset) || S.imports.find((x) => x.id === c.asset);
+        if (!m || m.failed) return { type: "bad", label: "素材已失效", hue: 0, dur: c.out };
+        return { type: m.media, label: m.name, hue: m.hue, dur: m.media === "image" ? 30 : m.dur };
+      }
+      const lenOf = (c) => c.out - c.in;
+      const total = () => S.clips.reduce((a, c) => a + lenOf(c), 0);
+      const starts = () => { let a = 0; return S.clips.map((c) => { const s = a; a += lenOf(c); return s; }); };
+      function clipAt(t) {
+        const st = starts();
+        for (let i = 0; i < S.clips.length; i++) if (t >= st[i] && t < st[i] + lenOf(S.clips[i])) return { i, off: t - st[i] };
+        return null;
+      }
+      const editable = () => !S.flags.shared;
+
+      /* ---- 历史与保存 ---- */
+      const snap = () => clone({ clips: S.clips, muted: S.muted, removed: S.removed });
+      function commit(before) {
+        S.undo.push(before);
+        if (S.undo.length > 100) S.undo.shift();
+        S.redo = [];
+        dirty();
+      }
+      function restore(sn) { S.clips = sn.clips; S.muted = sn.muted; S.removed = sn.removed; if (!S.clips.some((c) => c.id === S.sel)) S.sel = null; }
+      function undo() { if (!S.undo.length) return; S.redo.push(snap()); restore(S.undo.pop()); dirty(); renderApp(); }
+      function redo() { if (!S.redo.length) return; S.undo.push(snap()); restore(S.redo.pop()); dirty(); renderApp(); }
+      let saveTimer;
+      function dirty() {
+        if (S.final && !S.final.stale) S.final.stale = true;
+        S.save = "dirty";
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(doSave, 1000);
+      }
+      function doSave(then) {
+        clearTimeout(saveTimer);
+        S.save = "saving"; renderTop();
+        saveTimer = setTimeout(() => {
+          if (S.flags.failSave) { S.save = "error"; renderTop(); if (then) toast("时间线保存失败，未提交合成", "bad"); return; }
+          S.save = "saved"; S.rev++; renderTop();
+          if (then) then();
+        }, 600);
+      }
+
+      /* ---- 编辑操作 ---- */
+      function targetIdx() {
+        const i = S.clips.findIndex((c) => c.id === S.sel);
+        if (i >= 0) return i;
+        const a = clipAt(S.t);
+        return a ? a.i : -1;
+      }
+      function split() {
+        if (!editable()) return;
+        const a = clipAt(S.t);
+        if (!a) return toast("播放头不在任何段上", "warn");
+        const c = S.clips[a.i];
+        const r = resolve(c);
+        if (r.type === "ph") return toast("待采用占位不能拆分", "warn");
+        if (a.off < MIN || lenOf(c) - a.off < MIN) return toast("离段边缘太近（每段至少 0.5 秒）", "warn");
+        const b = snap();
+        const c2 = { ...clone(c), id: uid() };
+        if (r.type === "image") { c.out = a.off; c2.in = 0; c2.out = b.clips[a.i].out - a.off; }
+        else { c.out = c.in + a.off; c2.in = c.out; }
+        S.clips.splice(a.i + 1, 0, c2);
+        S.sel = c2.id;
+        commit(b); renderApp();
+      }
+      function trimSide(side) {
+        if (!editable()) return;
+        const i = targetIdx();
+        if (i < 0) return toast("先选中一段，或把播放头放到段上", "warn");
+        const st = starts()[i];
+        const c = S.clips[i];
+        const r = resolve(c);
+        if (r.type === "ph") return toast("待采用占位不能裁剪", "warn");
+        const off = S.t - st;
+        if (off <= 0 || off >= lenOf(c)) return toast("播放头要落在这段中间", "warn");
+        const keep = side === "left" ? lenOf(c) - off : off;
+        if (keep < MIN) return toast("裁完不足 0.5 秒，请改用删除", "warn");
+        const b = snap();
+        if (r.type === "image") c.out = keep;
+        else if (side === "left") c.in = c.in + off;
+        else c.out = c.in + off;
+        if (side === "left") S.t = st;
+        S.sel = c.id;
+        commit(b); renderApp();
+      }
+      function removeSel(id) {
+        if (!editable()) return;
+        const i = S.clips.findIndex((c) => c.id === (id || S.sel));
+        if (i < 0) return toast("先选中一段", "warn");
+        const b = snap();
+        const [c] = S.clips.splice(i, 1);
+        if (c.kind === "segment" && !S.clips.some((x) => x.seg === c.seg) && !S.removed.includes(c.seg)) S.removed.push(c.seg);
+        S.sel = null;
+        S.t = Math.min(S.t, total());
+        commit(b); renderApp();
+      }
+      function insertAt(idx, item) {
+        const b = snap();
+        let c;
+        if (item.type === "take") {
+          const seg = S.segs.find((s) => s.id === item.seg);
+          const t = seg.takes.find((x) => x.id === item.take);
+          c = { id: uid(), kind: "segment", seg: seg.id, segName: segLabel(seg), take: t.id, pinned: t.id !== seg.chosen, in: 0, out: t.dur, muted: false };
+          S.removed = S.removed.filter((x) => x !== seg.id);
+        } else {
+          const m = CANVAS_MEDIA.find((x) => x.id === item.asset) || S.imports.find((x) => x.id === item.asset);
+          if (m.uploading) return toast("还在上传，传完才能用", "warn");
+          if (m.failed) return toast("上传失败的素材不能用，请重试上传", "bad");
+          c = { id: uid(), kind: "asset", asset: m.id, media: m.media, in: 0, out: m.media === "image" ? 3 : m.dur, muted: false };
+        }
+        S.clips.splice(idx, 0, c);
+        S.sel = c.id;
+        commit(b); renderApp();
+      }
+      function swapTake(id, tid) {
+        const c = S.clips.find((x) => x.id === id);
+        const seg = S.segs.find((s) => s.id === c.seg);
+        const b = snap();
+        const target = tid === "follow" ? seg.chosen : tid;
+        const t = seg.takes.find((x) => x.id === target);
+        c.pinned = tid !== "follow" && tid !== seg.chosen;
+        if (!t) { c.take = ""; c.in = 0; c.out = seg.seconds; }
+        else { if (!c.take) { c.in = 0; c.out = t.dur; } else clampTrim(c, t.dur); c.take = t.id; }
+        S.menu = null;
+        commit(b); renderApp();
+        toast(c.pinned ? `已换成版本 ${t.v}，这段不再跟随片场采用` : "已恢复跟随采用", "info");
+      }
+      function toggleClipMute(id) { const c = S.clips.find((x) => x.id === id); const b = snap(); c.muted = !c.muted; S.menu = null; commit(b); renderApp(); }
+      function restoreLen(id) {
+        const c = S.clips.find((x) => x.id === id); const r = resolve(c);
+        const b = snap();
+        if (r.type === "image") { c.out = 3; } else { c.in = 0; c.out = r.dur; }
+        S.menu = null; commit(b); renderApp();
+      }
+
+      /* ---- 播放 ---- */
+      let raf, last;
+      function play() {
+        if (S.preview === "final") return toast("成片播放用现有播放器（示意）", "info");
+        if (total() <= 0) return;
+        if (S.t >= total() - 0.01) S.t = 0;
+        S.playing = true; last = performance.now();
+        const step = (now) => {
+          if (!S.playing) return;
+          S.t += (now - last) / 1000; last = now;
+          if (S.t >= total()) { S.t = total(); S.playing = false; }
+          // 只在换段或每 0.2 秒重绘一次预览，播放头每帧更新
+          const a = clipAt(Math.min(S.t, Math.max(0, total() - 0.001)));
+          const key = a ? `${a.i}:${Math.floor(a.off * 5)}` : "";
+          if (key !== S.pvKey) { S.pvKey = key; renderPreview(); }
+          renderPlayhead();
+          if (S.playing) raf = requestAnimationFrame(step); else renderPreview();
+        };
+        raf = requestAnimationFrame(step);
+        renderPreview();
+      }
+      function stopPlay() { if (S) S.playing = false; cancelAnimationFrame(raf); }
+      function togglePlay() { if (S.playing) { stopPlay(); renderPreview(); } else play(); }
+
+      /* ---- 合成 ---- */
+      function composeCheck() {
+        if (S.flags.empty && !S.clips.length) return "至少要有一个片段采用了视频才能合成";
+        const bad = S.clips.map(resolve).findIndex((r) => r.type === "bad");
+        if (bad >= 0) return `第 ${bad + 1} 段的素材已失效，请换版本或删掉`;
+        if (!S.clips.some((c) => ["video", "image"].includes(resolve(c).type))) return "至少要有一个片段采用了视频才能合成";
+        if (S.save === "error") return "时间线没保存成功，先点「重试」";
+        return null;
+      }
+      function compose() {
+        if (composeCheck()) return;
+        const go = () => {
+          const frozen = S.clips.filter((c) => resolve(c).type !== "ph");
+          const skipped = S.clips.filter((c) => resolve(c).type === "ph").map((c) => c.segName);
+          const dur = frozen.reduce((a, c) => a + lenOf(c), 0);
+          S.composing = { p: 0 };
+          renderTop();
+          const iv = setInterval(() => {
+            S.composing.p += 7 + Math.random() * 8;
+            if (S.flags.failCompose && S.composing.p > 55) {
+              clearInterval(iv); S.composing = null; renderTop();
+              toast("第 1 集合成失败：转码失败，无法合成视频（可在任务卡重试）", "bad");
+              return;
+            }
+            if (S.composing.p >= 100) {
+              clearInterval(iv); S.composing = null;
+              S.final = { dur, stale: false, n: frozen.length };
+              S.preview = "final";
+              renderApp();
+              toast(skipped.length ? `第 1 集已合成，跳过了待采用的${skipped.join("、")}` : `第 1 集已合成 · ${fmt(dur)}`, skipped.length ? "warn" : "ok");
+              return;
+            }
+            renderTop();
+          }, 260);
+        };
+        if (S.save === "dirty" || S.save === "saving") doSave(go); else go();
+      }
+
+      /* ---- 导入 ---- */
+      let impN = 0;
+      function importFile() {
+        if (!editable()) return;
+        impN++;
+        const isImg = impN % 2 === 0;
+        const m = { id: "i" + impN, name: isImg ? `本地图片-${pad2(impN)}.png` : `本地视频-${pad2(impN)}.mp4`, media: isImg ? "image" : "video", dur: 5, hue: (impN * 67) % 360, uploading: 0 };
+        S.imports.unshift(m);
+        S.panel = "imports";
+        renderPanel();
+        const iv = setInterval(() => {
+          m.uploading += 20;
+          if (S.flags.failImport && m.uploading >= 60) { clearInterval(iv); m.uploading = null; m.failed = true; renderPanel(); toast("上传失败，请重试", "bad"); return; }
+          if (m.uploading >= 100) { clearInterval(iv); m.uploading = null; renderPanel(); dirty(); renderTop(); }
+          else renderPanel();
+        }, 300);
+      }
+      function retryImport(id) {
+        const m = S.imports.find((x) => x.id === id);
+        m.failed = false; m.uploading = 0;
+        const iv = setInterval(() => { m.uploading += 25; if (m.uploading >= 100) { clearInterval(iv); m.uploading = null; } renderPanel(); }, 300);
+      }
+
+      /* ---- 片场模拟 ---- */
+      function siteChange(kind) {
+        const before = snap();
+        if (kind === "swap") { const s = S.segs.find((x) => x.id === "s2"); if (!s) return toast("片段 02 已不存在", "warn"); s.chosen = s.chosen === "t23" ? "t21" : "t23"; }
+        if (kind === "add") { if (S.segs.some((x) => x.id === "s5")) return toast("已经新增过了", "warn"); S.segs.push({ id: "s5", seq: S.segs.length, seconds: 10, chosen: "", takes: [] }); }
+        if (kind === "adopt5") { const s = S.segs.find((x) => x.id === "s5"); if (!s) return toast("先点「新增片段 05」", "warn"); if (s.chosen) return toast("片段 05 已采用", "warn"); s.takes.push({ id: "t51", v: 1, dur: 9, hue: 95 }); s.chosen = "t51"; }
+        if (kind === "del") { const i = S.segs.findIndex((x) => x.id === "s3"); if (i < 0) return toast("片段 03 已删除", "warn"); S.segs.splice(i, 1); S.segs.sort((a, b) => a.seq - b.seq).forEach((s, k) => (s.seq = k)); }
+        if (kind === "killtake") { const s = S.segs.find((x) => x.id === "s1"); const t = s.takes.find((x) => x.id === "t12"); t.deleted = true; if (!S.clips.some((c) => c.take === "t12")) toast("版本 2 已删除；时间线里没有用到它，所以没有失效段。先右键某段换成片段 01 的版本 2 再试", "info"); }
+        const r = reconcile(S.clips, S.removed, S.segs);
+        S.clips = r.clips.map((c) => { delete c.isNew; return c; });
+        S.removed = r.removed;
+        S.segs.forEach((s) => S.clips.forEach((c) => { if (c.seg === s.id) c.segName = segLabel(s); }));
+        if (r.changes.length) { const prev = S.sync || { items: [], open: false }; S.sync = { items: [...prev.items, ...r.changes.map((text, k) => ({ text, ref: r.refs[k] }))], open: prev.open }; S.undo.push(before); S.redo = []; dirty(); }
+        S.t = Math.min(S.t, total());
+        renderApp();
+      }
+
+      /* ---- 缩放 ---- */
+      function fitZoom() {
+        const sc = $("#tlScroll");
+        const w = sc ? sc.clientWidth : 900;
+        S.pps = clamp((w - 60) / Math.max(total(), 8), 2, 120);
+        S.fit = true;
+      }
+      const PMIN = 2, PMAX = 120;
+      const ppsToSlider = (p) => Math.round((Math.log(p / PMIN) / Math.log(PMAX / PMIN)) * 100);
+      const sliderToPps = (v) => PMIN * Math.pow(PMAX / PMIN, v / 100);
+      function zoomBy(f) { S.pps = clamp(S.pps * f, PMIN, PMAX); S.fit = false; renderTimeline(); }
+
+      /* ================= 渲染 ================= */
+      function renderSim() {
+        const f = S.flags;
+        const chips = [
+          ["swap", "repeat", "片场：片段 02 改采用版本 3"],
+          ["add", "plus", "片场：新增片段 05"],
+          ["adopt5", "check", "片场：片段 05 采用了"],
+          ["del", "trash-2", "片场：删除片段 03"],
+          ["killtake", "x-circle", "片场：片段 01 的版本 2 被删除"],
+        ];
+        const toggles = [["failSave", "下次保存失败"], ["failCompose", "下次合成失败"], ["failImport", "下次导入失败"], ["shared", "共享只读"], ["empty", "本集没有片段"]];
+        $("#sim").innerHTML = `<span class="lbl">模拟控制台（不属于产品界面）：</span>` +
+          chips.map(([k, ic, t]) => `<button class="chip" data-site="${k}"><i data-lucide="${ic}"></i>${t}</button>`).join("") +
+          toggles.map(([k, t]) => `<button class="chip" data-flag="${k}" aria-pressed="${f[k]}">${t}</button>`).join("") +
+          `<button class="chip" data-reset="1"><i data-lucide="rotate-ccw"></i>重置</button>`;
+        icons();
+      }
+      $("#sim").addEventListener("click", (e) => {
+        const b = e.target.closest("button"); if (!b) return;
+        if (b.dataset.reset) { resetProto(); return toast("已重置", "info"); }
+        if (b.dataset.site) { if (S.flags.empty) return toast("先关掉「本集没有片段」", "warn"); return siteChange(b.dataset.site); }
+        const k = b.dataset.flag;
+        S.flags[k] = !S.flags[k];
+        if (k === "empty") {
+          stopPlay();
+          if (S.flags.empty) { S._segsBak = S.segs; S._clipsBak = S.clips; S.segs = []; S.clips = S.clips.filter((c) => c.kind === "asset"); S.t = 0; S.sel = null; }
+          else { S.segs = S._segsBak; S.clips = S._clipsBak; }
+          fitZoom();
+        }
+        if (k === "shared") { S.sel = null; S.menu = null; }
+        renderSim(); renderApp();
+      });
+
+      function renderApp() {
+        const app = $("#app");
+        app.classList.toggle("ro", S.flags.shared);
+        app.innerHTML = `
+          <div class="app-top">
+            <i data-lucide="arrow-left"></i><span class="title">消失的情人 · 六六六儿</span>
+            <div class="pillbar"><span>总览</span><span>剧本</span><span>资产管理</span><span>片场</span><span class="on">成片</span></div>
+            <span class="pill p-mute">9:16</span>
+          </div>
+          <div class="app-body">
+            <div class="rail">${[1, 2, 3, 4, 5, 6].map((n) => `<div class="ep ${n === 1 ? "on" : ""}">${pad2(n)}</div>`).join("")}</div>
+            <div class="main">
+              <div class="bar note" id="bar"></div>
+              <div class="mid">
+                <div class="panel note" id="panel"></div>
+                <div class="preview" id="preview"></div>
+              </div>
+              <div class="tl note" id="tl"></div>
+            </div>
+          </div>
+          <div class="pin-note" style="top:58px;right:330px">顶栏 = 原右侧合成面板：统计、成片状态、下载、合成按钮</div>
+          <div class="pin-note" style="top:330px;left:90px">「片段」标签用来换版本、把删掉的片段拖回来</div>
+          <div class="pin-note" style="bottom:200px;right:40px">单轨磁吸：首尾相接、没有空隙</div>
+          <div id="menuBox"></div>`;
+        renderTop(); renderPanel(); renderPreview(); renderTimeline(); renderMenu();
+        icons();
+      }
+
+      function renderTop() {
+        const bar = $("#bar"); if (!bar) return;
+        const segs = S.segs;
+        const adopted = segs.filter((s) => s.chosen && s.takes.some((t) => t.id === s.chosen && !t.deleted)).length;
+        const reason = composeCheck();
+        let st = "";
+        if (S.final) st = S.final.stale ? `<span class="pill p-brand">成片已过期，可重新合成</span>` : `<span class="pill p-ok"><i data-lucide="check"></i>成片已合成</span>`;
+        const saveMap = { saved: ["", "已保存"], dirty: ["", "未保存"], saving: ["", "保存中…"], error: ["err", "保存失败"] };
+        const [cls, txt] = saveMap[S.save];
+        let action;
+        if (S.flags.shared) action = "";
+        else if (S.composing) action = `<div class="progress"><div class="row" style="justify-content:space-between;font-size:12px"><span style="color:rgb(var(--brand));font-weight:600">正在合成…</span><span class="mono">${Math.min(99, Math.floor(S.composing.p))}%</span></div><div class="track"><div class="fill" style="width:${Math.min(99, S.composing.p)}%"></div></div></div>`;
+        else action = `<button class="abtn ${S.final && !S.final.stale ? "" : "primary"}" data-act="compose" ${reason ? "disabled" : ""} title="${esc(reason || "按时间线裁剪并拼接，不扣积分")}"><i data-lucide="combine"></i>${S.final ? "重新合成" : "合成第 1 集"}</button>`;
+        bar.innerHTML = `
+          <h2>第 1 集 · 湖底沉箱</h2>${st}
+          <span class="savest ${cls}"><span class="d"></span>${txt}${S.save === "error" && !S.flags.shared ? ` · <button data-act="retrySave" style="text-decoration:underline">重试</button>` : ""}</span>
+          ${syncHTML()}
+          <span class="spacer"></span>
+          <span class="stat"><b>${adopted}/${segs.length}</b>已采用</span>
+          <span class="stat"><b id="statT">${fmt(total())}</b>时间线</span>
+          ${S.final ? `<button class="abtn" data-act="download"><i data-lucide="download"></i>下载 mp4</button>` : ""}
+          ${action}`;
+        if (reason && !S.composing && !S.flags.shared) bar.insertAdjacentHTML("beforeend", `<span class="muted" style="font-size:11.5px;max-width:180px;line-height:1.3">${esc(reason)}</span>`);
+        icons();
+      }
+
+      function syncHTML() {
+        if (!S.sync) return "";
+        const it = S.sync.items;
+        return `<span class="syncwrap"><button class="pill p-info" data-act="syncPop" aria-expanded="${S.sync.open}"><i data-lucide="refresh-cw"></i>片场更新 ${it.length}<i data-lucide="chevron-down"></i></button>
+          ${S.sync.open ? `<div class="syncpop">
+            <div class="sp-h">已按片场自动同步</div>
+            ${it.map((x) => `<button class="sp-i" ${x.ref && S.clips.some((c) => c.id === x.ref) ? `data-loc="${x.ref}"` : "disabled"}><span class="d"></span><span>${esc(x.text)}</span>${x.ref && S.clips.some((c) => c.id === x.ref) ? `<i data-lucide="locate-fixed"></i>` : ""}</button>`).join("")}
+            <div class="sp-f">${editable() ? `<button class="abtn" style="height:28px" data-act="undoSync"><i data-lucide="undo-2"></i>撤销同步</button>` : ""}<span class="spacer"></span><button class="abtn" style="height:28px" data-act="ackSync">知道了</button></div>
+          </div>` : ""}</span>`;
+      }
+      function renderBanner() {
+        const box = $("#bannerBox"); if (!box) return;
+        box.innerHTML = S.banner ? `<div class="banner"><i data-lucide="refresh-cw"></i><span><b>片场有 ${S.banner.list.length} 处更新已同步：</b>${esc(S.banner.list.join("；"))}</span><span class="spacer"></span>${editable() ? `<button class="lk" data-act="undoSync">撤销同步</button>` : ""}<button data-act="closeBanner" aria-label="关闭"><i data-lucide="x"></i></button></div>` : "";
+        icons();
+      }
+
+      function tileHTML(o) {
+        return `<div class="tile ${o.uploading != null ? "uploading" : ""}" data-drag='${esc(JSON.stringify(o.payload))}' style="background:linear-gradient(160deg,hsl(${o.hue} 50% 38%),hsl(${o.hue} 55% 16%))">
+          ${o.badge ? `<span class="badge">${o.badge}</span>` : ""}${o.onTl ? `<span class="badge on-tl">在轨上</span>` : ""}
+          ${o.uploading != null ? `<span class="up">上传中<br/>${o.uploading}%</span>` : ""}
+          ${o.failed ? `<span class="up" style="background:rgb(0 0 0/.6)">上传失败<br/><button data-retry="${o.payload.asset}" style="text-decoration:underline">重试</button></span>` : ""}
+          <span class="meta">${esc(o.title)}<br/>${esc(o.sub)}</span>
+          ${editable() && o.uploading == null && !o.failed ? `<button class="add" data-add='${esc(JSON.stringify(o.payload))}' title="加到播放头所在段之后">+</button>` : ""}
+        </div>`;
+      }
+      function renderPanel() {
+        const p = $("#panel"); if (!p) return;
+        const tabs = [["segments", "片段"], ["canvas", "画布素材"], ["imports", "已导入"]];
+        let body = "";
+        if (S.panel === "segments") {
+          if (!S.segs.length) body = `<div class="pempty">这一集还没有片段</div>`;
+          else body = [...S.segs].sort((a, b) => a.seq - b.seq).map((s) => `
+            <div class="sgroup"><h4>${segLabel(s)} · ${s.seconds}s ${S.removed.includes(s.id) ? `<span class="tag t-mute">已从时间线删除</span>` : ""}</h4>
+              ${s.takes.filter((t) => !t.deleted).length ? `<div class="tiles">${s.takes.filter((t) => !t.deleted).map((t) => tileHTML({ hue: t.hue, title: `版本 ${t.v}`, sub: `${t.dur}s`, badge: t.id === s.chosen ? "已采用" : "", onTl: S.clips.some((c) => c.take === t.id), payload: { type: "take", seg: s.id, take: t.id } })).join("")}</div>` : `<div class="muted" style="font-size:12px;padding:0 2px">还没有可用视频</div>`}
+            </div>`).join("");
+        } else {
+          const list = (S.panel === "canvas" ? CANVAS_MEDIA : S.imports).filter((m) => S.filter === "all" || m.media === S.filter);
+          body = list.length ? `<div class="tiles">${list.map((m) => tileHTML({ hue: m.hue, title: m.name, sub: m.media === "image" ? "图片" : `视频 · ${m.dur}s`, uploading: m.uploading, failed: m.failed, payload: { type: "asset", asset: m.id } })).join("")}</div>` : `<div class="pempty">${S.panel === "imports" ? "将文件拖至此处添加" : "画布上还没有图片或视频"}</div>`;
+        }
+        p.innerHTML = `
+          <div class="seg-tabs">${tabs.map(([k, t]) => `<button class="${S.panel === k ? "on" : ""}" data-panel="${k}">${t}</button>`).join("")}</div>
+          ${S.panel !== "segments" ? `<div class="filters">${[["all", "全部"], ["video", "视频"], ["image", "图片"]].map(([k, t]) => `<button class="${S.filter === k ? "on" : ""}" data-filter="${k}">${t}</button>`).join("")}<span class="spacer"></span>${S.panel === "imports" && editable() ? `<button class="abtn" style="height:28px" data-act="import"><i data-lucide="plus"></i>导入</button>` : ""}</div>` : ""}
+          <div class="plist">${body}</div>`;
+        icons();
+      }
+
+      function renderPreview() {
+        const pv = $("#preview"); if (!pv) return;
+        let screen;
+        if (S.flags.empty && !S.clips.length) {
+          screen = `<div class="empty" style="height:100%"><div><div class="ic"><i data-lucide="film"></i></div><b style="font-size:16px">第 1 集还没有片段</b><p class="muted" style="font-size:12.5px;margin:6px 0 10px">先生成分镜、出视频；也可以先从左侧加画布素材。</p><button class="abtn"><i data-lucide="clapperboard"></i>去片场</button></div></div>`;
+          pv.innerHTML = screen; icons(); return;
+        }
+        if (S.preview === "final" && S.final) {
+          screen = `<div class="screen" style="background:linear-gradient(160deg,#2b3a55,#0d1320)"><div><div class="big">成片 · 第 1 集</div><div class="small">${fmt(S.final.dur)} · ${S.final.n} 段 · 现有 VideoPlayer（示意）</div>${S.final.stale ? `<div class="small" style="color:rgb(var(--brand));margin-top:8px">合成后时间线又改过</div>` : ""}</div></div>`;
+        } else {
+          const a = clipAt(Math.min(S.t, Math.max(0, total() - 0.001)));
+          if (!a) screen = `<div class="screen"><div class="small">没有媒体可供预览</div></div>`;
+          else {
+            const c = S.clips[a.i]; const r = resolve(c);
+            const local = c.in + a.off;
+            const muted = S.muted || c.muted;
+            if (r.type === "ph") screen = `<div class="screen"><div><div class="big" style="font-size:15px">${esc(c.segName)} 待采用</div><div class="small">合成时跳过</div></div></div>`;
+            else if (r.type === "bad") screen = `<div class="screen"><div><div class="big" style="font-size:15px;color:rgb(var(--bad))">${esc(r.label)}</div><div class="small">请换版本或删掉这段</div></div></div>`;
+            else screen = `<div class="screen" style="background:linear-gradient(${160 + local * 6}deg,hsl(${r.hue} 55% 42%),hsl(${r.hue} 60% 12%))">${muted ? `<span class="mutemark"><i data-lucide="volume-x"></i>静音</span>` : ""}<div><div class="big">${esc(r.label)}</div><div class="small">${r.type === "image" ? "图片" : `版本 ${r.v ?? ""} · 素材内 ${sec1(local)}`}</div></div></div>`;
+          }
+        }
+        pv.innerHTML = `
+          <div class="pv-head"><div class="seg2"><button class="${S.preview === "timeline" ? "on" : ""}" data-pv="timeline">时间线</button><button class="${S.preview === "final" ? "on" : ""}" data-pv="final" ${S.final ? "" : "disabled title='还没有成片'"}>成片</button></div></div>
+          <div class="stage">${screen}</div>
+          <div class="pv-ctrl"><span class="spacer"></span>
+            <button class="ibtn" data-act="play" aria-label="播放"><i data-lucide="${S.playing ? "pause" : "play"}"></i></button>
+            <span class="tc">${fmtF(S.t)} <span class="muted">/ ${fmtF(total())}</span></span>
+            <span class="spacer"></span>
+            <button class="ibtn ${S.muted ? "on" : ""}" data-act="trackMute" aria-label="整轨静音" ${editable() ? "" : "disabled"}><i data-lucide="${S.muted ? "volume-x" : "volume-2"}"></i></button>
+            <button class="ibtn" aria-label="全屏"><i data-lucide="maximize"></i></button>
+          </div>`;
+        icons();
+      }
+
+      function renderTimeline() {
+        const tl = $("#tl"); if (!tl) return;
+        const can = editable();
+        const scroll = $("#tlScroll") ? $("#tlScroll").scrollLeft : 0;
+        tl.innerHTML = `
+          <div class="tl-tools">
+            <button class="ibtn" data-act="undo" ${S.undo.length && can ? "" : "disabled"} title="撤销 ⌘Z"><i data-lucide="undo-2"></i></button>
+            <button class="ibtn" data-act="redo" ${S.redo.length && can ? "" : "disabled"} title="重做 ⇧⌘Z"><i data-lucide="redo-2"></i></button>
+            <span class="sep"></span>
+            <button class="ibtn" data-act="split" ${can ? "" : "disabled"} title="拆分 S"><i data-lucide="scissors"></i></button>
+            <button class="ibtn" data-act="trimL" ${can ? "" : "disabled"} title="向左裁：删掉播放头左边 Q"><i data-lucide="arrow-left-to-line"></i></button>
+            <button class="ibtn" data-act="trimR" ${can ? "" : "disabled"} title="向右裁：删掉播放头右边 W"><i data-lucide="arrow-right-to-line"></i></button>
+            <button class="ibtn" data-act="del" ${S.sel && can ? "" : "disabled"} title="删除 Delete"><i data-lucide="trash-2"></i></button>
+            <span class="spacer"></span>
+            <span class="pill p-mute" title="主轨始终首尾相接"><i data-lucide="magnet"></i>磁吸</span>
+            <button class="ibtn" data-act="zoomOut" title="缩小"><i data-lucide="circle-minus"></i></button>
+            <input class="zoom" type="range" min="0" max="100" value="${ppsToSlider(S.pps)}" id="zoomR" aria-label="缩放" />
+            <button class="ibtn" data-act="zoomIn" title="放大"><i data-lucide="circle-plus"></i></button>
+            <button class="ibtn" data-act="fit" title="适配宽度"><i data-lucide="scan"></i></button>
+          </div>
+          <div class="tl-body">
+            <div class="tl-left"><div class="rule-sp"></div><div class="trk"><button class="ibtn ${S.muted ? "on" : ""}" data-act="trackMute" ${can ? "" : "disabled"} title="整轨静音"><i data-lucide="${S.muted ? "volume-x" : "volume-2"}"></i></button></div></div>
+            <div class="tl-scroll" id="tlScroll"><div class="tl-inner" id="tlInner"></div></div>
+          </div>`;
+        renderTrack();
+        $("#tlScroll").scrollLeft = scroll;
+        icons();
+      }
+      const PAD = 12;
+      function renderTrack() {
+        const inner = $("#tlInner"); if (!inner) return;
+        const T = total();
+        const sc = $("#tlScroll");
+        const width = Math.max(T * S.pps + PAD + 160, sc ? sc.clientWidth : 800);
+        inner.style.width = width + "px";
+        const steps = [1, 2, 5, 10, 15, 30, 60];
+        const step = steps.find((s) => s * S.pps >= 64) || 60;
+        const maxT = (width - PAD) / S.pps;
+        let ticks = "";
+        for (let t = 0; t <= maxT; t += step) {
+          ticks += `<span class="tick" style="left:${PAD + t * S.pps}px">${fmt(t)}</span>`;
+          for (let k = 1; k < 4 && step * S.pps >= 64; k++) ticks += `<span class="tick minor" style="left:${PAD + (t + (step * k) / 4) * S.pps}px"></span>`;
+        }
+        const st = starts();
+        const d = S.drag;
+        const clips = S.clips.map((c, i) => {
+          const r = resolve(c);
+          const left = PAD + st[i] * S.pps;
+          const w = Math.max(lenOf(c) * S.pps - 2, 6);
+          const frames = r.type === "ph" ? "" : r.type === "image"
+            ? `<div class="frames" style="background:hsl(${r.hue} 45% 32%);background-image:repeating-linear-gradient(90deg,hsl(${r.hue} 50% 40%) 0 40px,hsl(${r.hue} 45% 30%) 40px 44px)"></div>`
+            : `<div class="frames" style="background:linear-gradient(90deg,hsl(${r.hue} 50% 36%),hsl(${r.hue} 55% 22%));background-image:repeating-linear-gradient(90deg,transparent 0 41px,rgb(0 0 0/.35) 41px 43px),linear-gradient(90deg,hsl(${r.hue} 50% 38%),hsl(${r.hue} 55% 20%))"></div>`;
+          const label = c.kind === "segment" ? `${esc(c.segName)}${c.take ? ` · 版本 ${r.v ?? "?"}` : " · 待采用"}` : esc(r.label);
+          const pill = d && d.mode === "trim" && d.id === c.id ? `<span class="durpill" style="left:${left + w / 2}px">${sec1(lenOf(c))}</span>` : "";
+          return `${pill}<div class="clip ${r.type === "ph" ? "placeholder" : ""} ${r.type === "bad" ? "invalid" : ""} ${S.sel === c.id ? "sel" : ""} ${S.sync && S.sync.items.some((x) => x.ref === c.id) ? "synced" : ""} ${d && d.mode === "move" && d.moving && d.id === c.id ? "dragging" : ""}" data-clip="${c.id}" style="left:${left}px;width:${w}px">
+            ${frames}${S.sync && S.sync.items.some((x) => x.ref === c.id) ? `<span class="syncdot" title="片场同步改动"></span>` : ""}
+            <span class="lab">${c.pinned ? `<i data-lucide="pin" style="width:11px;height:11px"></i>` : ""}${r.type === "image" ? `<i data-lucide="image" style="width:11px;height:11px"></i>` : ""}${label}</span>
+            <span class="dur">${sec1(lenOf(c))}</span>
+            <span class="icons">${c.muted ? `<i data-lucide="volume-x"></i>` : ""}${r.type === "bad" ? `<i data-lucide="triangle-alert"></i>` : ""}</span>
+            ${r.type !== "ph" && r.type !== "bad" ? `<span class="h h-l" data-h="l"></span><span class="h h-r" data-h="r"></span>` : ""}
+          </div>`;
+        }).join("");
+        let ins = "";
+        if (d && d.insIdx != null && (d.mode !== "move" || d.moving)) {
+          const x = d.insIdx >= S.clips.length ? PAD + T * S.pps : PAD + st[d.insIdx] * S.pps;
+          ins = `<div class="ins" style="left:${x}px"></div>`;
+        }
+        inner.innerHTML = `
+          <div class="ruler" id="ruler">${ticks}</div>
+          <div class="track-bg" style="width:${Math.max(T * S.pps, 40)}px"></div>
+          <div class="track" id="track">${clips}${!S.clips.length ? `<div class="muted" style="position:absolute;left:${PAD + 10}px;top:28px;font-size:12px">还没有片段</div>` : ""}</div>
+          ${ins}
+          <div class="playhead" id="ph" style="left:${PAD + S.t * S.pps}px"><span class="knob" id="knob"></span></div>`;
+        icons();
+      }
+      function renderPlayhead() { const ph = $("#ph"); if (ph) ph.style.left = PAD + S.t * S.pps + "px"; const tc = $(".pv-ctrl .tc"); if (tc) tc.innerHTML = `${fmtF(S.t)} <span class="muted">/ ${fmtF(total())}</span>`; }
+
+      function renderMenu() {
+        const box = $("#menuBox"); if (!box) return;
+        if (!S.menu) { box.innerHTML = ""; return; }
+        const c = S.clips.find((x) => x.id === S.menu.id);
+        if (!c) { S.menu = null; box.innerHTML = ""; return; }
+        const r = resolve(c);
+        let html = "";
+        if (c.kind === "segment") {
+          const seg = S.segs.find((s) => s.id === c.seg);
+          html += `<div class="mh">换版本（${esc(c.segName)}）</div>`;
+          html += `<button class="mi" data-swap="follow"><i data-lucide="link"></i>跟随采用${!c.pinned ? " ✓" : ""}</button>`;
+          (seg ? seg.takes.filter((t) => !t.deleted) : []).forEach((t) => {
+            html += `<button class="mi" data-swap="${t.id}"><span class="sw" style="background:linear-gradient(160deg,hsl(${t.hue} 50% 40%),hsl(${t.hue} 55% 16%))"></span>版本 ${t.v} · ${t.dur}s ${t.id === seg.chosen ? `<span class="tag t-ok">采用</span>` : ""}${c.pinned && c.take === t.id ? " ✓" : ""}</button>`;
+          });
+          html += `<hr/>`;
+        }
+        html += `<button class="mi" data-cm="mute" ${r.type === "ph" ? "disabled" : ""}><i data-lucide="${c.muted ? "volume-2" : "volume-x"}"></i>${c.muted ? "取消静音" : "静音此段"}</button>`;
+        html += `<button class="mi" data-cm="restore" ${r.type === "ph" || r.type === "bad" ? "disabled" : ""}><i data-lucide="maximize-2"></i>${r.type === "image" ? "恢复默认 3 秒" : "恢复原长"}</button>`;
+        if (r.type === "ph") html += `<button class="mi"><i data-lucide="clapperboard"></i>去片场生成</button>`;
+        html += `<hr/><button class="mi" data-cm="del" style="color:rgb(var(--bad))"><i data-lucide="trash-2"></i>删除</button>`;
+        box.innerHTML = `<div class="menu" style="left:${S.menu.x}px;top:${S.menu.y}px">${html}</div>`;
+        icons();
+        const m = box.firstElementChild;
+        const app = $("#app").getBoundingClientRect();
+        const mr = m.getBoundingClientRect();
+        if (mr.bottom > app.bottom - 6) m.style.top = Math.max(6, S.menu.y - mr.height) + "px";
+        if (mr.right > app.right - 6) m.style.left = S.menu.x - mr.width + "px";
+      }
+
+      /* ================= 交互 ================= */
+      const app = $("#app");
+      const timeFromX = (clientX) => { const r = $("#tlInner").getBoundingClientRect(); return (clientX - r.left - PAD) / S.pps; };
+      function insIdxFromX(clientX, exclude) {
+        const t = timeFromX(clientX);
+        const st = starts();
+        let best = S.clips.length, bd = Infinity;
+        for (let i = 0; i <= S.clips.length; i++) {
+          const bt = i < S.clips.length ? st[i] : total();
+          const dd = Math.abs(bt - t);
+          if (dd < bd) { bd = dd; best = i; }
+        }
+        return best;
+      }
+      app.addEventListener("click", (e) => {
+        const t = e.target;
+        if (S.menu && !t.closest(".menu")) { S.menu = null; renderMenu(); }
+        const act = t.closest("[data-act]")?.dataset.act;
+        if (S.sync && S.sync.open && !t.closest(".syncwrap")) { S.sync.open = false; renderTop(); }
+        if (t.closest("[data-loc]")) {
+          const id = t.closest("[data-loc]").dataset.loc; const i = S.clips.findIndex((c) => c.id === id);
+          S.sel = id; S.t = starts()[i]; S.preview = "timeline"; stopPlay();
+          const sc = $("#tlScroll"); if (sc) sc.scrollLeft = Math.max(0, PAD + S.t * S.pps - sc.clientWidth / 3);
+          renderTrack(); renderPreview(); renderTimelineToolsOnly(); return;
+        }
+        if (t.closest("[data-panel]")) { S.panel = t.closest("[data-panel]").dataset.panel; return renderPanel(); }
+        if (t.closest("[data-filter]")) { S.filter = t.closest("[data-filter]").dataset.filter; return renderPanel(); }
+        if (t.closest("[data-pv]")) { S.preview = t.closest("[data-pv]").dataset.pv; stopPlay(); return renderPreview(); }
+        if (t.closest("[data-retry]")) return retryImport(t.closest("[data-retry]").dataset.retry);
+        if (t.closest("[data-add]")) {
+          const p = JSON.parse(t.closest("[data-add]").dataset.add);
+          const a = clipAt(Math.min(S.t, Math.max(0, total() - 0.001)));
+          return insertAt(a ? a.i + 1 : S.clips.length, p);
+        }
+        if (t.closest("[data-swap]")) return swapTake(S.menu.id, t.closest("[data-swap]").dataset.swap);
+        if (t.closest("[data-cm]")) {
+          const k = t.closest("[data-cm]").dataset.cm; const id = S.menu.id; S.menu = null;
+          if (k === "mute") return toggleClipMute(id);
+          if (k === "restore") return restoreLen(id);
+          if (k === "del") return removeSel(id);
+        }
+        switch (act) {
+          case "undo": return undo();
+          case "redo": return redo();
+          case "split": return split();
+          case "trimL": return trimSide("left");
+          case "trimR": return trimSide("right");
+          case "del": return removeSel();
+          case "zoomIn": return zoomBy(1.4);
+          case "zoomOut": return zoomBy(1 / 1.4);
+          case "fit": fitZoom(); return renderTimeline();
+          case "play": return togglePlay();
+          case "trackMute": { const b = snap(); S.muted = !S.muted; commit(b); renderPreview(); renderTimeline(); renderTop(); return; }
+          case "compose": return compose();
+          case "retrySave": S.flags.failSave = false; renderSim(); return doSave();
+          case "download": return toast("开始下载 消失的情人-第1集.mp4（示意）", "info");
+          case "import": return importFile();
+          case "syncPop": S.sync.open = !S.sync.open; return renderTop();
+          case "undoSync": S.sync = null; undo(); return;
+          case "ackSync": S.sync = null; renderTop(); return renderTrack();
+        }
+      });
+      app.addEventListener("input", (e) => { if (e.target.id === "zoomR") { S.pps = sliderToPps(+e.target.value); S.fit = false; renderTrack(); } });
+      app.addEventListener("contextmenu", (e) => {
+        const el = e.target.closest("[data-clip]"); if (!el) return;
+        e.preventDefault();
+        if (!editable()) return;
+        const r = app.getBoundingClientRect();
+        S.sel = el.dataset.clip;
+        S.menu = { id: el.dataset.clip, x: e.clientX - r.left, y: e.clientY - r.top };
+        renderTrack(); renderTimelineToolsOnly(); renderMenu();
+      });
+      function renderTimelineToolsOnly() { const b = $('[data-act="del"]'); if (b) b.disabled = !(S.sel && editable()); }
+      app.addEventListener("wheel", (e) => { if ((e.metaKey || e.ctrlKey) && e.target.closest("#tlScroll")) { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15); } }, { passive: false });
+
+      app.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        const t = e.target;
+        if (t.closest(".menu")) return;
+        // 播放头 / 刻度尺
+        if (t.closest("#knob") || t.closest("#ruler")) {
+          stopPlay(); S.preview = "timeline";
+          S.t = clamp(timeFromX(e.clientX), 0, total());
+          S.drag = { mode: "seek" };
+          renderPlayhead(); renderPreview();
+          return;
+        }
+        // 素材面板拖拽
+        const tile = t.closest("[data-drag]");
+        if (tile && !t.closest("[data-add]") && !t.closest("[data-retry]")) {
+          if (!editable()) return;
+          S.drag = { mode: "lib", payload: JSON.parse(tile.dataset.drag), x0: e.clientX, y0: e.clientY, bg: tile.style.background, started: false, insIdx: null };
+          return;
+        }
+        const clipEl = t.closest("[data-clip]");
+        if (clipEl) {
+          const id = clipEl.dataset.clip;
+          const c = S.clips.find((x) => x.id === id);
+          S.sel = id;
+          if (!editable()) { renderTrack(); return; }
+          const h = t.closest("[data-h]");
+          if (h) { S.drag = { mode: "trim", id, side: h.dataset.h, x0: e.clientX, orig: clone(c), before: snap() }; renderTrack(); return; }
+          S.drag = { mode: "move", id, x0: e.clientX, moving: false, insIdx: null, before: snap() };
+          renderTrack(); renderTimelineToolsOnly();
+          return;
+        }
+        if (t.closest("#track") || t.closest(".tl-inner")) { S.sel = null; S.t = clamp(timeFromX(e.clientX), 0, total()); stopPlay(); renderTrack(); renderTimelineToolsOnly(); renderPreview(); }
+      });
+      document.addEventListener("pointermove", (e) => {
+        const d = S && S.drag; if (!d) return;
+        if (d.mode === "seek") { S.t = clamp(timeFromX(e.clientX), 0, total()); renderPlayhead(); renderPreview(); return; }
+        if (d.mode === "trim") {
+          const c = S.clips.find((x) => x.id === d.id); const r = resolve(c); const o = d.orig;
+          const dt = (e.clientX - d.x0) / S.pps;
+          if (r.type === "image") c.out = clamp(d.side === "l" ? o.out - dt : o.out + dt, MIN, 30);
+          else if (d.side === "l") c.in = clamp(o.in + dt, 0, o.out - MIN);
+          else c.out = clamp(o.out + dt, o.in + MIN, r.dur);
+          renderTrack(); renderPlayhead();
+          const tcs = $("#statT"); if (tcs) tcs.textContent = fmt(total());
+          return;
+        }
+        if (d.mode === "move") {
+          if (!d.moving && Math.abs(e.clientX - d.x0) < 5) return;
+          d.moving = true;
+          d.insIdx = insIdxFromX(e.clientX);
+          renderTrack();
+          return;
+        }
+        if (d.mode === "lib") {
+          if (!d.started && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 5) return;
+          if (!d.started) { d.started = true; const g = document.createElement("div"); g.className = "ghost"; g.id = "ghost"; g.style.background = d.bg; document.body.appendChild(g); }
+          const g = $("#ghost"); g.style.left = e.clientX - 27 + "px"; g.style.top = e.clientY - 48 + "px";
+          const tr = $("#tl").getBoundingClientRect();
+          const over = e.clientY >= tr.top && e.clientY <= tr.bottom && e.clientX >= tr.left && e.clientX <= tr.right;
+          const ni = over ? insIdxFromX(e.clientX) : null;
+          if (ni !== d.insIdx) { d.insIdx = ni; renderTrack(); }
+        }
+      });
+      document.addEventListener("pointerup", () => {
+        const d = S && S.drag; if (!d) return;
+        S.drag = null;
+        if (d.mode === "trim") {
+          const c = S.clips.find((x) => x.id === d.id);
+          if (c.in !== d.orig.in || c.out !== d.orig.out) { S.t = Math.min(S.t, total()); commit(d.before); }
+          renderApp(); return;
+        }
+        if (d.mode === "move") {
+          if (d.moving && d.insIdx != null) {
+            const from = S.clips.findIndex((x) => x.id === d.id);
+            let to = d.insIdx;
+            if (to !== from && to !== from + 1) {
+              const [c] = S.clips.splice(from, 1);
+              if (to > from) to--;
+              S.clips.splice(to, 0, c);
+              commit(d.before);
+              renderApp(); return;
+            }
+          }
+          renderTrack(); return;
+        }
+        if (d.mode === "lib") {
+          const g = $("#ghost"); if (g) g.remove();
+          if (d.started && d.insIdx != null) insertAt(d.insIdx, d.payload);
+          else renderTrack();
+        }
+      });
+      document.addEventListener("keydown", (e) => {
+        if (currentTab !== "proto" || !S) return;
+        if (e.target.closest && e.target.closest("input,textarea")) return;
+        const k = e.key.toLowerCase();
+        if (k === " ") { e.preventDefault(); return togglePlay(); }
+        if (!editable()) return;
+        if ((e.metaKey || e.ctrlKey) && k === "z") { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
+        if (e.metaKey || e.ctrlKey) return;
+        if (k === "s") return split();
+        if (k === "q") return trimSide("left");
+        if (k === "w") return trimSide("right");
+        if (k === "delete" || k === "backspace") { if (S.sel) { e.preventDefault(); removeSel(); } }
+        if (k === "escape") { S.sel = null; S.menu = null; renderTrack(); renderMenu(); }
+      });
+      window.addEventListener("resize", () => { if (currentTab === "proto" && S.fit) { fitZoom(); renderTimeline(); } });
+
+      resetProto();
+      icons();
+    </script>
+  </body>
+</html>

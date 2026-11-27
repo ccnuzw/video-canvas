@@ -299,6 +299,11 @@ var (
 	ErrDramaPresetOrderBad   = New(67040, "排序列表与现有预设不一致，请刷新后重试", http.StatusBadRequest) // 多了、少了或重复了条目
 	ErrDramaPresetFileFormat = New(67041, "预览图仅支持 WebP / PNG / JPEG", http.StatusBadRequest)
 	ErrDramaPresetFileLarge  = New(67042, "预览图不能超过 2MB", http.StatusRequestEntityTooLarge)
+
+	// 成片粗剪时间线
+	ErrDramaTimelineConflict = New(67046, "时间线在别处被修改，已载入最新版本", http.StatusConflict)
+	ErrDramaTimelineInvalid  = New(67047, "时间线不合法", http.StatusBadRequest)             // Msg 写明第几段和原因
+	ErrDramaTimelineBroken   = New(67048, "时间线里有素材已失效，请换版本或删掉", http.StatusBadRequest) // Msg 写明第几段
 )
 
 // 环节协议层（stepkit）与营销工作室 68xxx。68001–68011、68015、68016、68018 由营销业务使用（见 docs/design/营销工作室/接口契约.md §6），

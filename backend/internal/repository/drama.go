@@ -82,6 +82,12 @@ type DramaTx interface {
 	SaveSegment(context.Context, *model.DramaSegment, int64) error
 	// DeleteSegment 只软删用户片段，缺失返回ErrNotFound。
 	DeleteSegment(context.Context, uint64, uint64) error
+	// Timeline 读取某集的粗剪时间线，没保存过返回ErrNotFound。
+	Timeline(context.Context, uint64, uint64) (*model.DramaEpisodeTimeline, error)
+	// SaveTimeline 插入或按revision更新时间线，冲突返回ErrStateConflict，并让集的segment_version自增。
+	SaveTimeline(context.Context, *model.DramaEpisodeTimeline, int64) error
+	// TimelineAssets 按用户读取一批素材，只返回存在的。
+	TimelineAssets(context.Context, uint64, []uint64) ([]model.Asset, error)
 	// SegmentTasks 读取同用户、画布和节点的正式任务，按创建时间和ID排序。
 	SegmentTasks(context.Context, uint64, uint64, string) ([]model.GenerationTask, error)
 	// Jobs 读取项目任务，可仅返回活动任务。
@@ -232,7 +238,13 @@ func (r *DramaRepository) SaveEpisode(ctx context.Context, e *model.DramaEpisode
 	if e.ID == 0 {
 		return r.db.WithContext(ctx).Create(e).Error
 	}
-	res := r.db.WithContext(ctx).Model(&model.DramaEpisode{}).Where("user_id = ? AND drama_id = ? AND id = ? AND revision = ?", e.UserID, e.DramaID, e.ID, revision).Updates(map[string]any{"title": e.Title, "synopsis": e.Synopsis, "hook": e.Hook, "cliffhanger": e.Cliffhanger, "unit_from": e.UnitFrom, "unit_to": e.UnitTo, "script_md": e.ScriptMD, "script_status": e.ScriptStatus, "storyboard_status": e.StoryboardStatus, "locked_at": e.LockedAt, "final_asset_id": e.FinalAssetID, "final_segment_version": e.FinalSegmentVersion, "revision": gorm.Expr("revision + 1"), "updated_at": time.Now()})
+	res := r.db.WithContext(ctx).Model(&model.DramaEpisode{}).Where("user_id = ? AND drama_id = ? AND id = ? AND revision = ?", e.UserID, e.DramaID, e.ID, revision).Updates(map[string]any{
+		"title": e.Title, "synopsis": e.Synopsis, "hook": e.Hook, "cliffhanger": e.Cliffhanger,
+		"unit_from": e.UnitFrom, "unit_to": e.UnitTo, "script_md": e.ScriptMD, "script_status": e.ScriptStatus,
+		"storyboard_status": e.StoryboardStatus, "locked_at": e.LockedAt,
+		"final_asset_id": e.FinalAssetID, "final_segment_version": e.FinalSegmentVersion, "final_spec": e.FinalSpec,
+		"revision": gorm.Expr("revision + 1"), "updated_at": time.Now(),
+	})
 	if res.Error != nil {
 		return res.Error
 	}

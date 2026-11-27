@@ -3,26 +3,27 @@ import { toast } from "sonner";
 
 import { submitJob } from "@/api/drama";
 import { dramaErrorMessage } from "@/api/drama/errors";
+import type { ExportSpec } from "@/api/drama/type";
 import { useDramaJobsStore } from "@/store/drama";
 import { composeNotice } from "@/utils/drama/compose";
 
 /**
  * 提交「合成整集」（契约 §14）：服务端 ffmpeg 拼接，不扣积分，进度走 drama.job 推送 + 任务卡。
  * 67010（没有可合成的片段）/ 67004（已有进行中的任务）等错误给出明确文案。
- * 返回 compose(no)：提交成功为 true；pending 是正在提交的集号。
+ * 返回 compose(no, spec?)：spec 是导出规格（缺省按后端默认）；提交成功返回任务，失败返回 null；pending 是正在提交的集号。
  */
 export function useCompose(dramaId: string) {
   const [pending, setPending] = useState<number | null>(null);
   const compose = useCallback(
-    async (no: number) => {
+    async (no: number, spec?: ExportSpec) => {
       setPending(no);
       try {
-        const job = await submitJob(dramaId, { step: "compose", episodes: [no] });
+        const job = await submitJob(dramaId, { step: "compose", episodes: [no], spec });
         useDramaJobsStore.getState().applyJob(dramaId, job);
-        return true;
+        return job;
       } catch (e) {
         toast.error(dramaErrorMessage(e, "合成提交失败，请稍后重试"));
-        return false;
+        return null;
       } finally {
         setPending(null);
       }

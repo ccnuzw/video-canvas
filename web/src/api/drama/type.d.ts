@@ -1,5 +1,6 @@
 import type { AssetDto, BackendAssetDto } from "@/api/asset/type";
 import type { TaskStatus, TaskView } from "@/api/generation-task/type";
+import type { EditorTrack } from "@/components/timeline-editor/types";
 
 /**
  * 短剧工作室接口类型（契约 docs/design/短剧工作室/接口契约.md）。
@@ -130,6 +131,8 @@ export interface BackendEpisodeSummary {
   /** 三期字段（契约 §14）：成片与是否过期；后端还没带时按「没有成片」处理 */
   final?: BackendAssetDto | null;
   final_stale?: boolean;
+  /** 成片导出时用的规格；旧成片没记录时为 null */
+  final_spec?: BackendExportSpec | null;
   /** 开场钩子；规划前建的老集为空 */
   hook?: string;
   /** 结尾悬念；规划前建的老集为空 */
@@ -271,6 +274,8 @@ export interface EpisodeSummary {
   final: AssetDto | null;
   /** 成片之后有片段改了采用 / 顺序 / 增删：提示「成片已过期，可重新合成」 */
   finalStale: boolean;
+  /** 成片导出时用的规格；旧成片没记录时为 null */
+  finalSpec: ExportSpec | null;
   /** 开场钩子，没有为空串 */
   hook: string;
   /** 结尾悬念，没有为空串 */
@@ -461,6 +466,28 @@ export interface DramaJobInput {
   maxSeconds?: number;
   /** storyboard：片场当前选的视频模型，后端按它的参考音频上限切段；缺省用项目视频模型 */
   videoModel?: string;
+  /** compose：导出规格；缺省按后端默认（跟随素材分辨率、30fps、高画质） */
+  spec?: ExportSpec;
+}
+
+/** 导出画质：标准 / 高 / 极高 */
+export type ExportQuality = "standard" | "high" | "best";
+
+/** 成片导出规格 */
+export interface ExportSpec {
+  /** 分辨率：画面短边像素（720 / 1080 / 1440） */
+  shortSide: 720 | 1080 | 1440;
+  /** 帧率（每秒帧数） */
+  fps: 24 | 25 | 30;
+  /** 画质 */
+  quality: ExportQuality;
+}
+
+/** 后端的导出规格（原样 snake_case）；short_side 为 0 表示跟随素材 */
+export interface BackendExportSpec {
+  short_side: number;
+  fps: number;
+  quality: string;
 }
 
 /** WebSocket drama.episode 事件载荷：该集剧本状态已保存，需重新读取短剧详情。 */
@@ -795,6 +822,136 @@ export interface BackendSourcePreflight {
     credits: number;
     minutes: number;
   };
+}
+
+/** 时间线段的来源：分镜片段的某条视频结果、画布素材 / 本地导入的素材，或文字（字幕） */
+export type TimelineClipKind = "segment" | "asset" | "text";
+
+/** 素材段的种类 */
+export type TimelineMedia = "video" | "image" | "audio";
+
+/** 轨道种类 */
+export type TimelineTrackKind = "main" | "overlay" | "audio" | "text";
+
+/** 对账带来的变化种类：片段删除 / 取消采用 / 换了采用 / 占位采用了 / 新增片段 */
+export type TimelineChangeKind = "removed" | "unadopted" | "swapped" | "adopted" | "added";
+
+/** 后端时间线段（原样 snake_case，id 是编码串） */
+export interface BackendTimelineClip {
+  id: string;
+  kind: TimelineClipKind;
+  /** 只用于 kind=segment */
+  segment_id?: string | null;
+  /** 只用于 kind=segment；空 = 主轨上待采用的占位 */
+  task_id?: string | null;
+  /** 只用于 kind=segment；附属轨上的片段后端视为 true */
+  pinned?: boolean;
+  /** 只用于 kind=asset */
+  /** 素材 ID：原始数字（和素材接口、画布节点一致，不是编码串）；不是素材段为 null */
+  asset_id?: number | null;
+  /** 只用于 kind=asset */
+  media?: TimelineMedia | "";
+  /** 只用于 kind=text */
+  text?: string;
+  /** 只用于 kind=text：subtitle / title */
+  style?: "subtitle" | "title";
+  /** 只用于 kind=text：top / middle / bottom */
+  pos?: "top" | "middle" | "bottom";
+  /** 只用于 kind=text：字号百分比 60–180 */
+  size?: number;
+  in_ms: number;
+  out_ms: number;
+  /** 附属轨必填；主轨不存 */
+  start_ms?: number;
+  muted?: boolean;
+  /** 音量百分比 0–200，后端始终序列化 */
+  volume?: number;
+  fade_in_ms?: number;
+  fade_out_ms?: number;
+  /** 以下四项只有叠加轨用：中心点横向 / 纵向百分比、画面宽度百分比、不透明度百分比 */
+  x?: number;
+  y?: number;
+  scale?: number;
+  opacity?: number;
+}
+
+/** 后端时间线轨道 */
+export interface BackendTimelineTrack {
+  id: string;
+  kind: TimelineTrackKind;
+  /** 只有 audio 轨有：voice / music / sfx */
+  role?: "voice" | "music" | "sfx" | null;
+  name: string;
+  muted?: boolean;
+  hidden?: boolean;
+  locked?: boolean;
+  clips: BackendTimelineClip[] | null;
+}
+
+/** GET/PUT /dramas/:id/episodes/:no/timeline 的响应 */
+export interface BackendTimelineView {
+  tracks: BackendTimelineTrack[] | null;
+  removed_segment_ids: string[] | null;
+  /** 「已导入」的素材，原始数字 ID */
+  imports: number[] | null;
+  revision: number;
+  changes:
+    | { kind: TimelineChangeKind; segment_id: string | null; seq: number; clip_id: string }[]
+    | null;
+  invalid_clip_ids: string[] | null;
+  assets: BackendAssetDto[] | null;
+}
+
+/**
+ * 时间线段里宿主私有的部分（放在通用片段的 host 字段里，编辑器原样保留）。
+ * 后端用 0 表示「没有」的 ID，这里统一成空串。
+ */
+export interface DramaClipHost {
+  /** 段的来源种类 */
+  kind: TimelineClipKind;
+  /** 片段 ID；只用于 kind=segment */
+  segmentId: string;
+  /** 用的那条视频结果；空串 = 片段还没有采用（待采用占位，合成时跳过） */
+  taskId: string;
+  /** 用户在时间线里手动选了版本，不跟随片段的采用 */
+  pinned: boolean;
+  /** 素材 ID；只用于 kind=asset */
+  assetId: string;
+  /** 素材种类；只用于 kind=asset */
+  media: TimelineMedia | null;
+}
+
+/** 对账带来的一条变化 */
+export interface TimelineChange {
+  kind: TimelineChangeKind;
+  /** 片段 ID */
+  segmentId: string;
+  /** 片段序号（从 0 起）；被删的片段是它在原时间线里排第几个片段 */
+  seq: number;
+  /** 对应的主轨段；空串 = 段已移除 */
+  clipId: string;
+}
+
+/** 一集的粗剪时间线：轨道和片段就是编辑器的通用结构 */
+export interface Timeline {
+  /** 全部轨道，显示顺序为 字幕 → 叠加 → 主轨 → 音频 */
+  tracks: EditorTrack[];
+  /** 用户主动从主轨上删掉的片段，片场再改也不自动加回 */
+  removedSegmentIds: string[];
+  /** 「已导入」里的素材 ID */
+  imports: string[];
+}
+
+/** 读到的时间线 */
+export interface TimelineView extends Timeline {
+  /** 乐观锁版本；0 = 还没保存过（按片段现算的默认时间线） */
+  revision: number;
+  /** 这次读取时按片场同步的变化（只来自主轨） */
+  changes: TimelineChange[];
+  /** 固定的版本或素材已失效的段（所有轨） */
+  invalidClipIds: string[];
+  /** 所有轨和「已导入」引用的素材 */
+  assets: AssetDto[];
 }
 
 /** 剧本元素类型 */

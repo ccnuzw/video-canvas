@@ -28,7 +28,11 @@ type Repo struct {
 	// Credit 是用户 1 的积分账户（nil 表示没有账户）；Ledger 记录写入的流水
 	Credit *model.UserCredit
 	Ledger []model.CreditLedger
-	nextID uint64
+	// TimelineRow 集10已保存的时间线；nil 表示没保存过
+	TimelineRow *model.DramaEpisodeTimeline
+	// Library 用户素材（结果视频和导入的素材），供时间线校验取种类与时长
+	Library []model.Asset
+	nextID  uint64
 }
 
 // New 返回用户1、项目7、画布9、集10的独立测试仓储。
@@ -41,6 +45,7 @@ func (r *Repo) WithTx(_ context.Context, fn func(repository.DramaTx) error) erro
 	}
 	before := slices.Clone(r.Rows)
 	version := r.SegmentVersion
+	timeline := r.TimelineRow
 	ledger := slices.Clone(r.Ledger)
 	var credit *model.UserCredit
 	if r.Credit != nil {
@@ -51,6 +56,7 @@ func (r *Repo) WithTx(_ context.Context, fn func(repository.DramaTx) error) erro
 	if err != nil {
 		r.Rows = before
 		r.SegmentVersion = version
+		r.TimelineRow = timeline
 		r.Ledger, r.Credit = ledger, credit
 	}
 	return err
@@ -306,4 +312,39 @@ func (r *Repo) AddCredit(_ context.Context, _ uint64, balance, frozen int) error
 func (r *Repo) InsertLedger(_ context.Context, e *model.CreditLedger) (bool, error) {
 	r.Ledger = append(r.Ledger, *e)
 	return true, nil
+}
+
+// Timeline 返回集10已保存的时间线。
+func (r *Repo) Timeline(_ context.Context, userID, episodeID uint64) (*model.DramaEpisodeTimeline, error) {
+	if r.TimelineRow == nil || userID != 1 || episodeID != 10 {
+		return nil, repository.ErrNotFound
+	}
+	row := *r.TimelineRow
+	return &row, nil
+}
+
+// SaveTimeline 首次插入或按revision更新，成功后片段版本自增。
+func (r *Repo) SaveTimeline(_ context.Context, row *model.DramaEpisodeTimeline, revision int64) error {
+	if (r.TimelineRow == nil) != (row.ID == 0) || (r.TimelineRow != nil && r.TimelineRow.Revision != revision) {
+		return repository.ErrStateConflict
+	}
+	saved := *row
+	if saved.ID == 0 {
+		saved.ID = 1
+	}
+	saved.Revision = revision + 1
+	r.TimelineRow, row.ID, row.Revision = &saved, saved.ID, saved.Revision
+	r.SegmentVersion++
+	return nil
+}
+
+// TimelineAssets 按用户返回素材库里存在的素材。
+func (r *Repo) TimelineAssets(_ context.Context, userID uint64, ids []uint64) ([]model.Asset, error) {
+	out := []model.Asset{}
+	for _, a := range r.Library {
+		if a.UserID == userID && slices.Contains(ids, a.ID) {
+			out = append(out, a)
+		}
+	}
+	return out, nil
 }

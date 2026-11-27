@@ -82,6 +82,7 @@ func All() []any {
 		&DramaScriptElement{},
 		&DramaJob{},
 		&DramaSegment{},
+		&DramaEpisodeTimeline{},
 		&PaymentChannel{},
 		&RechargeProduct{},
 		&PaymentOrder{},

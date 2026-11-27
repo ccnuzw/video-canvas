@@ -31,6 +31,8 @@ func segmentHTTP() (*gin.Engine, *dramasegmentfake.Repo) {
 	r.POST("/drama-segments/:sid/adapt", h.Adapt)
 	r.POST("/drama-segments/:sid/board", h.GenerateBoard)
 	r.PUT("/drama-segments/:sid/board/output", h.SelectBoardOutput)
+	r.GET("/dramas/:id/episodes/:no/timeline", h.Timeline)
+	r.PUT("/dramas/:id/episodes/:no/timeline", h.SaveTimeline)
 	return r, repo
 }
 

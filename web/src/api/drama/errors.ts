@@ -63,6 +63,12 @@ export const DRAMA_ERR = {
   scriptRefs: 67044,
   /** 同一短剧内人物或地点名字（含别名）重复 */
   scriptNameTaken: 67045,
+  /** 时间线在别处被修改（409）：载入最新版本 */
+  timelineConflict: 67046,
+  /** 时间线不合法（Msg 写明第几段和原因） */
+  timelineInvalid: 67047,
+  /** 时间线里有素材已失效，不能合成（Msg 写明第几段） */
+  timelineBroken: 67048,
 } as const;
 
 /** 各错误码的兜底文案：后端 Msg 为空时用 */
@@ -94,6 +100,9 @@ const FALLBACK: Record<number, string> = {
   [DRAMA_ERR.adaptInvalid]: "转写结果不合格，请重试",
   [DRAMA_ERR.adaptMissing]: "还没有这个格式的转写稿，请先转写",
   [DRAMA_ERR.contentFiltered]: "内容触发了模型的安全过滤，调整相关描述后重试",
+  [DRAMA_ERR.timelineConflict]: "时间线在别处被修改，已载入最新版本",
+  [DRAMA_ERR.timelineInvalid]: "时间线不合法，请刷新后重试",
+  [DRAMA_ERR.timelineBroken]: "时间线里有素材已失效，请换版本或删掉",
 };
 
 /** 错误是不是这个业务码 */
@@ -117,6 +126,8 @@ const MSG_FIRST = new Set<number>([
   DRAMA_ERR.promptInvalid,
   DRAMA_ERR.contextTooSmall,
   DRAMA_ERR.presetChanged,
+  DRAMA_ERR.timelineInvalid,
+  DRAMA_ERR.timelineBroken,
 ]);
 
 /**

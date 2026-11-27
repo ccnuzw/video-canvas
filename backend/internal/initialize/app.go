@@ -222,7 +222,7 @@ func NewApp(cfg *config.Config) (*App, error) {
 		Presets: dramaPresets,
 		Repo:    dramaRepo, Settings: dramaRepo, Skills: skillSvc, Registry: aiCfgSvc, Streamer: textGateway, Secrets: aiCfgSvc, Canvas: dramaCanvasSvc, Broadcaster: hub, Credits: settingsSvc,
 		Segments: dramaSegments, CanvasAssets: canvasProjectRepo,
-		Compose: videoframe.New(videoframe.Options{Timeout: 10 * time.Minute}), Assets: assetSvc,
+		Compose: videoframe.New(videoframe.Options{Timeout: 30 * time.Minute}), Assets: assetSvc, // 实际超时由合成任务按成片时长决定
 		// 列表封面：资产画布里第一张生成成功的图，和画布列表一样取缩略图
 		Covers: dramaRepo, CoverURL: func(key string) string { return assetSvc.FileURL(key) + "?v=thumb" },
 	})
