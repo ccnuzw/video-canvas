@@ -27,7 +27,15 @@ import {
   splitCommand,
   trimCommand,
 } from "./edit-actions";
-import { HEAD_WIDTH, RULER_HEIGHT, formatClock, msToX, rulerTicks } from "./layout";
+import {
+  HEAD_WIDTH,
+  RULER_HEIGHT,
+  SCROLLBAR_GUTTER,
+  formatClock,
+  msToX,
+  rulerTicks,
+} from "./layout";
+import { TimelineScrollbar } from "./scrollbar";
 import { Toolbar } from "./toolbar";
 import { TrackRow } from "./track-row";
 import type { TrackToggle } from "./track-header";
@@ -187,139 +195,154 @@ export function TimelinePanel(props: TimelinePanelProps) {
         onZoom={view.zoomTo}
         onFit={view.fitNow}
       />
-      <ContextMenu>
-        <ContextMenuTrigger
-          render={
-            <div
-              ref={scrollRef}
-              className="relative min-h-0 min-w-0 flex-1 overflow-x-scroll overflow-y-auto"
-              onContextMenu={(event) => {
-                const id = (event.target as HTMLElement).closest<HTMLElement>("[data-clip]")
-                  ?.dataset.clip;
-                const found = id ? findClip(timeline, id) : null;
-                if (!found || readOnly || found.track.locked) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setMenuId(null);
-                  return;
-                }
-                setMenuId(found.clip.id);
-                onSelect(found.clip.id);
-              }}
-            />
-          }
-        >
-          <div
-            style={{ width: HEAD_WIDTH + view.width }}
-            className="relative min-h-full"
-            onDragOver={(event) => {
-              if (readOnly || !isMediaDrag(event)) return;
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "copy";
-              const next = markAt(event.clientX, event.clientY);
-              setDropMark((prev) => (sameMark(prev, next) ? prev : next));
-            }}
-            onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-                setDropMark(null);
-            }}
-            onDrop={(event) => {
-              const media = currentMediaDrag();
-              const mark = markAt(event.clientX, event.clientY);
-              setDropMark(null);
-              endMediaDrag();
-              if (!media || readOnly || !mark) return;
-              event.preventDefault();
-              if (mark.kind === "main") return props.onDropMedia(media, mark);
-              if (!mark.ok) return onError("这里已有片段，换个位置");
-              props.onDropMedia(media, {
-                kind: "track",
-                trackId: mark.trackId,
-                startMs: mark.startMs,
-              });
-            }}
+      {/* 原生滚动条隐藏，换成只在轨道内容区里的自绘细滚动条：一直显示，缩放时不会一闪一闪 */}
+      <div className="relative min-h-0 min-w-0 flex-1">
+        <ContextMenu>
+          <ContextMenuTrigger
+            render={
+              <div
+                ref={scrollRef}
+                className="relative size-full overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                onContextMenu={(event) => {
+                  const id = (event.target as HTMLElement).closest<HTMLElement>("[data-clip]")
+                    ?.dataset.clip;
+                  const found = id ? findClip(timeline, id) : null;
+                  if (!found || readOnly || found.track.locked) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setMenuId(null);
+                    return;
+                  }
+                  setMenuId(found.clip.id);
+                  onSelect(found.clip.id);
+                }}
+              />
+            }
           >
             <div
-              style={{ height: RULER_HEIGHT }}
-              className="border-chrome-border/60 sticky top-0 z-40 flex border-b"
+              style={{ width: HEAD_WIDTH + view.width, paddingBottom: SCROLLBAR_GUTTER }}
+              className="relative min-h-full"
+              onDragOver={(event) => {
+                if (readOnly || !isMediaDrag(event)) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+                const next = markAt(event.clientX, event.clientY);
+                setDropMark((prev) => (sameMark(prev, next) ? prev : next));
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                  setDropMark(null);
+              }}
+              onDrop={(event) => {
+                const media = currentMediaDrag();
+                const mark = markAt(event.clientX, event.clientY);
+                setDropMark(null);
+                endMediaDrag();
+                if (!media || readOnly || !mark) return;
+                event.preventDefault();
+                if (mark.kind === "main") return props.onDropMedia(media, mark);
+                if (!mark.ok) return onError("这里已有片段，换个位置");
+                props.onDropMedia(media, {
+                  kind: "track",
+                  trackId: mark.trackId,
+                  startMs: mark.startMs,
+                });
+              }}
             >
               <div
-                style={{ width: HEAD_WIDTH }}
-                className="bg-chrome border-chrome-border sticky left-0 z-10 shrink-0 border-r backdrop-blur-xl"
-              />
-              <div
-                style={{ width: view.width }}
-                onPointerDown={drag.startSeek}
-                className="bg-chrome relative shrink-0 cursor-pointer backdrop-blur-xl"
+                style={{ height: RULER_HEIGHT }}
+                className="border-chrome-border/60 sticky top-0 z-40 flex border-b"
               >
-                {rulerTicks(view.width, pps).map((s) => (
-                  <span
-                    key={s}
-                    style={{ left: msToX(s * 1000, pps) }}
-                    className="text-muted-foreground absolute top-0 h-full border-l border-current/30 pt-1.5 pl-1 font-mono text-[10.5px]"
-                  >
-                    {formatClock(s)}
-                  </span>
-                ))}
-                <div ref={knobRef} className="pointer-events-none absolute top-0 left-0 z-10">
-                  <span className="bg-foreground absolute top-0.5 -left-1.5 h-3.5 w-3 rounded-[3px_3px_6px_6px]" />
+                <div
+                  style={{ width: HEAD_WIDTH }}
+                  className="bg-chrome border-chrome-border sticky left-0 z-10 shrink-0 border-r backdrop-blur-xl"
+                />
+                <div
+                  style={{ width: view.width }}
+                  onPointerDown={drag.startSeek}
+                  className="bg-chrome relative shrink-0 cursor-pointer backdrop-blur-xl"
+                >
+                  {rulerTicks(view.width, pps).map((s) => (
+                    <span
+                      key={s}
+                      style={{ left: msToX(s * 1000, pps) }}
+                      className="text-muted-foreground absolute top-0 h-full border-l border-current/30 pt-1.5 pl-1 font-mono text-[10.5px]"
+                    >
+                      {formatClock(s)}
+                    </span>
+                  ))}
+                  <div ref={knobRef} className="pointer-events-none absolute top-0 left-0 z-10">
+                    <span className="bg-foreground absolute top-0.5 -left-1.5 h-3.5 w-3 rounded-[3px_3px_6px_6px]" />
+                  </div>
                 </div>
               </div>
-            </div>
-            {shown.tracks.map((track) => (
-              <TrackRow
-                key={track.id}
-                track={track}
-                badge={trackBadge(shown, track)}
-                host={host}
-                pps={pps}
-                width={view.width}
-                selectedId={selectedId}
-                readOnly={readOnly}
-                drag={drag.drag}
-                insertX={track.kind === "main" ? insertX : null}
-                dropBox={
-                  dropMark?.kind === "track" && dropMark.trackId === track.id
-                    ? { startMs: dropMark.startMs, ok: dropMark.ok }
-                    : null
-                }
-                onClipPointerDown={drag.startClip}
-                onLanePointerDown={(event) => {
-                  if (event.button !== 0) return;
-                  onSelect(null);
-                  drag.startSeek(event);
-                }}
-                onToggle={toggleTrack}
-                onAddSubtitle={addSub}
-                onGenerate={generate}
-                onRemove={deleteTrack}
-              />
-            ))}
-            {snapAt !== null && (
+              {shown.tracks.map((track) => (
+                <TrackRow
+                  key={track.id}
+                  track={track}
+                  badge={trackBadge(shown, track)}
+                  host={host}
+                  pps={pps}
+                  width={view.width}
+                  selectedId={selectedId}
+                  readOnly={readOnly}
+                  drag={drag.drag}
+                  insertX={track.kind === "main" ? insertX : null}
+                  dropBox={
+                    dropMark?.kind === "track" && dropMark.trackId === track.id
+                      ? { startMs: dropMark.startMs, ok: dropMark.ok }
+                      : null
+                  }
+                  onClipPointerDown={drag.startClip}
+                  onLanePointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    onSelect(null);
+                    drag.startSeek(event);
+                  }}
+                  onToggle={toggleTrack}
+                  onAddSubtitle={addSub}
+                  onGenerate={generate}
+                  onRemove={deleteTrack}
+                />
+              ))}
+              {snapAt !== null && (
+                <div
+                  style={{ left: HEAD_WIDTH + msToX(snapAt, pps), top: RULER_HEIGHT }}
+                  className="pointer-events-none absolute bottom-0 z-[45] w-0 border-l border-dashed border-sky-400"
+                />
+              )}
               <div
-                style={{ left: HEAD_WIDTH + msToX(snapAt, pps), top: RULER_HEIGHT }}
-                className="pointer-events-none absolute bottom-0 z-[45] w-0 border-l border-dashed border-sky-400"
-              />
-            )}
-            <div
-              ref={playheadRef}
-              className="pointer-events-none absolute inset-y-0 left-0 z-50 w-0"
-            >
-              <span className="bg-foreground absolute inset-y-0 -left-px w-0.5" />
+                ref={playheadRef}
+                className="pointer-events-none absolute inset-y-0 left-0 z-50 w-0"
+              >
+                <span className="bg-foreground absolute inset-y-0 -left-px w-0.5" />
+              </div>
             </div>
-          </div>
-        </ContextMenuTrigger>
-        {menuFound && (
-          <ClipMenuContent
-            clip={menuFound.clip}
-            media={menuMedia}
-            host={host}
-            onMute={() => apply(muteCommand(timeline, menuFound.clip.id))}
-            onRestore={() => apply(restoreCommand(timeline, host.resolve, menuFound.clip.id))}
-            onRemove={() => remove(menuFound.clip.id)}
-          />
-        )}
-      </ContextMenu>
+          </ContextMenuTrigger>
+          {menuFound && (
+            <ClipMenuContent
+              clip={menuFound.clip}
+              media={menuMedia}
+              host={host}
+              onMute={() => apply(muteCommand(timeline, menuFound.clip.id))}
+              onRestore={() => apply(restoreCommand(timeline, host.resolve, menuFound.clip.id))}
+              onRemove={() => remove(menuFound.clip.id)}
+            />
+          )}
+        </ContextMenu>
+        <TimelineScrollbar
+          scrollRef={scrollRef}
+          axis="x"
+          className="bottom-1.5 h-1.5"
+          style={{ left: HEAD_WIDTH + 8, right: 16 }}
+        />
+        <TimelineScrollbar
+          scrollRef={scrollRef}
+          axis="y"
+          className="right-1.5 w-1.5"
+          style={{ top: RULER_HEIGHT + 4, bottom: 16 }}
+        />
+      </div>
     </section>
   );
 }

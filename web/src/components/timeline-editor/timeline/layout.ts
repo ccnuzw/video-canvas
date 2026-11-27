@@ -15,8 +15,10 @@ export const HEAD_WIDTH = 168;
 export const RULER_HEIGHT = 28;
 /** 工具条的高度（像素）：按钮 32px + 上下内边距 12px + 底边框 1px，改工具条样式时同步 */
 export const TOOLBAR_HEIGHT = 45;
-/** 面板的其余占用（像素）：横向滚动条的位置和上下描边 */
-export const PANEL_CHROME = 18;
+/** 轨道内容底部给自绘横向滚动条留的空（像素），免得滚动条压住最后一条轨 */
+export const SCROLLBAR_GUTTER = 14;
+/** 面板的其余占用（像素）：横向滚动条的留空，再加一点余量 */
+export const PANEL_CHROME = SCROLLBAR_GUTTER + 4;
 /** 缩放下限：每秒多少像素 */
 export const MIN_PPS = 2;
 /** 缩放上限：每秒多少像素 */
