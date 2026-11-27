@@ -1,6 +1,4 @@
 import {
-  ArrowLeftToLine,
-  ArrowRightToLine,
   AudioLines,
   Captions,
   CircleMinus,
@@ -27,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { TRACK_LIMIT } from "../model";
 import type { TrackKind } from "../types";
 import { MAX_PPS, ppsToSlider, sliderToPps } from "./layout";
+import { ShortcutHelp } from "./shortcut-help";
 
 /** 工具条上的图标按钮 */
 function ToolButton({
@@ -97,10 +96,6 @@ export interface ToolbarProps {
   onRedo: () => void;
   /** 拆分 */
   onSplit: () => void;
-  /** 向左裁 */
-  onTrimLeft: () => void;
-  /** 向右裁 */
-  onTrimRight: () => void;
   /** 删除选中片段 */
   onRemove: () => void;
   /** 新增一条轨道 */
@@ -113,7 +108,7 @@ export interface ToolbarProps {
   onFit: () => void;
 }
 
-/** 时间线上方的工具条：撤销重做、拆分裁剪删除、新增轨道、吸附、缩放 */
+/** 时间线上方的工具条：撤销重做、拆分删除、新增轨道、吸附、缩放 */
 export function Toolbar(props: ToolbarProps) {
   const { readOnly, pps, minPps } = props;
   const singleDisabled = readOnly || props.multiSelected;
@@ -136,33 +131,20 @@ export function Toolbar(props: ToolbarProps) {
         <Redo2 />
       </ToolButton>
       <span className="bg-chrome-border mx-1.5 h-4.5 w-px" />
-      <ToolButton label="拆分" shortcut="S" disabled={singleDisabled} onClick={props.onSplit}>
-        <Scissors />
-      </ToolButton>
-      <ToolButton
-        label="删掉播放头左边"
-        shortcut="Q"
-        disabled={singleDisabled}
-        onClick={props.onTrimLeft}
-      >
-        <ArrowLeftToLine />
-      </ToolButton>
-      <ToolButton
-        label="删掉播放头右边"
-        shortcut="W"
-        disabled={singleDisabled}
-        onClick={props.onTrimRight}
-      >
-        <ArrowRightToLine />
-      </ToolButton>
-      <ToolButton
-        label="删除"
-        shortcut="Delete"
-        disabled={readOnly || !props.hasSelection}
-        onClick={props.onRemove}
-      >
-        <Trash2 />
-      </ToolButton>
+      {/* 新手引导的「剪辑」一步高亮这一组 */}
+      <span data-tour="edit-tools" className="flex items-center gap-0.5">
+        <ToolButton label="拆分" shortcut="S" disabled={singleDisabled} onClick={props.onSplit}>
+          <Scissors />
+        </ToolButton>
+        <ToolButton
+          label="删除"
+          shortcut="Delete"
+          disabled={readOnly || !props.hasSelection}
+          onClick={props.onRemove}
+        >
+          <Trash2 />
+        </ToolButton>
+      </span>
       <span className="flex-1" />
       <DropdownMenu>
         <DropdownMenuTrigger
@@ -214,6 +196,7 @@ export function Toolbar(props: ToolbarProps) {
       <ToolButton label="适配宽度" onClick={props.onFit}>
         <Scan />
       </ToolButton>
+      <ShortcutHelp readOnly={readOnly} />
     </div>
   );
 }

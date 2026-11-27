@@ -1,5 +1,18 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
+/** 时间线的实际键位，按键监听和帮助面板共用 */
+export const TIMELINE_KEYS = {
+  play: " ",
+  snap: "n",
+  split: "s",
+  trimLeft: "q",
+  trimRight: "w",
+  remove: "delete",
+  removeAlt: "backspace",
+  undo: "z",
+  deselect: "escape",
+} as const;
+
 /** 快捷键触发的动作 */
 export interface ShortcutActions {
   /** 只读：只有播放和吸附开关可用 */
@@ -40,27 +53,32 @@ export function useTimelineShortcuts(actions: ShortcutActions): void {
   });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.target as HTMLElement | null)?.closest(IGNORE)) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (event.defaultPrevented || target?.closest(IGNORE)) return;
       const a = ref.current;
       const key = event.key.toLowerCase();
-      if (key === " ") {
+      if (key === TIMELINE_KEYS.play) {
+        if (target?.closest("button, [role=button]")) return;
         event.preventDefault();
         return a.toggle();
       }
-      if (key === "n" && !event.metaKey && !event.ctrlKey) return a.toggleSnap();
+      if (key === TIMELINE_KEYS.snap && !event.metaKey && !event.ctrlKey) return a.toggleSnap();
       if (a.readOnly) return;
-      if ((event.metaKey || event.ctrlKey) && key === "z") {
+      if ((event.metaKey || event.ctrlKey) && key === TIMELINE_KEYS.undo) {
         event.preventDefault();
         return event.shiftKey ? a.redo() : a.undo();
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (key === "s") a.split();
-      else if (key === "q") a.trimLeft();
-      else if (key === "w") a.trimRight();
-      else if ((key === "delete" || key === "backspace") && a.hasSelection) {
+      if (key === TIMELINE_KEYS.split) a.split();
+      else if (key === TIMELINE_KEYS.trimLeft) a.trimLeft();
+      else if (key === TIMELINE_KEYS.trimRight) a.trimRight();
+      else if (
+        (key === TIMELINE_KEYS.remove || key === TIMELINE_KEYS.removeAlt) &&
+        a.hasSelection
+      ) {
         event.preventDefault();
         a.remove();
-      } else if (key === "escape") a.deselect();
+      } else if (key === TIMELINE_KEYS.deselect) a.deselect();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

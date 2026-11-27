@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ChevronDown,
+  CircleHelp,
   Download,
   Loader2,
   LocateFixed,
@@ -38,6 +39,7 @@ export function FinalBar({
   onExport,
   fullscreen,
   onToggleFullscreen,
+  onTour,
 }: {
   no: number;
   title: string;
@@ -59,6 +61,8 @@ export function FinalBar({
   fullscreen: boolean;
   /** 进入 / 退出全屏 */
   onToggleFullscreen: () => void;
+  /** 重看新手引导 */
+  onTour: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -154,6 +158,15 @@ export function FinalBar({
       <span className="flex-1" />
       <button
         type="button"
+        aria-label="新手引导"
+        title="新手引导"
+        onClick={onTour}
+        className="hover:bg-chrome-hover focus-visible:ring-ring grid size-8 shrink-0 place-items-center rounded-full transition-colors focus-visible:ring-2 [&_svg]:size-4"
+      >
+        <CircleHelp />
+      </button>
+      <button
+        type="button"
         aria-label={fullscreen ? "退出全屏" : "全屏"}
         aria-pressed={fullscreen}
         title={fullscreen ? "退出全屏" : "全屏"}
@@ -164,6 +177,7 @@ export function FinalBar({
       </button>
       <Button
         size="sm"
+        data-tour="export"
         className="min-w-24 rounded-full"
         // 导出进行中按钮显示进度，点它重新打开导出弹窗看详情
         disabled={!exporting && !!exportReason}

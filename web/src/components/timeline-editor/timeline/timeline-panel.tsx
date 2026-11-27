@@ -214,8 +214,6 @@ export function TimelinePanel(props: TimelinePanelProps) {
         onUndo={props.onUndo}
         onRedo={props.onRedo}
         onSplit={split}
-        onTrimLeft={() => trim("left")}
-        onTrimRight={() => trim("right")}
         onRemove={() => remove(selectedIds)}
         onAddTrack={addTrackOf}
         onToggleSnap={toggleSnap}
@@ -223,7 +221,7 @@ export function TimelinePanel(props: TimelinePanelProps) {
         onFit={view.fitNow}
       />
       {/* 原生滚动条隐藏，换成只在轨道内容区里的自绘细滚动条：一直显示，缩放时不会一闪一闪 */}
-      <div className="relative min-h-0 min-w-0 flex-1">
+      <div data-tour="tracks" className="relative min-h-0 min-w-0 flex-1">
         <ContextMenu>
           <ContextMenuTrigger
             render={

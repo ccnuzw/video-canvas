@@ -314,7 +314,10 @@ export function ProjectSettingsDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-chrome ring-chrome-border flex max-h-[min(88svh,760px)] flex-col gap-0 overflow-hidden rounded-2xl p-0 [corner-shape:squircle] shadow-2xl backdrop-blur-2xl backdrop-saturate-150 sm:max-w-lg">
+      <DialogContent
+        variant="chrome"
+        className="flex max-h-[min(88svh,760px)] flex-col gap-0 p-0 sm:max-w-lg"
+      >
         <DialogSession open={open}>
           <ProjectSettingsContent onClose={() => onOpenChange(false)} />
         </DialogSession>

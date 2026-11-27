@@ -79,6 +79,7 @@ export function TrackRow(props: TrackRowProps) {
   const toMain = moving?.plan?.target.kind === "main";
   return (
     <div
+      data-tour={track.kind === "main" ? "main-track" : undefined}
       className="border-chrome-border/50 flex border-b"
       style={{ height: ROW_HEIGHT[track.kind] }}
     >

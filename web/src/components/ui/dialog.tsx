@@ -43,9 +43,12 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  variant = "default",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  /** 前台半透明面板沿用工作台的材质 */
+  variant?: "default" | "chrome"
 }) {
   return (
     <DialogPortal>
@@ -54,6 +57,7 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-200 data-closed:duration-150 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          variant === "chrome" && "bg-chrome ring-chrome-border overflow-hidden rounded-2xl shadow-2xl backdrop-blur-2xl backdrop-saturate-150 [corner-shape:squircle]",
           className
         )}
         {...props}

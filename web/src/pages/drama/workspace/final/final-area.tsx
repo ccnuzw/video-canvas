@@ -31,6 +31,7 @@ import {
 import { FinalBar } from "./final-bar";
 import { readFullscreen, writeFullscreen } from "./fullscreen";
 import { useFinalHost } from "./use-final-host";
+import { useFinalTour } from "./use-final-tour";
 
 const NO_SEGMENTS: never[] = [];
 
@@ -223,6 +224,13 @@ export function FinalArea({
     [history, editor],
   );
 
+  /** 新手引导：时间线读完、导出单没开时才自动开始 */
+  const tour = useFinalTour({
+    ready: !!episode && status === "ready" && !exportOpen,
+    readOnly: readOnly || !!shared,
+    episode: no,
+  });
+
   if (!episode) {
     return (
       <p className="text-muted-foreground grid h-full place-items-center text-sm">还没有分集</p>
@@ -313,6 +321,7 @@ export function FinalArea({
         onExport={openExport}
         fullscreen={fullscreen}
         onToggleFullscreen={toggleFullscreen}
+        onTour={tour.start}
       />
       <div className="min-h-0 flex-1 px-6 pb-4">
         <TimelineEditor

@@ -153,6 +153,7 @@ export function TimelineEditor({
   const left = (
     <section
       aria-label="素材与属性"
+      data-tour="media"
       className="bg-chrome ring-chrome-border flex size-full min-h-0 flex-col rounded-2xl ring-1 ring-inset [corner-shape:squircle]"
     >
       <div className="px-3 pt-3">

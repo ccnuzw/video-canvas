@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+<head>
+<meta charset="utf-8" />
+<title>成片剪辑台 · 新手引导原型</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.14.0/dist/driver.css" />
+<style>
+  /* token 抄自 web/src/index.css 的 .drama-theme / .dark .drama-theme */
+  :root {
+    --background: oklch(0.95 0.007 85); --foreground: oklch(0.22 0.01 85);
+    --primary: oklch(0.67 0.14 78); --primary-foreground: oklch(1 0 0);
+    --muted-foreground: oklch(0.5 0.015 85);
+    --chrome: oklch(0.95 0.007 85 / 0.78); --chrome-border: oklch(0.22 0.02 85 / 0.1);
+    --chrome-hover: oklch(0.22 0.02 85 / 0.06); --ring: oklch(0.67 0.14 78);
+    --ease: cubic-bezier(0.2, 0, 0, 1); --base: 180ms; --exit: 126ms;
+  }
+  .dark {
+    --background: oklch(0.145 0.002 286); --foreground: oklch(0.955 0.008 85);
+    --primary: oklch(0.81 0.15 82); --primary-foreground: oklch(0.2 0.03 85);
+    --muted-foreground: oklch(0.75 0.015 85);
+    --chrome: oklch(0.145 0.002 286 / 0.72); --chrome-border: oklch(1 0 0 / 0.08);
+    --chrome-hover: oklch(1 0 0 / 0.06); --ring: oklch(0.81 0.15 82);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--background);
+    color: var(--foreground); font: 14px/1.5 -apple-system, "PingFang SC", sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .demo { display: flex; gap: 8px; padding: 8px 24px; font-size: 12px; color: var(--muted-foreground);
+    border-bottom: 1px dashed var(--chrome-border); align-items: center; }
+  .demo button { background: var(--chrome-hover); border: 0; border-radius: 999px; padding: 4px 10px; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 10px 24px; }
+  .bar h2 { margin: 0; font-size: 17px; flex: 1; }
+  .icon { width: 32px; height: 32px; border-radius: 999px; border: 0; background: transparent;
+    display: grid; place-items: center; transition: background var(--base) var(--ease); }
+  .icon:hover { background: var(--chrome-hover); }
+  .icon:focus-visible, .btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .export { background: var(--primary); color: var(--primary-foreground); border: 0; border-radius: 999px;
+    height: 32px; padding: 0 14px; font-weight: 600; }
+  .work { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 400px; gap: 12px; padding: 0 24px 16px; }
+  .left { display: grid; grid-template-rows: 1fr 380px; gap: 12px; min-height: 0; }
+  .panel { background: var(--chrome); border-radius: 16px; box-shadow: inset 0 0 0 1px var(--chrome-border);
+    min-height: 0; overflow: hidden; }
+  .tabs { display: inline-flex; gap: 2px; padding: 2px; margin: 12px; border-radius: 999px; background: var(--chrome-hover); }
+  .tabs span { padding: 4px 14px; border-radius: 999px; font-size: 12.5px; color: var(--muted-foreground); }
+  .tabs span.on { background: var(--background); color: var(--foreground); font-weight: 600; }
+  .empty { text-align: center; color: var(--muted-foreground); margin-top: 80px; font-size: 13px; }
+  .tools { display: flex; align-items: center; gap: 2px; padding: 6px 10px; border-bottom: 1px solid var(--chrome-border); }
+  .tools .grp { display: flex; gap: 2px; padding: 2px; border-radius: 999px; }
+  .tools .sp { flex: 1; }
+  .track { display: grid; grid-template-columns: 220px 1fr; align-items: center; height: 52px; font-size: 13px; }
+  .track .head { padding: 0 14px; display: flex; gap: 8px; align-items: center; }
+  .track .head b { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--chrome-hover); }
+  .track.main { height: 80px; background: var(--chrome-hover); }
+  .track.main .head b { color: var(--primary); }
+  .clips { display: flex; gap: 2px; height: 64px; padding-right: 60px; }
+  .clip { flex: 1; border-radius: 8px; padding: 6px 8px; font-size: 12px; color: var(--muted-foreground);
+    background: repeating-linear-gradient(135deg, var(--chrome-hover) 0 10px, transparent 10px 20px);
+    box-shadow: inset 0 0 0 1px var(--chrome-border); }
+  .tracks-rest { display: contents; }
+  .preview { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .preview .screen { width: 70%; aspect-ratio: 9/16; border-radius: 12px; background: #000; display: grid; place-items: center;
+    color: oklch(0.955 0.008 85); font-weight: 600; }
+  .tc { font-variant-numeric: tabular-nums; color: var(--muted-foreground); font-size: 13px; margin-top: 8px; }
+
+  /* —— 引导气泡：对应实现里的 final-tour.css 的 .vc-tour —— */
+  .driver-popover.vc-tour { background: var(--chrome); color: var(--foreground); border-radius: 16px;
+    box-shadow: 0 0 0 1px var(--chrome-border), 0 12px 32px oklch(0 0 0 / 0.25);
+    backdrop-filter: blur(24px) saturate(1.5); -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    width: min(280px, calc(100vw - 32px)); max-width: none; padding: 16px; font-family: inherit;
+    animation: vc-tour-in var(--base) var(--ease); }
+  .driver-popover.vc-tour .driver-popover-arrow { display: none; }
+  .driver-popover.vc-tour .driver-popover-title { font-size: 14px; font-weight: 600; font-family: inherit; }
+  .driver-popover.vc-tour .driver-popover-description { font-size: 13px; color: var(--muted-foreground); margin-top: 4px; font-family: inherit; }
+  .driver-popover.vc-tour .driver-popover-close-btn { color: var(--muted-foreground); width: 28px; height: 28px;
+    top: 8px; right: 8px; border-radius: 999px; }
+  .driver-popover.vc-tour .driver-popover-close-btn:hover { background: var(--chrome-hover); color: var(--foreground); }
+  .driver-popover.vc-tour .driver-popover-footer { margin-top: 14px; align-items: center; }
+  .driver-popover.vc-tour .driver-popover-progress-text { font-variant-numeric: tabular-nums; color: var(--muted-foreground); font-size: 12px; }
+  .driver-popover.vc-tour .driver-popover-navigation-btns button { all: unset; cursor: pointer; height: 28px; padding: 0 12px;
+    border-radius: 999px; font-size: 12.5px; transition: background var(--base) var(--ease), transform var(--base) var(--ease); }
+  .driver-popover.vc-tour .driver-popover-navigation-btns button:active { transform: scale(0.96); }
+  .driver-popover.vc-tour .driver-popover-navigation-btns button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .driver-popover.vc-tour .driver-popover-prev-btn:hover { background: var(--chrome-hover); }
+  .driver-popover.vc-tour .driver-popover-next-btn { background: var(--primary); color: var(--primary-foreground); font-weight: 600; margin-left: 4px; }
+  @keyframes vc-tour-in { from { opacity: 0; transform: translateY(4px); } }
+  @media (prefers-reduced-motion: reduce) { @keyframes vc-tour-in { from { opacity: 0; } } }
+</style>
+</head>
+<body>
+<div class="demo">
+  原型控制：
+  <button id="d-theme">切换明暗</button>
+  <button id="d-ro">只读：关</button>
+  <button id="d-reset">清除「已看」并刷新</button>
+  <span id="d-state"></span>
+</div>
+<div class="bar">
+  <h2>第 1 集 · 神仙眷属</h2>
+  <button class="icon" id="tour-btn" title="新手引导" aria-label="新手引导">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+  </button>
+  <button class="icon" title="全屏" aria-label="全屏">⤢</button>
+  <button class="export" data-tour="export">⬇ 导出</button>
+</div>
+<div class="work">
+  <div class="left">
+    <section class="panel" data-tour="media">
+      <div class="tabs"><span class="on">素材</span><span>属性</span></div>
+      <div class="tabs" style="margin-top:0"><span class="on">片段</span><span>画布素材</span><span>已导入</span></div>
+      <p class="empty">还没有可用的片段视频</p>
+    </section>
+    <section class="panel">
+      <div class="tools">
+        <button class="icon" title="撤销">↶</button><button class="icon" title="重做">↷</button>
+        <span class="grp" data-tour="edit-tools">
+          <button class="icon" title="拆分 S">✂</button><button class="icon" title="删掉播放头左边 Q">⇤</button>
+          <button class="icon" title="删掉播放头右边 W">⇥</button><button class="icon" title="删除">🗑</button>
+        </span>
+        <span class="sp"></span><button class="icon" title="快捷键">⌨</button>
+      </div>
+      <div data-tour="tracks">
+        <div class="track"><div class="head"><b>T1</b>字幕</div><div></div></div>
+        <div class="track"><div class="head"><b>V2</b>叠加</div><div></div></div>
+        <div class="track main" data-tour="main-track"><div class="head"><b>V1</b>主轨</div>
+          <div class="clips">
+            <div class="clip">片段 01 · 待采用</div><div class="clip">片段 02 · 待采用</div>
+            <div class="clip">片段 03 · 待采用</div><div class="clip">片段 04 · 待采用</div>
+          </div>
+        </div>
+        <div class="track"><div class="head"><b>A1</b>配音</div><div></div></div>
+        <div class="track"><div class="head"><b>A2</b>BGM</div><div></div></div>
+      </div>
+    </section>
+  </div>
+  <section class="panel preview" data-tour="preview">
+    <div class="screen">片段 01 · 待采用</div>
+    <div class="tc">00:00.00 / 01:04.00</div>
+  </section>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.14.0/dist/driver.js.iife.js"></script>
+<script>
+  /* 与实现的 final-tour.ts 同一张步骤表 */
+  const TOUR_KEY = "vc.drama-final-tour";
+  const TOUR_VERSION = "1";
+  const STEPS = [
+    { target: "media", title: "素材", text: "片场采用的片段、画布里的素材和导入的文件都在这里。", edit: false, side: "right" },
+    { target: "main-track", title: "拖到主轨", text: "把素材拖进主轨，片段会首尾相接排好。斜纹块是片场还没采用的片段。", edit: true, side: "top" },
+    { target: "tracks", title: "叠加、字幕和声音", text: "主轨上下的轨道放叠加画面、字幕、配音和 BGM，可以摆在任意时间点。", edit: true, side: "right" },
+    { target: "edit-tools", title: "剪辑", text: "把播放头放到要剪的位置，再点剪刀拆分。按 Q 或 W 可以裁掉播放头的一侧。", edit: true, side: "bottom" },
+    { target: "preview", title: "预览", text: "按时间线实时播放，空格键播放或暂停。", edit: false, side: "left" },
+    { target: "export", title: "导出", text: "按时间线合成 mp4 并下载，不扣积分。", edit: false, side: "bottom" },
+  ];
+  let readOnly = false;
+
+  function buildSteps() {
+    return STEPS.filter((s) => !s.edit || !readOnly)
+      .filter((s) => document.querySelector(`[data-tour="${s.target}"]`))
+      .map((s) => ({
+        element: `[data-tour="${s.target}"]`,
+        popover: { title: s.title, description: s.text, side: s.side, align: "start" },
+      }));
+  }
+
+  function startTour() {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const tour = window.driver.js.driver({
+      steps: buildSteps(),
+      popoverClass: "vc-tour",
+      showProgress: true,
+      progressText: "{{current}} / {{total}}",
+      prevBtnText: "上一步",
+      nextBtnText: "下一步",
+      doneBtnText: "知道了",
+      showButtons: ["next", "previous", "close"],
+      animate: !reduce,
+      overlayColor: "#000",
+      overlayOpacity: 0.6,
+      stagePadding: 6,
+      stageRadius: 16,
+      allowKeyboardControl: true,
+      disableActiveInteraction: true,
+      overlayClickBehavior: () => {},
+      onDestroyed: () => { localStorage.setItem(TOUR_KEY, TOUR_VERSION); showState(); },
+    });
+    tour.drive();
+  }
+
+  function showState() {
+    document.getElementById("d-state").textContent =
+      localStorage.getItem(TOUR_KEY) === TOUR_VERSION ? "已看过（刷新不再自动播）" : "未看过（刷新会自动播）";
+  }
+
+  document.getElementById("tour-btn").onclick = startTour;
+  document.getElementById("d-theme").onclick = () => document.documentElement.classList.toggle("dark");
+  document.getElementById("d-ro").onclick = (e) => {
+    readOnly = !readOnly;
+    e.target.textContent = `只读：${readOnly ? "开" : "关"}`;
+  };
+  document.getElementById("d-reset").onclick = () => { localStorage.removeItem(TOUR_KEY); location.reload(); };
+
+  showState();
+  /* 首次进入：等页面入场动画播完再开始 */
+  if (localStorage.getItem(TOUR_KEY) !== TOUR_VERSION) setTimeout(startTour, 400);
+</script>
+
+</body>
+</html>

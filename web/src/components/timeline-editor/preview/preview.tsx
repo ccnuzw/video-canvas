@@ -46,6 +46,7 @@ export function Preview({
   return (
     <section
       aria-label="预览"
+      data-tour="preview"
       className="bg-chrome ring-chrome-border relative flex size-full min-w-0 flex-col rounded-2xl ring-1 ring-inset [corner-shape:squircle]"
     >
       <div className="grid min-h-0 flex-1 place-items-center px-3 pt-4 pb-2">

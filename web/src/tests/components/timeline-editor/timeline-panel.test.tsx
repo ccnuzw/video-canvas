@@ -108,6 +108,13 @@ const disabled = (html: string, label: string) => {
 };
 
 describe("时间线面板渲染", () => {
+  test("工具栏保留拆分，省去播放头左右裁剪按钮", () => {
+    const html = render(sample());
+    expect(disabled(html, "拆分")).toBe(false);
+    expect(html).not.toContain('aria-label="删掉播放头左边"');
+    expect(html).not.toContain('aria-label="删掉播放头右边"');
+  });
+
   test("默认适配整条时间线，缩小按钮到达下限", () => {
     const html = render(sample());
     expect(disabled(html, "缩小")).toBe(true);
@@ -175,11 +182,12 @@ describe("锁定、隐藏与只读", () => {
 
   test("只读：编辑入口全部禁用，裁剪和淡变手柄不渲染，但缩放仍可用", () => {
     const html = render(sample(), { readOnly: true });
-    for (const label of ["撤销", "拆分", "删掉播放头左边", "删掉播放头右边", "删除", "新增轨道"]) {
+    for (const label of ["撤销", "拆分", "删除", "新增轨道"]) {
       expect(disabled(html, label)).toBe(true);
     }
     expect(disabled(html, "放大")).toBe(false);
     expect(disabled(html, "适配宽度")).toBe(false);
+    expect(disabled(html, "快捷键")).toBe(false);
     expect(html).not.toContain("cursor-ew-resize");
   });
 
@@ -190,7 +198,7 @@ describe("锁定、隐藏与只读", () => {
     expect(disabled(render(sample(), { canUndo: false }), "撤销")).toBe(true);
   });
 
-  test("多选时所有片段高亮，删除可用，单段裁剪与拆分禁用", () => {
+  test("多选时所有片段高亮，删除可用，拆分禁用", () => {
     const html = render(sample(), { selectedIds: ["a", "o1"] });
     for (const id of ["a", "o1"]) {
       expect(html.match(new RegExp(`<div data-clip="${id}"[^>]*>`))?.[0]).toContain(
@@ -198,8 +206,6 @@ describe("锁定、隐藏与只读", () => {
       );
     }
     expect(disabled(html, "删除")).toBe(false);
-    for (const label of ["拆分", "删掉播放头左边", "删掉播放头右边"]) {
-      expect(disabled(html, label)).toBe(true);
-    }
+    expect(disabled(html, "拆分")).toBe(true);
   });
 });
