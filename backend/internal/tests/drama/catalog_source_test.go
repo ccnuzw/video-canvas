@@ -1,6 +1,7 @@
 package drama_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io/fs"
@@ -101,7 +102,7 @@ func TestCatalogFallback(t *testing.T) {
 	}
 }
 
-// seedRow 是迁移 0049 里的一行种子。
+// seedRow 是迁移里的一行种子。
 type seedRow struct {
 	kind, key, name, prompt, previewURL string
 	sort                                int
@@ -115,13 +116,16 @@ var seedRowPattern = regexp.MustCompile(`\('(genre|style)', '([a-z0-9_]+)', '((?
 //
 // styles.json 现在是「种子来源 + 空表兜底」：两边一旦漂移，空库部署与正常部署会给出不同的画风，
 // 而且没人会立刻发现。这条测试把两边钉死。
+//
+// 种子可以分散在多个迁移里：0049 建表时种下首批，之后加条目只能新增迁移（已发布的迁移不许改），
+// 所以这里按文件顺序把所有种过 drama_presets 的迁移合起来解析，合并结果必须与内置清单逐条相等。
 func TestSeedMatchesBuiltin(t *testing.T) {
-	raw, err := fs.ReadFile(migrations.FS, "0049_drama_presets.sql")
+	raw, err := seedSources()
 	if err != nil {
 		t.Fatal(err)
 	}
 	var rows []seedRow
-	for _, m := range seedRowPattern.FindAllStringSubmatch(string(raw), -1) {
+	for _, m := range seedRowPattern.FindAllStringSubmatch(raw, -1) {
 		sort, err := strconv.Atoi(m[6])
 		if err != nil {
 			t.Fatalf("解析 sort_order 失败：%v", err)
@@ -167,4 +171,31 @@ func TestSeedMatchesBuiltin(t *testing.T) {
 			}
 		}
 	}
+}
+
+// seedSources 按文件名顺序把所有「往 drama_presets 里 INSERT」的迁移拼起来。
+//
+// 不能写死文件名：加画风 / 题材只能新增迁移，写死一个文件会让后续迁移里的种子在测试里消失，
+// 表现为「种子 N 行，内置目录 M 条，数量不一致」——而库里的真实数据其实是对的。
+func seedSources() (string, error) {
+	entries, err := fs.ReadDir(migrations.FS, ".")
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
+		}
+		raw, err := fs.ReadFile(migrations.FS, e.Name())
+		if err != nil {
+			return "", err
+		}
+		if !bytes.Contains(raw, []byte("INSERT INTO drama_presets (")) {
+			continue
+		}
+		b.Write(raw)
+		b.WriteByte('\n')
+	}
+	return b.String(), nil
 }

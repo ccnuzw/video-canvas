@@ -221,7 +221,7 @@ docker compose logs agent plugin-runner | grep '<编号>'
 | PUT                 | /api/v1/virtual-humans/:id/cover                      | 设封面 `{image_id}`（排到第一张）；图片不属于该真人 69002 |
 | POST                | /api/v1/virtual-human-images/:id/retry                | 重新提交备案失败的图片；不是失败状态 69011 |
 | DELETE              | /api/v1/virtual-human-images/:id                      | 移除一张图片并删除方舟侧素材；被角色卡使用 69006，真人只剩这一张 69009，方舟删除失败 69008 |
-| GET                 | /api/v1/drama-styles                                  | 内置题材与画风目录 `{genres:[{key,name}](12), styles:[{key,name,prompt}](12)}` |
+| GET                 | /api/v1/drama-styles                                  | 内置题材与画风目录 `{genres:[{key,name}](12), styles:[{key,name,prompt}](19)}` |
 | GET/POST | /api/v1/dramas | 用户短剧列表 / JSON 建剧 `{source_token,source_kind,range_end?,ratio,genre?,style_key,style_custom?,episode_seconds?,text_model?,prompts?}`；原文先预检，返回 201；自动研读并按批规划，剧本型直接按原文切集。模型上下文须至少 128k。 |
 | GET/PATCH/DELETE    | /api/v1/dramas/:id                                    | 详情（含 `episodes`、`active_jobs`、`phase/plan_cursor/range_end/pause_code` 和不含正文的 `prompt_settings`）/ 改 `{revision, title?, genre?, style_key?, style_custom?, ratio?, text_model?, outline_md?, characters_md?, prompts?}`（revision 冲突 409 / 30002）/ 软删，连带短剧画布（角色数据内嵌在画布里，随画布一起软删），返回 **204**；不存在或不属于自己 67001 |
 | GET/PATCH           | /api/v1/dramas/:id/episodes/:no                       | 单集（含 `script_md` 及 `storyboard_status/segment_count/segment_seconds/done_segment_count`，项目详情集概要同样返回这四项）/ 改 `{revision, title?, synopsis?, script_md?,hook?,cliffhanger?}`：已拆解（锁定）的集改 `script_md` / `synopsis` 返回 409 / 67005（改 `title` 允许）；集用集号 `no` 定位 |
