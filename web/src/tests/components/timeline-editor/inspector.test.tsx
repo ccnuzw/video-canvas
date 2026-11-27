@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { Inspector } from "@/components/timeline-editor/inspector";
+import { parseField } from "@/components/timeline-editor/inspector-fields";
 
 import { host, sampleTimeline } from "./fixtures";
 
@@ -69,5 +70,57 @@ describe("属性面板", () => {
     const locked = render("v1", { lock: "voice1" });
     expect(locked).toContain("轨道已锁定");
     expect(locked).toContain("disabled");
+  });
+});
+
+describe("属性面板的结构", () => {
+  test("头部信息条把起点、时长、结束分成三格", () => {
+    const html = render("v1");
+    expect(html).toContain('aria-label="片段信息"');
+    for (const label of ["起点", "时长", "结束"]) expect(html).toContain(`>${label}<`);
+  });
+
+  test("每类属性是一张带标题的分区卡片", () => {
+    const html = render("o1");
+    for (const title of ["画面", "淡入淡出"]) {
+      expect(html).toContain(`role="group" aria-label="${title}"`);
+    }
+  });
+
+  test("数值可以直接输入：音量、淡入淡出带单位的输入框", () => {
+    const html = render("v1");
+    expect(html).toMatch(/<input[^>]*aria-label="音量"[^>]*value="100"/);
+    expect(html).toMatch(/<input[^>]*aria-label="淡入"/);
+    expect(html).toContain(">%<");
+    expect(html).toContain(">s<");
+  });
+
+  test("静音是声音卡片头上的开关，状态在 aria-pressed 上", () => {
+    expect(render("v1")).toMatch(/aria-label="静音此段"[^>]*aria-pressed="false"/);
+  });
+
+  test("叠加位置用横向、纵向两个输入框，预设是带位置示意的小画面", () => {
+    const html = render("o1");
+    expect(html).toMatch(/<input[^>]*aria-label="横向位置"/);
+    expect(html).toMatch(/<input[^>]*aria-label="纵向位置"/);
+    expect(html).toMatch(/aria-label="铺满"/);
+  });
+
+  test("字幕的样式和位置是分段单选", () => {
+    const html = render("s1");
+    expect(html).toMatch(/role="radiogroup" aria-label="样式"/);
+    expect(html).toMatch(/role="radiogroup" aria-label="位置"/);
+    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>字幕</);
+  });
+});
+
+describe("数值输入的换算", () => {
+  test("输入框里的文字换算回数值：按单位倍数、夹到范围、按步长取整，看不懂就不改", () => {
+    expect(parseField("150", { min: 0, max: 200, step: 1, scale: 1 })).toBe(150);
+    expect(parseField("999", { min: 0, max: 200, step: 1, scale: 1 })).toBe(200);
+    expect(parseField("1.26", { min: 0, max: 3000, step: 100, scale: 1000 })).toBe(1300);
+    expect(parseField(" 0.5s ", { min: 0, max: 3000, step: 100, scale: 1000 })).toBe(500);
+    expect(parseField("abc", { min: 0, max: 200, step: 1, scale: 1 })).toBeNull();
+    expect(parseField("", { min: 0, max: 200, step: 1, scale: 1 })).toBeNull();
   });
 });

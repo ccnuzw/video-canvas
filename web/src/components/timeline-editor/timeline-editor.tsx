@@ -197,6 +197,7 @@ export function TimelineEditor({
             clipId={activeId}
             host={host}
             readOnly={readOnly}
+            ratio={aspect}
             onPreview={(next) => setDraft({ base: timeline, value: next })}
             onCommit={commit}
           />

@@ -1,7 +1,16 @@
-import { Maximize2, Volume2, VolumeX } from "lucide-react";
+import { Blend, Lock, Maximize2, MonitorPlay, Type, Volume2, VolumeX } from "lucide-react";
 
 import { Textarea } from "@/components/ui/textarea";
 
+import {
+  IconToggle,
+  FieldRow,
+  InspectorSection,
+  NumberField,
+  Segmented,
+  SliderField,
+  StatStrip,
+} from "./inspector-fields";
 import {
   DEFAULT_OVERLAY,
   MAX_FADE_MS,
@@ -11,7 +20,7 @@ import {
   trackBadge,
   updateClip,
 } from "./model";
-import { Group, Option, Options, SliderRow } from "./inspector-fields";
+import { OverlayPresets } from "./overlay-presets";
 import { timecode } from "./preview/timecode";
 import { restoreLength } from "./restore";
 import type {
@@ -19,30 +28,32 @@ import type {
   EditorTimeline,
   OverlayParams,
   TextParams,
+  TextPos,
+  TextStyle,
   TimelineEditorHost,
 } from "./types";
 
-/** 叠加画面的预设位置 */
-const PRESETS: { label: string; overlay: Omit<OverlayParams, "opacity"> }[] = [
-  { label: "铺满", overlay: { x: 50, y: 50, scale: 100 } },
-  { label: "右上小窗", overlay: { x: 72, y: 22, scale: 42 } },
-  { label: "左下小窗", overlay: { x: 28, y: 78, scale: 42 } },
-  { label: "居中", overlay: { x: 50, y: 50, scale: 62 } },
-];
+/** 百分比的范围（0–100，步长 1） */
+const PERCENT = { min: 0, max: 100, step: 1, scale: 1 };
 
-const percent = (value: number) => `${value}%`;
-const seconds = (value: number) => `${(value / 1000).toFixed(1)}s`;
+/** 秒数显示（一位小数） */
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+
+/** 改动的两种提交方式：拖动或输入中只更新预览，松手、失焦、点按钮才算一次修改 */
+type Apply = (next: EditorTimeline) => void;
 
 /**
- * 选中片段的属性面板：声音、淡入淡出、叠加位置、字幕文字和样式、恢复原长，宿主还能追加内容（如换版本）。
- * 滑杆拖动期间走 onPreview（只更新预览），松手才走 onCommit，所以每次拖动在宿主的撤销栈里只多一步；
- * 文字输入同理，输入中 onPreview，失焦 onCommit。
+ * 选中片段的属性面板：头部是轨道编号、片段名和「起点 / 时长 / 结束」信息条，
+ * 下面按分区卡片排：宿主追加区（如版本）、声音、淡入淡出、画面（叠加）、文字，最后是恢复原长。
+ * 滑杆拖动期间走 onPreview（只更新预览），松手才走 onCommit，每次拖动在宿主撤销栈里只多一步；
+ * 数值框回车或失焦提交；文字输入中 onPreview，失焦 onCommit。
  */
 export function Inspector({
   timeline,
   clipId,
   host,
   readOnly,
+  ratio = "9/16",
   onPreview,
   onCommit,
 }: {
@@ -52,10 +63,12 @@ export function Inspector({
   clipId: string | null;
   host: TimelineEditorHost;
   readOnly: boolean;
+  /** 项目画面比例（CSS aspect-ratio），叠加位置预设的小画面用 */
+  ratio?: string;
   /** 拖动或输入中：只更新预览 */
-  onPreview: (next: EditorTimeline) => void;
+  onPreview: Apply;
   /** 一次完整的修改：松手、失焦或点按钮 */
-  onCommit: (next: EditorTimeline) => void;
+  onCommit: Apply;
 }) {
   const found = clipId ? findClip(timeline, clipId) : null;
   if (!found) {
@@ -64,171 +77,241 @@ export function Inspector({
   const { clip, track } = found;
   const disabled = readOnly || track.locked;
   const media = clip.type === "text" ? null : host.resolve(clip);
-  const length = clipLength(clip);
   const patch = (change: Partial<EditorClip> | ((c: EditorClip) => EditorClip)) =>
     updateClip(timeline, clip.id, change);
-  const setOverlay = (change: Partial<OverlayParams>) =>
-    patch((c) => ({ ...c, overlay: { ...(c.overlay ?? DEFAULT_OVERLAY), ...change } }));
-  const setText = (change: Partial<TextParams>) =>
-    patch((c) => (c.text ? { ...c, text: { ...c.text, ...change } } : c));
-  const slider = (
-    label: string,
-    value: number,
-    range: [number, number, number],
-    format: (value: number) => string,
-    apply: (value: number) => EditorTimeline,
-  ) => (
-    <SliderRow
-      label={label}
-      value={value}
-      min={range[0]}
-      max={range[1]}
-      step={range[2]}
-      format={format}
-      disabled={disabled}
-      onPreview={(next) => onPreview(apply(next))}
-      onCommit={(next) => onCommit(apply(next))}
-    />
-  );
-
-  const hasSound = clip.type === "video" || clip.type === "audio";
-  const overlay = clip.overlay;
-  const text = clip.text;
   const title =
-    clip.type === "text" ? (text?.style === "title" ? "标题" : "字幕") : (media?.label ?? "");
+    clip.type === "text" ? (clip.text?.style === "title" ? "标题" : "字幕") : (media?.label ?? "");
+  const ctx = { clip, patch, disabled, onPreview, onCommit };
 
   return (
-    <div className="flex flex-col gap-5 px-1 pt-1 pb-3">
-      <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-3 px-1 pt-1 pb-3">
+      <div className="flex flex-col gap-2.5">
         <div className="flex items-center gap-2 text-[13.5px] font-semibold">
-          <span className="bg-chrome-hover text-muted-foreground rounded-md px-1.5 py-px font-mono text-[10.5px]">
+          <span className="bg-chrome-hover text-muted-foreground shrink-0 rounded-md px-1.5 py-px font-mono text-[10.5px]">
             {trackBadge(timeline, track)}
           </span>
-          <span className="truncate" title={title}>
+          <span className="min-w-0 flex-1 truncate" title={title}>
             {title}
           </span>
+          {track.locked && (
+            <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-[11px] font-normal">
+              <Lock className="size-3" />
+              轨道已锁定
+            </span>
+          )}
         </div>
-        <div className="text-muted-foreground font-mono text-[11.5px]">
-          起点 {timecode(clip.startMs)} · 时长 {seconds(length)} · 结束 {timecode(clipEnd(clip))}
-          {track.locked && " · 轨道已锁定"}
-        </div>
+        <StatStrip
+          items={[
+            { label: "起点", value: timecode(clip.startMs) },
+            { label: "时长", value: seconds(clipLength(clip)) },
+            { label: "结束", value: timecode(clipEnd(clip)) },
+          ]}
+        />
       </div>
 
       {host.inspectorExtra?.(clip)}
-
-      {hasSound && (
-        <Group title="声音">
-          {slider("音量", clip.volume, [0, 200, 1], percent, (v) => patch({ volume: v }))}
-          <Options>
-            <Option
-              disabled={disabled}
-              on={clip.muted}
-              onClick={() => onCommit(patch({ muted: !clip.muted }))}
-            >
-              {clip.muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
-              {clip.muted ? "已静音" : "静音此段"}
-            </Option>
-          </Options>
-        </Group>
-      )}
-
-      {overlay && (
-        <Group title="画面">
-          <Options>
-            {PRESETS.map((preset) => (
-              <Option
-                key={preset.label}
-                disabled={disabled}
-                on={
-                  overlay.x === preset.overlay.x &&
-                  overlay.y === preset.overlay.y &&
-                  overlay.scale === preset.overlay.scale
-                }
-                onClick={() => onCommit(setOverlay(preset.overlay))}
-              >
-                {preset.label}
-              </Option>
-            ))}
-          </Options>
-          {slider("横向", overlay.x, [0, 100, 1], percent, (v) => setOverlay({ x: v }))}
-          {slider("纵向", overlay.y, [0, 100, 1], percent, (v) => setOverlay({ y: v }))}
-          {slider("缩放", overlay.scale, [10, 100, 1], percent, (v) => setOverlay({ scale: v }))}
-          {slider("不透明", overlay.opacity, [0, 100, 1], percent, (v) =>
-            setOverlay({ opacity: v }),
-          )}
-        </Group>
-      )}
-
-      {text && (
-        <>
-          <Group title="文字">
-            <Textarea
-              value={text.text}
-              disabled={disabled}
-              rows={3}
-              onChange={(event) => onPreview(setText({ text: event.target.value }))}
-              onBlur={() => onCommit(timeline)}
-              className="bg-chrome-hover border-chrome-border rounded-2xl"
-            />
-          </Group>
-          <Group title="样式">
-            <Options>
-              <Option
-                disabled={disabled}
-                on={text.style === "subtitle"}
-                onClick={() => onCommit(setText({ style: "subtitle" }))}
-              >
-                字幕
-              </Option>
-              <Option
-                disabled={disabled}
-                on={text.style === "title"}
-                onClick={() => onCommit(setText({ style: "title" }))}
-              >
-                标题
-              </Option>
-            </Options>
-          </Group>
-          <Group title="位置">
-            <Options>
-              {(["top", "middle", "bottom"] as const).map((pos) => (
-                <Option
-                  key={pos}
-                  disabled={disabled}
-                  on={text.pos === pos}
-                  onClick={() => onCommit(setText({ pos }))}
-                >
-                  {pos === "top" ? "顶部" : pos === "middle" ? "中间" : "底部"}
-                </Option>
-              ))}
-            </Options>
-            {slider("字号", text.size, [60, 180, 5], percent, (v) => setText({ size: v }))}
-          </Group>
-        </>
-      )}
-
-      {clip.type !== "text" && (
-        <Group title="淡入淡出">
-          {slider("淡入", clip.fadeInMs, [0, Math.min(MAX_FADE_MS, length), 100], seconds, (v) =>
-            patch({ fadeInMs: v }),
-          )}
-          {slider("淡出", clip.fadeOutMs, [0, Math.min(MAX_FADE_MS, length), 100], seconds, (v) =>
-            patch({ fadeOutMs: v }),
-          )}
-        </Group>
-      )}
+      {(clip.type === "video" || clip.type === "audio") && <SoundSection {...ctx} />}
+      {clip.overlay && <OverlaySection {...ctx} overlay={clip.overlay} ratio={ratio} />}
+      {clip.text && <TextSection {...ctx} text={clip.text} timeline={timeline} />}
+      {clip.type !== "text" && <FadeSection {...ctx} />}
 
       {media && clip.type !== "text" && (
-        <Options>
-          <Option
-            disabled={disabled}
-            onClick={() => onCommit(restoreLength(timeline, clip.id, media.durationMs))}
-          >
-            <Maximize2 className="size-3.5" />
-            {clip.type === "image" ? "恢复默认 3 秒" : "恢复原长"}
-          </Option>
-        </Options>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onCommit(restoreLength(timeline, clip.id, media.durationMs))}
+          className="hover:bg-chrome-hover text-muted-foreground hover:text-foreground flex h-9 items-center justify-center gap-1.5 rounded-full text-[12.5px] transition-colors disabled:opacity-45 [&_svg]:size-3.5"
+        >
+          <Maximize2 />
+          {clip.type === "image" ? "恢复默认 3 秒" : "恢复原长"}
+        </button>
       )}
     </div>
+  );
+}
+
+/** 各分区共用的输入 */
+interface SectionProps {
+  clip: EditorClip;
+  /** 在当前时间线上改这一段，返回新时间线 */
+  patch: (change: Partial<EditorClip> | ((c: EditorClip) => EditorClip)) => EditorTimeline;
+  disabled: boolean;
+  onPreview: Apply;
+  onCommit: Apply;
+}
+
+/** 声音：音量；静音开关在卡片头 */
+function SoundSection({ clip, patch, disabled, onPreview, onCommit }: SectionProps) {
+  return (
+    <InspectorSection
+      icon={<Volume2 />}
+      title="声音"
+      action={
+        <IconToggle
+          label={clip.muted ? "取消静音" : "静音此段"}
+          pressed={clip.muted}
+          disabled={disabled}
+          onClick={() => onCommit(patch({ muted: !clip.muted }))}
+        >
+          {clip.muted ? <VolumeX /> : <Volume2 />}
+        </IconToggle>
+      }
+    >
+      <SliderField
+        label="音量"
+        value={clip.volume}
+        range={{ min: 0, max: 200, step: 1, scale: 1 }}
+        unit="%"
+        disabled={disabled || clip.muted}
+        onPreview={(v) => onPreview(patch({ volume: v }))}
+        onCommit={(v) => onCommit(patch({ volume: v }))}
+      />
+    </InspectorSection>
+  );
+}
+
+/** 淡入淡出：各自最长 3 秒，且不超过片段长度 */
+function FadeSection({ clip, patch, disabled, onPreview, onCommit }: SectionProps) {
+  const range = { min: 0, max: Math.min(MAX_FADE_MS, clipLength(clip)), step: 100, scale: 1000 };
+  const row = (label: string, key: "fadeInMs" | "fadeOutMs") => (
+    <SliderField
+      label={label}
+      value={clip[key]}
+      range={range}
+      unit="s"
+      decimals={1}
+      disabled={disabled}
+      onPreview={(v) => onPreview(patch({ [key]: v }))}
+      onCommit={(v) => onCommit(patch({ [key]: v }))}
+    />
+  );
+  return (
+    <InspectorSection icon={<Blend />} title="淡入淡出">
+      {row("淡入", "fadeInMs")}
+      {row("淡出", "fadeOutMs")}
+    </InspectorSection>
+  );
+}
+
+/** 画面（叠加轨）：位置预设、横纵位置、缩放、不透明度 */
+function OverlaySection({
+  overlay,
+  ratio,
+  patch,
+  disabled,
+  onPreview,
+  onCommit,
+}: SectionProps & { overlay: OverlayParams; ratio: string }) {
+  const set = (change: Partial<OverlayParams>) =>
+    patch((c) => ({ ...c, overlay: { ...(c.overlay ?? DEFAULT_OVERLAY), ...change } }));
+  return (
+    <InspectorSection icon={<MonitorPlay />} title="画面">
+      <OverlayPresets
+        overlay={overlay}
+        ratio={ratio}
+        disabled={disabled}
+        onPick={(preset) => onCommit(set(preset))}
+      />
+      <FieldRow label="位置">
+        <NumberField
+          label="横向位置"
+          prefix="X"
+          value={overlay.x}
+          range={PERCENT}
+          unit="%"
+          disabled={disabled}
+          onCommit={(v) => onCommit(set({ x: v }))}
+          className="w-auto flex-1"
+        />
+        <NumberField
+          label="纵向位置"
+          prefix="Y"
+          value={overlay.y}
+          range={PERCENT}
+          unit="%"
+          disabled={disabled}
+          onCommit={(v) => onCommit(set({ y: v }))}
+          className="w-auto flex-1"
+        />
+      </FieldRow>
+      <SliderField
+        label="缩放"
+        value={overlay.scale}
+        range={{ ...PERCENT, min: 10 }}
+        unit="%"
+        disabled={disabled}
+        onPreview={(v) => onPreview(set({ scale: v }))}
+        onCommit={(v) => onCommit(set({ scale: v }))}
+      />
+      <SliderField
+        label="不透明度"
+        value={overlay.opacity}
+        range={PERCENT}
+        unit="%"
+        disabled={disabled}
+        onPreview={(v) => onPreview(set({ opacity: v }))}
+        onCommit={(v) => onCommit(set({ opacity: v }))}
+      />
+    </InspectorSection>
+  );
+}
+
+/** 文字（字幕轨）：内容、样式、位置、字号 */
+function TextSection({
+  text,
+  timeline,
+  patch,
+  disabled,
+  onPreview,
+  onCommit,
+}: SectionProps & { text: TextParams; timeline: EditorTimeline }) {
+  const set = (change: Partial<TextParams>) =>
+    patch((c) => (c.text ? { ...c, text: { ...c.text, ...change } } : c));
+  return (
+    <InspectorSection icon={<Type />} title="文字">
+      <Textarea
+        aria-label="文字内容"
+        value={text.text}
+        disabled={disabled}
+        rows={3}
+        onChange={(event) => onPreview(set({ text: event.target.value }))}
+        onBlur={() => onCommit(timeline)}
+        className="bg-chrome-hover border-chrome-border rounded-xl text-[13px]"
+      />
+      <FieldRow label="样式">
+        <Segmented<TextStyle>
+          label="样式"
+          value={text.style}
+          options={[
+            { value: "subtitle", label: "字幕" },
+            { value: "title", label: "标题" },
+          ]}
+          disabled={disabled}
+          onChange={(style) => onCommit(set({ style }))}
+        />
+      </FieldRow>
+      <FieldRow label="位置">
+        <Segmented<TextPos>
+          label="位置"
+          value={text.pos}
+          options={[
+            { value: "top", label: "顶部" },
+            { value: "middle", label: "中间" },
+            { value: "bottom", label: "底部" },
+          ]}
+          disabled={disabled}
+          onChange={(pos) => onCommit(set({ pos }))}
+        />
+      </FieldRow>
+      <SliderField
+        label="字号"
+        value={text.size}
+        range={{ min: 60, max: 180, step: 5, scale: 1 }}
+        unit="%"
+        disabled={disabled}
+        onPreview={(v) => onPreview(set({ size: v }))}
+        onCommit={(v) => onCommit(set({ size: v }))}
+      />
+    </InspectorSection>
   );
 }

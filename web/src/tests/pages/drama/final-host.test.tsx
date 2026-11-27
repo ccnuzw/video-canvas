@@ -228,14 +228,17 @@ describe("换版本入口", () => {
     expect(items.map((i) => i.label)).toEqual(["跟随采用", "版本 1（已采用）", "版本 2 ✓"]);
   });
 
-  test("属性面板里的版本选择：列出跟随采用和各版本，选中态在 aria-pressed 上", () => {
+  test("属性面板里的版本选择：单选列表，跟随采用和各版本各一行，采用的那版带标记", () => {
     const html = renderToStaticMarkup(
       <VersionPicker clip={clip} segment={segments[0]} disabled={false} onPick={() => {}} />,
     );
+    expect(html).toContain('role="radiogroup"');
     expect(html).toContain("跟随采用");
     expect(html).toContain("版本 1");
     expect(html).toContain("版本 2");
     expect(html).not.toContain("版本 3");
-    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(html.match(/role="radio"/g)).toHaveLength(3);
+    expect(html.match(/aria-checked="true"/g)).toHaveLength(1);
+    expect(html).toContain(">采用<");
   });
 });
