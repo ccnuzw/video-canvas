@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 var (
 	reEpisode  = regexp.MustCompile(`^第\s*[\d一二三四五六七八九十百]+\s*集`)
 	reHeading  = regexp.MustCompile(`^\d+\s*[-–]\s*\d+\s*(?:(.+?)\s*)?[·•]\s*(.+)$`)
 	reHeadBare = regexp.MustCompile(`^\d+\s*[-–]\s*\d+$`)
+	// reHeadNo 是空格分隔标题「2-1 地点 日 外」的编号前缀
+	reHeadNo   = regexp.MustCompile(`^\d+\s*[-–]\s*\d+\s+(.+)$`)
 	reHeadEN   = regexp.MustCompile(`(?i)^(INT|EXT)\.\s*(.+?)\s*[-–]\s*(DAY|NIGHT)$`)
 	reCast     = regexp.MustCompile(`^人物[:：]\s*(.+)$`)
 	reProps    = regexp.MustCompile(`^道具[:：]\s*(.+)$`)
@@ -46,6 +50,8 @@ var reservedLabels = map[string]bool{
 	"大纲": true, "概述": true, "总述": true, "主要人物": true, "人物": true, "人物设定": true, "人物小传": true,
 	"角色": true, "场景": true, "地点": true, "时间": true, "道具": true, "画面": true,
 	"备注": true, "说明": true, "注": true, "提示": true, "要求": true,
+	"对标剧": true, "对标": true, "核心梗": true, "一句话故事": true, "一句话梗概": true, "故事梗概": true,
+	"卖点": true, "看点": true, "亮点": true, "集数": true, "时长": true,
 }
 
 // parser 逐行读文本，把每行归到当前场次。
@@ -65,7 +71,7 @@ type parser struct {
 // pendingSpeaker 是读到「人物：」单独一行后挂起的说话人，raw 用于没等到台词时原样存为动作。
 type pendingSpeaker struct {
 	raw   string
-	id    uint64
+	name  string
 	ext   string
 	paren string
 }
@@ -166,7 +172,52 @@ func parseHeading(s string) (heading, bool) {
 	if m := reHeadNum.FindStringSubmatch(s); m != nil {
 		return parseNumberedHeading(m[1]), true
 	}
-	return h, reHeadBare.MatchString(s)
+	if reHeadBare.MatchString(s) {
+		return h, true
+	}
+	return parseSpacedHeading(s)
+}
+
+// parseSpacedHeading 识别空格分隔的「2-1 大唐 立政殿 日/黄昏 内」和省掉编号的「小兕子寝宫 日 内」：
+// 从行尾往前取时间、内外景，剩下的段落拼成地点。没有编号时时间和内外景都要有，免得把普通文字当成标题。
+func parseSpacedHeading(s string) (heading, bool) {
+	var h heading
+	body, numbered := s, false
+	if m := reHeadNo.FindStringSubmatch(s); m != nil {
+		body, numbered = m[1], true
+	}
+	if strings.ContainsAny(body, "：:，,。！!？?△【】“”\"（）()") {
+		return h, false
+	}
+	toks := strings.Fields(body)
+	n := len(toks)
+	for n > 1 && (h.tm == "" || h.intExt == "") && h.setSpacedSegment(toks[n-1]) {
+		n--
+	}
+	if n == len(toks) || (!numbered && (h.tm == "" || h.intExt == "")) {
+		return heading{}, false
+	}
+	h.loc = strings.Join(toks[:n], "·")
+	return h, true
+}
+
+// setSpacedSegment 记下一段时间或内外景；「日/黄昏」这类全是时间词的段落整段作为时间。已经取过的项不重复取。
+func (h *heading) setSpacedSegment(seg string) bool {
+	all := true
+	for _, tok := range reTimeSplit.Split(seg, -1) {
+		all = all && timeWords[tok]
+	}
+	if all {
+		if h.tm != "" {
+			return false
+		}
+		h.tm = seg
+		return true
+	}
+	if h.intExt != "" {
+		return false
+	}
+	return h.setSegment(seg)
 }
 
 // parseNumberedHeading 拆「海边沙地 · 夜 · 外（意象镜头）」：能认出的时间、内外景取出，其余段落拼成地点，末尾括号作短标题。
@@ -291,7 +342,7 @@ func (p *parser) meta(s string) bool {
 func splitList(s string) []string {
 	var out []string
 	for _, v := range reListSplit.Split(s, -1) {
-		if v != "" {
+		if v = strings.Trim(v, "。.．；;：:！!？?"); v != "" {
 			out = append(out, v)
 		}
 	}
@@ -339,11 +390,15 @@ func (p *parser) speech(no int, s string) bool {
 	if m == nil || notSpeaker(m[1]) {
 		return false
 	}
-	id := p.r.Character(m[1])
+	name, suffix := splitNameExt(m[1])
+	id := p.r.Character(name)
 	if id == 0 {
 		return false
 	}
 	ext, paren := splitTags(m[2])
+	if ext == "" {
+		ext = suffix
+	}
 	p.add(Element{Type: Character, CharacterID: id, Extension: ext})
 	if paren != "" {
 		p.add(Element{Type: Parenthetical, Text: paren})
@@ -357,18 +412,36 @@ func notSpeaker(name string) bool {
 	return reservedLabels[name] || reShotLabel.MatchString(name)
 }
 
-// speaker 处理单独一行的「人物（语气）：」，挂起等下一行台词。
+// splitNameExt 把「林牧OS」「林牧VO」这类紧贴名字的画外音标记拆出来；后缀前面必须是非字母（如汉字），免得拆坏英文名。
+func splitNameExt(name string) (string, string) {
+	if len(name) <= 2 {
+		return name, ""
+	}
+	rest, tail := name[:len(name)-2], name[len(name)-2:]
+	for _, ext := range []string{ExtOS, ExtVO} {
+		if !strings.EqualFold(tail, ext) {
+			continue
+		}
+		if r, _ := utf8.DecodeLastRuneInString(rest); r >= utf8.RuneSelf || !unicode.IsLetter(r) {
+			return rest, ext
+		}
+	}
+	return name, ""
+}
+
+// speaker 处理单独一行的「人物（语气）：」，挂起等下一行台词；等到台词才登记人物，
+// 免得「画面一：」这类后面跟着动作的段落标签变成人物。
 func (p *parser) speaker(s string) bool {
 	m := reSpeaker.FindStringSubmatch(s)
 	if m == nil || notSpeaker(m[1]) {
 		return false
 	}
-	id := p.r.Character(m[1])
-	if id == 0 {
-		return false
-	}
+	name, suffix := splitNameExt(m[1])
 	ext, paren := splitTags(m[2])
-	p.pending = &pendingSpeaker{raw: s, id: id, ext: ext, paren: paren}
+	if ext == "" {
+		ext = suffix
+	}
+	p.pending = &pendingSpeaker{raw: s, name: name, ext: ext, paren: paren}
 	return true
 }
 
@@ -381,8 +454,13 @@ func (p *parser) continueSpeech(s string) bool {
 		return false
 	}
 	if ps := p.pending; ps != nil {
+		id := p.r.Character(ps.name)
+		if id == 0 {
+			p.flushPending() // 人物登记不了，说话人行原样存成动作，这一行按普通行处理
+			return false
+		}
 		p.pending = nil
-		p.add(Element{Type: Character, CharacterID: ps.id, Extension: ps.ext})
+		p.add(Element{Type: Character, CharacterID: id, Extension: ps.ext})
 		if ps.paren != "" {
 			p.add(Element{Type: Parenthetical, Text: ps.paren})
 		}

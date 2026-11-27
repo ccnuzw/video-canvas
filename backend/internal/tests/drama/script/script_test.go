@@ -540,3 +540,97 @@ func TestParseSpeakerOnOwnLine(t *testing.T) {
 		t.Fatalf("【画面】后的文字应作为动作：%q", s2[4].Text)
 	}
 }
+
+// spacedScript 是另一种常见写法：场次标题用空格分隔「编号 地点 时间 内外」，
+// 第一场还省掉了编号；文头是对标剧、核心梗这类自定义字段。
+const spacedScript = `《开局一座幼儿园》
+对标剧：同类型非同IP
+核心梗：萌娃穿梭+震惊古代
+一句话故事：继承了爷爷幼儿园的林牧……
+
+小兕子寝宫 日 内
+人物：小兕子、翠儿。
+【一组蒙太奇】
+画面一：
+△ 小兕子，坐在椅子上，一手托腮。
+【蒙太奇结束】
+翠儿：小公主？快来喝药了。
+
+4-1 大唐 立政殿 日/黄昏 内
+林牧OS：唉爷爷啊爷爷。
+5-2 立政殿偏殿长廊 夜 内/外
+小兕子：阿姐！`
+
+func TestParseSpaceSeparatedSceneHeadings(t *testing.T) {
+	r := newRoster()
+	r.chars = map[string]uint64{"小兕子": 1, "翠儿": 2, "林牧": 3}
+	r.locs = map[string]uint64{}
+	res := script.Parse(spacedScript, r)
+	if len(res.Scenes) != 4 {
+		t.Fatalf("应为文头 + 三场，得到 %d 场", len(res.Scenes))
+	}
+	s1, s2, s3 := res.Scenes[1], res.Scenes[2], res.Scenes[3]
+	if s1.TimeLabel != "日" || s1.IntExt != script.Interior || s1.LocationID != r.locs["小兕子寝宫"] || s1.LocationID == 0 {
+		t.Fatalf("没有编号的标题解析错误：%+v %v", s1, r.locs)
+	}
+	if s2.TimeLabel != "日/黄昏" || s2.IntExt != script.Interior || s2.LocationID != r.locs["大唐·立政殿"] || s2.LocationID == 0 {
+		t.Fatalf("带编号的标题解析错误：%+v %v", s2, r.locs)
+	}
+	if s3.TimeLabel != "夜" || s3.IntExt != script.InteriorExterior || s3.LocationID != r.locs["立政殿偏殿长廊"] || s3.LocationID == 0 {
+		t.Fatalf("内/外 标题解析错误：%+v %v", s3, r.locs)
+	}
+}
+
+func TestParseSpacedScriptRegistersOnlyRealCharacters(t *testing.T) {
+	r := newRoster()
+	r.chars = map[string]uint64{"小兕子": 1, "翠儿": 2, "林牧": 3}
+	r.locs = map[string]uint64{}
+	script.Parse(spacedScript, r)
+	if len(r.chars) != 3 {
+		t.Fatalf("文头字段、段落标签、画外音标记都不应登记成人物：%v", r.registered)
+	}
+}
+
+func TestParseCustomPreambleLabelsInFragmentAreNotSpeakers(t *testing.T) {
+	// 没有场次标题时没有文头保护，常见的文头字段名本身也不能当说话人
+	r := newRoster()
+	script.Parse("对标剧：同类型\n核心梗：萌娃穿梭\n一句话故事：林牧……\n苏晚：走吧。", r)
+	if len(r.registered) != 0 {
+		t.Fatalf("文头字段名不应登记成人物：%v", r.registered)
+	}
+}
+
+func TestParseSpeakerWithoutDialogueIsNotRegistered(t *testing.T) {
+	r := newRoster()
+	res := script.Parse("1-1 日/内 · 林家老宅客厅\n画面一：\n△ 小兕子坐在椅子上。\n老周：来了。", r)
+	if len(r.registered) != 0 {
+		t.Fatalf("单独一行的「名字：」后面没有台词时不应登记人物：%v", r.registered)
+	}
+	els := res.Scenes[0].Elements
+	if els[0].Type != script.Action || els[0].Text != "画面一：" {
+		t.Fatalf("没等到台词的说话人行应原样保存为动作：%+v", els[0])
+	}
+}
+
+func TestParseSpeakerWithOSSuffix(t *testing.T) {
+	r := newRoster()
+	res := script.Parse("1-1 日/内 · 林家老宅客厅\n林骁OS：他醒得太巧了。\n老周vo：少爷。", r)
+	if len(r.registered) != 0 {
+		t.Fatalf("名字后缀的 OS/VO 是画外音标记，不是名字的一部分：%v", r.registered)
+	}
+	els := res.Scenes[0].Elements
+	if els[0].CharacterID != 1 || els[0].Extension != script.ExtOS || els[2].CharacterID != 3 || els[2].Extension != script.ExtVO {
+		t.Fatalf("画外音标记错误：%+v", els)
+	}
+}
+
+func TestParseCastListTrimsPunctuation(t *testing.T) {
+	r := newRoster()
+	res := script.Parse("1-1 日/内 · 林家老宅客厅\n人物：苏晚、老周。\n老周：来了。", r)
+	if len(r.registered) != 0 {
+		t.Fatalf("人物行末尾的标点不是名字的一部分：%v", r.registered)
+	}
+	if got := res.Scenes[0].ExtraCharacterIDs; !reflect.DeepEqual(got, []uint64{2}) {
+		t.Fatalf("人物行里没说话的人物=%v", got)
+	}
+}
