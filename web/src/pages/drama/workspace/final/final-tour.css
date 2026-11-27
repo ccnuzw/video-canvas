@@ -102,6 +102,34 @@
   background: color-mix(in oklch, var(--primary) 88%, var(--foreground));
 }
 
+/*
+ * 深色下剪辑台本身接近纯黑，黑色遮罩压上去和高亮区几乎没有明暗差，看不出指的是哪块。
+ * 所以在遮罩上面（z-index 高于遮罩的 10000、低于气泡）盖一个琥珀色的框，位置由 use-final-tour 写入。
+ * 浅色下遮罩对比足够，不显示。过渡时长和曲线跟 driver.js 遮罩的滑动一致（400ms、easeInOutQuad）。
+ */
+.vc-tour-ring {
+  display: none;
+}
+
+.dark .vc-tour-ring {
+  display: block;
+  position: fixed;
+  z-index: 10001;
+  box-sizing: border-box;
+  border: 2px solid color-mix(in oklch, var(--primary) 85%, transparent);
+  background: transparent;
+  pointer-events: none;
+  transition-property: left, top, width, height, border-radius;
+  transition-duration: 400ms;
+  transition-timing-function: cubic-bezier(0.455, 0.03, 0.515, 0.955);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark .vc-tour-ring {
+    transition: none;
+  }
+}
+
 @keyframes vc-tour-in {
   from {
     opacity: 0;
