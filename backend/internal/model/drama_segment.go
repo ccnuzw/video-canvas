@@ -138,11 +138,11 @@ type DramaTimelineClip struct {
 	TaskID    idcodec.ID `json:"task_id,omitempty"`
 	// Pinned 用户在时间线里手动选了版本，不再跟随片段的采用；附属轨上的版本恒为固定
 	Pinned bool `json:"pinned"`
-	// AssetID / Media 只用于 kind=asset
-	AssetID idcodec.ID `json:"asset_id,omitempty"`
-	Media   string     `json:"media,omitempty"`
-	InMS    int64      `json:"in_ms"`
-	OutMS   int64      `json:"out_ms"`
+	// AssetID / Media 只用于 kind=asset；素材 ID 和素材接口、画布节点一致，是原始数字（不编码）
+	AssetID uint64 `json:"asset_id,omitempty"`
+	Media   string `json:"media,omitempty"`
+	InMS    int64  `json:"in_ms"`
+	OutMS   int64  `json:"out_ms"`
 	// StartMS 在时间线上的起点；主轨不存（恒为 0），按顺序首尾相接
 	StartMS int64 `json:"start_ms"`
 	Muted   bool  `json:"muted"`
@@ -187,7 +187,7 @@ type DramaTimelineChange struct {
 type DramaTimelineView struct {
 	Tracks            []DramaTimelineTrack  `json:"tracks"`
 	RemovedSegmentIDs []idcodec.ID          `json:"removed_segment_ids"`
-	Imports           []idcodec.ID          `json:"imports"`
+	Imports           []uint64              `json:"imports"` // 「已导入」的素材，原始数字 ID
 	Revision          int64                 `json:"revision"`
 	Changes           []DramaTimelineChange `json:"changes"`
 	// InvalidClipIDs 所有轨上固定的版本或素材已不可用的段，合成前必须处理
@@ -201,5 +201,5 @@ type SaveDramaTimelineReq struct {
 	Revision          int64                `json:"revision" binding:"min=0" label:"版本"`
 	Tracks            []DramaTimelineTrack `json:"tracks" binding:"max=15,dive" label:"轨道"`
 	RemovedSegmentIDs []idcodec.ID         `json:"removed_segment_ids" binding:"max=500" label:"已删除片段"`
-	Imports           []idcodec.ID         `json:"imports" binding:"max=200" label:"已导入素材"`
+	Imports           []uint64             `json:"imports" binding:"max=200" label:"已导入素材"` // 原始数字 ID
 }

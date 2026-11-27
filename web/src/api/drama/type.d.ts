@@ -821,7 +821,8 @@ export interface BackendTimelineClip {
   /** 只用于 kind=segment；附属轨上的片段后端视为 true */
   pinned?: boolean;
   /** 只用于 kind=asset */
-  asset_id?: string | null;
+  /** 素材 ID：原始数字（和素材接口、画布节点一致，不是编码串）；不是素材段为 null */
+  asset_id?: number | null;
   /** 只用于 kind=asset */
   media?: TimelineMedia | "";
   /** 只用于 kind=text */
@@ -865,7 +866,8 @@ export interface BackendTimelineTrack {
 export interface BackendTimelineView {
   tracks: BackendTimelineTrack[] | null;
   removed_segment_ids: string[] | null;
-  imports: string[] | null;
+  /** 「已导入」的素材，原始数字 ID */
+  imports: number[] | null;
   revision: number;
   changes:
     | { kind: TimelineChangeKind; segment_id: string | null; seq: number; clip_id: string }[]

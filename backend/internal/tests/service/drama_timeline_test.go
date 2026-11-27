@@ -40,11 +40,11 @@ func segClip(id string, sid, task uint64, in, out int64) model.DramaTimelineClip
 }
 
 func imageClip(id string, asset uint64, out int64) model.DramaTimelineClip {
-	return model.DramaTimelineClip{ID: id, Kind: model.TimelineKindAsset, AssetID: idcodec.ID(asset), Media: model.TimelineMediaImage, OutMS: out, Volume: 100}
+	return model.DramaTimelineClip{ID: id, Kind: model.TimelineKindAsset, AssetID: asset, Media: model.TimelineMediaImage, OutMS: out, Volume: 100}
 }
 
 func audioViewClip(id string, asset uint64, start, out int64) model.DramaTimelineClip {
-	return model.DramaTimelineClip{ID: id, Kind: model.TimelineKindAsset, AssetID: idcodec.ID(asset), Media: model.TimelineMediaAudio, StartMS: start, OutMS: out, Volume: 100}
+	return model.DramaTimelineClip{ID: id, Kind: model.TimelineKindAsset, AssetID: asset, Media: model.TimelineMediaAudio, StartMS: start, OutMS: out, Volume: 100}
 }
 
 func trackOf(id, kind string, clips ...model.DramaTimelineClip) model.DramaTimelineTrack {
@@ -121,7 +121,7 @@ func TestDramaTimeline_SaveReconcileAndConflict(t *testing.T) {
 	req := &model.SaveDramaTimelineReq{
 		Tracks:            []model.DramaTimelineTrack{main, voice},
 		RemovedSegmentIDs: []idcodec.ID{2},
-		Imports:           []idcodec.ID{601, 701, 601, 801},
+		Imports:           []uint64{601, 701, 601, 801},
 	}
 	// 1. 第一次保存：版本 0 → 1，片段版本自增让成片过期；已导入去掉别人的素材和重复项，音频可以导入。
 	v, err := s.SaveTimeline(ctx, 1, 7, 1, req)
@@ -134,7 +134,7 @@ func TestDramaTimeline_SaveReconcileAndConflict(t *testing.T) {
 	if !mainOf(t, v).Muted || len(mainOf(t, v).Clips) != 2 {
 		t.Fatalf("主轨 %+v", mainOf(t, v))
 	}
-	if len(v.Imports) != 2 || uint64(v.Imports[0]) != 601 || uint64(v.Imports[1]) != 801 || len(v.RemovedSegmentIDs) != 1 || len(v.Assets) != 2 {
+	if len(v.Imports) != 2 || v.Imports[0] != 601 || v.Imports[1] != 801 || len(v.RemovedSegmentIDs) != 1 || len(v.Assets) != 2 {
 		t.Fatalf("已导入或删除名单 %+v", v)
 	}
 	if got := trackByID(t, v, "voice1").Clips[0]; got.StartMS != 1000 || got.Media != model.TimelineMediaAudio {

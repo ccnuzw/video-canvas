@@ -32,7 +32,7 @@ function mapClip(raw: BackendTimelineClip, trackKind: TimelineTrackKind): Editor
     segmentId: raw.segment_id ?? "",
     taskId: raw.task_id ?? "",
     pinned: !!raw.pinned,
-    assetId: raw.asset_id ?? "",
+    assetId: raw.asset_id ? String(raw.asset_id) : "",
     media: raw.media || null,
   };
   return {
@@ -84,7 +84,7 @@ const mapTrack = (raw: BackendTimelineTrack): EditorTrack => ({
 export const mapTimeline = (raw: BackendTimelineView): TimelineView => ({
   tracks: normalize({ tracks: (raw.tracks ?? []).map(mapTrack) }).tracks,
   removedSegmentIds: raw.removed_segment_ids ?? [],
-  imports: raw.imports ?? [],
+  imports: (raw.imports ?? []).map(String),
   revision: raw.revision ?? 0,
   changes: (raw.changes ?? []).map((change) => ({
     kind: change.kind,
@@ -116,7 +116,7 @@ function toClipBody(clip: EditorClip, trackKind: TimelineTrackKind): BackendTime
     // 附属轨上的片段版本不跟随采用，后端一律当固定版本
     body.pinned = trackKind === "main" ? host.pinned : true;
   } else if (body.kind === "asset") {
-    body.asset_id = host.assetId;
+    body.asset_id = Number(host.assetId);
     body.media = (host.media ?? (clip.type === "text" ? "video" : clip.type)) as TimelineMedia;
   } else if (clip.text) {
     body.text = clip.text.text;
@@ -150,7 +150,7 @@ export const toTimelineBody = (timeline: Timeline, revision: number) => ({
   revision,
   tracks: timeline.tracks.map(toTrackBody),
   removed_segment_ids: timeline.removedSegmentIds,
-  imports: timeline.imports,
+  imports: timeline.imports.map(Number),
 });
 
 /**

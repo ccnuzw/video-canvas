@@ -78,7 +78,7 @@ const rawView = (): BackendTimelineView => ({
         {
           id: "c",
           kind: "asset",
-          asset_id: "i1",
+          asset_id: 11,
           media: "image",
           in_ms: 0,
           out_ms: 3000,
@@ -96,7 +96,7 @@ const rawView = (): BackendTimelineView => ({
         {
           id: "v1",
           kind: "asset",
-          asset_id: "a1",
+          asset_id: 21,
           media: "audio",
           in_ms: 0,
           out_ms: 4000,
@@ -110,7 +110,7 @@ const rawView = (): BackendTimelineView => ({
     { id: "music1", kind: "audio", name: "BGM", clips: null },
   ],
   removed_segment_ids: ["s3"],
-  imports: ["a1"],
+  imports: [21],
   revision: 4,
   changes: [{ kind: "swapped", segment_id: "s1", seq: 0, clip_id: "a" }],
   invalid_clip_ids: ["o1"],
@@ -135,7 +135,7 @@ describe("后端时间线 → 前端", () => {
     expect([overlay.hidden, main.muted, voice.locked, music.clips]).toEqual([true, true, true, []]);
     expect(view.revision).toBe(4);
     expect(view.removedSegmentIds).toEqual(["s3"]);
-    expect(view.imports).toEqual(["a1"]);
+    expect(view.imports).toEqual(["21"]);
     expect(view.invalidClipIds).toEqual(["o1"]);
     expect(view.changes).toEqual([{ kind: "swapped", segmentId: "s1", seq: 0, clipId: "a" }]);
   });
@@ -154,15 +154,15 @@ describe("后端时间线 → 前端", () => {
 
   test("通用类型和宿主字段：片段=video，素材取 media，文字=text", () => {
     const view = mapTimeline(rawView());
-    expect(clipOf(view, "c")).toMatchObject({ type: "image", ref: "asset:i1" });
+    expect(clipOf(view, "c")).toMatchObject({ type: "image", ref: "asset:11" });
     expect(hostOf(clipOf(view, "c"))).toMatchObject({
       kind: "asset",
-      assetId: "i1",
+      assetId: "11",
       media: "image",
     });
     expect(clipOf(view, "v1")).toMatchObject({
       type: "audio",
-      ref: "asset:a1",
+      ref: "asset:21",
       muted: true,
       volume: 150,
     });
@@ -206,7 +206,7 @@ describe("后端时间线 → 前端", () => {
             {
               id: "x",
               kind: "asset",
-              asset_id: "m",
+              asset_id: 31,
               media: "image",
               in_ms: 0,
               out_ms: 3000,
@@ -229,6 +229,18 @@ describe("后端时间线 → 前端", () => {
   });
 });
 
+describe("素材 ID 是原始数字", () => {
+  test("后端给数字，前端用字符串；存回去又是数字（和素材接口、画布节点一致，不是编码串）", () => {
+    const view = mapTimeline(rawView());
+    expect(hostOf(clipOf(view, "c")).assetId).toBe("11");
+    expect(clipOf(view, "c").ref).toBe("asset:11");
+    const body = toTimelineBody(view, 4);
+    const c = body.tracks.flatMap((t) => t.clips ?? []).find((x) => x.id === "c")!;
+    expect(c.asset_id).toBe(11);
+    expect(body.imports).toEqual([21]);
+  });
+});
+
 describe("前端时间线 → 请求体", () => {
   test("读出来再存回去，字段保持一致（往返）", () => {
     const raw = rawView();
@@ -236,7 +248,7 @@ describe("前端时间线 → 请求体", () => {
     const body = toTimelineBody(view, 4);
     expect(body.revision).toBe(4);
     expect(body.removed_segment_ids).toEqual(["s3"]);
-    expect(body.imports).toEqual(["a1"]);
+    expect(body.imports).toEqual([21]);
     expect("clips" in body).toBe(false);
     expect("muted" in body).toBe(false);
     const byId = Object.fromEntries(
@@ -268,13 +280,13 @@ describe("前端时间线 → 请求体", () => {
     });
     expect(byId.v1).toMatchObject({
       kind: "asset",
-      asset_id: "a1",
+      asset_id: 21,
       media: "audio",
       muted: true,
       volume: 150,
       start_ms: 2000,
     });
-    expect(byId.c).toMatchObject({ kind: "asset", asset_id: "i1", media: "image" });
+    expect(byId.c).toMatchObject({ kind: "asset", asset_id: 11, media: "image" });
     const voice = body.tracks.find((t) => t.id === "voice1")!;
     expect([voice.kind, voice.role, voice.name, voice.locked]).toEqual([
       "audio",

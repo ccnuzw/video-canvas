@@ -49,3 +49,29 @@ func TestDramaTimelineHandler_Contracts(t *testing.T) {
 		t.Fatalf("数字字段应始终序列化：%+v", first)
 	}
 }
+
+// 素材 ID 和素材接口、画布节点一致，是原始数字（不是编码串）：保存时收数字，读取时也返回数字，
+// 和同一个响应里 assets 的 id 对得上。
+func TestDramaTimelineHandler_AssetIDsAreRawNumbers(t *testing.T) {
+	r, repo := segmentHTTP()
+	chosen, canvas := uint64(101), uint64(9)
+	repo.Rows = []model.DramaSegment{{BaseModel: model.BaseModel{ID: 1}, UserID: 1, EpisodeID: 10, Seq: 0, Seconds: 15, ChosenTaskID: &chosen, Revision: 1}}
+	repo.Tasks = []model.GenerationTask{{ID: 101, UserID: 1, CanvasProjectID: &canvas, NodeID: "seg:" + idcodec.Encode(1), Kind: model.KindVideo, Status: model.TaskSucceeded, OutputJSON: []byte(`[{"asset_id":501,"media_type":"video"}]`)}}
+	repo.Library = []model.Asset{{ID: 501, UserID: 1, Kind: "video", DurationMs: 15000}, {ID: 1036, UserID: 1, Kind: "image"}}
+	path := "/dramas/" + idcodec.Encode(7) + "/episodes/1/timeline"
+	segment := `{"id":"a","kind":"segment","segment_id":"` + idcodec.Encode(1) + `","task_id":"` + idcodec.Encode(101) + `","in_ms":0,"out_ms":9000,"volume":100}`
+	image := `{"id":"b","kind":"asset","asset_id":1036,"media":"image","in_ms":0,"out_ms":3000,"volume":100}`
+	body := `{"revision":0,"tracks":[{"id":"main","kind":"main","name":"主轨","clips":[` + segment + `,` + image + `]}],"imports":[1036]}`
+	status, resp := characterCall(t, r, "PUT", path, body)
+	if status != 200 {
+		t.Fatalf("原始数字的素材 ID 应能保存：status=%d body=%+v", status, resp)
+	}
+	data := responseData(t, resp)
+	clips := data["tracks"].([]any)[0].(map[string]any)["clips"].([]any)
+	if id := clips[1].(map[string]any)["asset_id"]; id != float64(1036) {
+		t.Fatalf("返回的素材 ID 应是原始数字 1036，得到 %#v", id)
+	}
+	if imports := data["imports"].([]any); len(imports) != 1 || imports[0] != float64(1036) {
+		t.Fatalf("已导入应是原始数字：%#v", data["imports"])
+	}
+}
