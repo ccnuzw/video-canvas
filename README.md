@@ -57,6 +57,12 @@
     <td><a href="docs/assets/screenshots/短剧工作室分镜.png"><img src="docs/assets/screenshots/短剧工作室分镜.png" alt="短剧工作室-分镜片场" /></a></td>
     <td><a href="docs/assets/screenshots/音色库.png"><img src="docs/assets/screenshots/音色库.png" alt="资产-音色库" /></a></td>
   </tr>
+  <tr>
+    <th colspan="2">剪辑工作台</th>
+  </tr>
+  <tr>
+    <td colspan="2"><a href="docs/assets/screenshots/%E5%89%AA%E8%BE%91%E5%B7%A5%E4%BD%9C%E5%8F%B0.png"><img src="docs/assets/screenshots/%E5%89%AA%E8%BE%91%E5%B7%A5%E4%BD%9C%E5%8F%B0.png" alt="剪辑工作台" /></a></td>
+  </tr>
 </table>
 
 ### 营销工作室：把商品图做成带货短视频
@@ -204,6 +210,12 @@ flowchart LR
     <td><img src="docs/assets/community/wechat-group.jpg" alt="连镜微信交流群二维码" width="240" /></td>
   </tr>
 </table>
+
+## 支持与赞助
+
+如果连镜对你有所帮助，欢迎用微信扫码请作者喝杯咖啡，支持项目的持续开发和维护。
+
+<a href="docs/assets/screenshots/%E6%94%B6%E6%AC%BE%E7%A0%81.jpg"><img src="docs/assets/screenshots/%E6%94%B6%E6%AC%BE%E7%A0%81.jpg" alt="微信收款码" width="240" /></a>
 
 ## 许可证
 
