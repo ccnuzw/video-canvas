@@ -15,13 +15,8 @@ import {
   updateTrack,
 } from "../model";
 import { SNAP_PX } from "../types";
-import type {
-  EditError,
-  EditorTimeline,
-  TimelineEditorHost,
-  TimelinePanelProps,
-  TrackKind,
-} from "../types";
+import type { EditError, EditorTimeline, TimelineEditorHost, TimelinePanelProps } from "../types";
+import { AddTrackMenu, type AddableKind } from "./add-track-menu";
 import { ClipMenuContent } from "./clip-menu";
 import { dropTargetFor, type DropMark } from "./drag-logic";
 import {
@@ -120,7 +115,7 @@ export function TimelinePanel(props: TimelinePanelProps) {
   };
   const toggleSnap = () => setSnapOn((on) => !on);
 
-  const addTrackOf = (kind: Exclude<TrackKind, "main">) => apply(addTrack(timeline, kind));
+  const addTrackOf = (kind: AddableKind) => apply(addTrack(timeline, kind));
   const toggleTrack = (trackId: string, toggle: TrackToggle) => {
     const track = timeline.tracks.find((item) => item.id === trackId);
     if (track) onChange(updateTrack(timeline, trackId, { [toggle]: !track[toggle] }));
@@ -210,12 +205,10 @@ export function TimelinePanel(props: TimelinePanelProps) {
         snapOn={snapOn}
         pps={pps}
         minPps={view.minPps}
-        trackCounts={trackCounts}
         onUndo={props.onUndo}
         onRedo={props.onRedo}
         onSplit={split}
         onRemove={() => remove(selectedIds)}
-        onAddTrack={addTrackOf}
         onToggleSnap={toggleSnap}
         onZoom={view.zoomTo}
         onFit={view.fitNow}
@@ -283,9 +276,16 @@ export function TimelinePanel(props: TimelinePanelProps) {
                 className="border-chrome-border/60 sticky top-0 z-40 flex border-b"
               >
                 <div
+                  data-slot="track-corner"
                   style={{ width: HEAD_WIDTH }}
-                  className="bg-chrome border-chrome-border sticky left-0 z-10 shrink-0 border-r backdrop-blur-xl"
-                />
+                  className="bg-chrome border-chrome-border sticky left-0 z-10 flex shrink-0 items-center border-r px-1.5 backdrop-blur-xl"
+                >
+                  <AddTrackMenu
+                    readOnly={readOnly}
+                    trackCounts={trackCounts}
+                    onAddTrack={addTrackOf}
+                  />
+                </div>
                 <div
                   style={{ width: view.width }}
                   onPointerDown={drag.startSeek}

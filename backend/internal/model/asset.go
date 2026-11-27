@@ -34,6 +34,8 @@ type Asset struct {
 	VoiceGender string    `gorm:"size:8;not null;default:''" json:"-"`
 	VoiceLang   string    `gorm:"size:8;not null;default:''" json:"-"`
 	CreatedAt   time.Time `gorm:"index:idx_assets_user_source_kind_created,priority:4,sort:desc" json:"created_at"` // 创建时间
+	// HistoryHiddenAt 用户在生成历史里删除的时间：只是不再出现在生成历史，素材与文件保留；nil 表示仍显示。
+	HistoryHiddenAt *time.Time `json:"-"`
 }
 
 func (Asset) TableName() string { return "assets" }

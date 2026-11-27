@@ -225,6 +225,7 @@ func New(mode, jwtSecret string, h Handlers) *gin.Engine {
 		auth.POST("/assets/upload-intents", h.Asset.CreateUploadIntent)          // 申请上传：直传凭证，或告知走后端中转
 		auth.POST("/assets/upload-intents/:id/complete", h.Asset.CompleteUpload) // 直传完成后登记素材
 		auth.GET("/assets/generated", h.AssetLibrary.ListGenerated)              // 生成历史；静态段优先于 /assets/:id
+		auth.DELETE("/assets/generated/:id", h.AssetLibrary.HideGenerated)       // 从生成历史删除：只隐藏，不删素材
 		auth.GET("/assets/official", h.Asset.ListOfficial)                       // 官方参考音色列表；静态段优先于 /assets/:id
 		auth.GET("/assets/:id", h.Asset.Get)
 

@@ -75,6 +75,19 @@ describe("HistoryAssetCard：生成历史卡片", () => {
     expect(out).not.toContain("v=poster");
   });
 
+  test("能删除时，即使已在库里且来自首页对话也有 ⋯ 菜单", () => {
+    const out = renderToStaticMarkup(
+      <HistoryAssetCard
+        item={generated({ libraryItemId: "a1" })}
+        onPreview={noop}
+        onAddToLibrary={noop}
+        onOpenCanvas={noop}
+        onDelete={noop}
+      />,
+    );
+    expect(out).toContain("更多操作");
+  });
+
   test("没有任何可做的操作（已在库里且来自首页对话）时不出现 ⋯ 菜单", () => {
     expect(history(generated({ libraryItemId: "a1" }))).not.toContain("更多操作");
     expect(history(generated())).toContain("更多操作");

@@ -16,6 +16,12 @@ export type LibraryApi = {
   removeLibraryItem: (id: string) => Promise<void>;
 };
 
+/** 生成历史改动用到的接口：由调用方注入，测试时换成假的 */
+export type HistoryApi = {
+  /** 从生成历史删除（只隐藏，不删素材文件） */
+  hideGeneratedAsset: (assetId: string) => Promise<void>;
+};
+
 /** 资产库列表当前在看什么：决定移动后素材是否还留在这个列表里 */
 export type LibraryView = {
   /** 所在文件夹；null 是根目录 */
@@ -61,26 +67,54 @@ export async function addGeneratedToLibrary(
 /**
  * 乐观地从列表里拿掉一项，返回回滚函数：把它放回原位，期间新插入的内容不受影响。
  * @param store 列表
- * @param id 要拿掉的条目 ID
+ * @param id 要拿掉的条目的键
+ * @param keyOf 取条目的键
  */
-function takeOut(store: PagedList<LibraryItemDto>, id: string) {
-  let removed: LibraryItemDto | undefined;
+function takeOut<T>(store: PagedList<T>, id: string, keyOf: (item: T) => string) {
+  let removed: T | undefined;
   let index = -1;
   store.update((items) => {
-    index = items.findIndex((item) => item.id === id);
+    index = items.findIndex((item) => keyOf(item) === id);
     if (index < 0) return items;
     removed = items[index];
-    return items.filter((item) => item.id !== id);
+    return items.filter((item) => keyOf(item) !== id);
   });
   return () => {
     const item = removed;
-    if (!item) return;
+    if (item === undefined) return;
     store.update((items) => {
-      if (items.some((entry) => entry.id === item.id)) return items;
+      if (items.some((entry) => keyOf(entry) === id)) return items;
       const at = Math.min(index, items.length);
       return [...items.slice(0, at), item, ...items.slice(at)];
     });
   };
+}
+
+/** 资产库条目的键 */
+const libraryKey = (item: LibraryItemDto) => item.id;
+
+/**
+ * 从生成历史删除：先从列表里消失，请求失败再回滚。404 说明别处已经删了，重新拉取当前列表。
+ * 只是隐藏，素材文件与资产库里的那份都不动。
+ * @param store 生成历史列表
+ * @param assetId 素材 ID
+ * @param api 接口
+ * @returns 是否成功
+ */
+export async function hideFromHistory(
+  store: PagedList<GeneratedItemDto>,
+  assetId: string,
+  api: HistoryApi,
+): Promise<boolean> {
+  const rollback = takeOut(store, assetId, (item) => item.asset.id);
+  try {
+    await api.hideGeneratedAsset(assetId);
+    return true;
+  } catch (error) {
+    if (isNotFound(error)) store.load();
+    else rollback();
+    return false;
+  }
 }
 
 /**
@@ -95,7 +129,7 @@ export async function removeFromLibrary(
   id: string,
   api: LibraryApi,
 ): Promise<boolean> {
-  const rollback = takeOut(store, id);
+  const rollback = takeOut(store, id, libraryKey);
   try {
     await api.removeLibraryItem(id);
     return true;
@@ -124,7 +158,7 @@ export async function moveInLibrary(
   api: LibraryApi,
 ): Promise<boolean> {
   if (!view.search && view.folder === folderId) return true;
-  const rollback = view.search ? () => {} : takeOut(store, id);
+  const rollback = view.search ? () => {} : takeOut(store, id, libraryKey);
   if (view.search) {
     store.update((items) => items.map((item) => (item.id === id ? { ...item, folderId } : item)));
   }

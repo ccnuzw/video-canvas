@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { addToLibrary, moveLibraryItem, removeLibraryItem } from "@/api/asset-library";
+import {
+  addToLibrary,
+  hideGeneratedAsset,
+  moveLibraryItem,
+  removeLibraryItem,
+} from "@/api/asset-library";
 import type { AssetKind, GeneratedItemDto } from "@/api/asset-library/type";
 import { AddToLibraryAction } from "@/components/assets/add-to-library-action";
 import { AssetKindTabs } from "@/components/assets/asset-kind-tabs";
@@ -13,6 +18,16 @@ import { AssetsToolbar } from "@/components/assets/assets-toolbar";
 import { FilterMenu } from "@/components/assets/filter-menu";
 import { FolderPickerDialog } from "@/components/assets/folder-picker-dialog";
 import { EmptyMark } from "@/components/home/empty-mark";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useCanvasSourceMenu } from "@/hooks/use-canvas-source-menu";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -23,12 +38,20 @@ import {
   sourceFromValue,
   type GeneratedFilter,
 } from "@/utils/assets/generated-filter";
-import { addGeneratedToLibrary, type LibraryApi } from "@/utils/assets/library-actions";
+import {
+  addGeneratedToLibrary,
+  hideFromHistory,
+  type HistoryApi,
+  type LibraryApi,
+} from "@/utils/assets/library-actions";
 import { createScrollTopRunner } from "@/utils/assets/scroll-top";
 import type { TimeRange } from "@/utils/assets/time-range";
 
 /** 加入资产库用到的接口 */
 const LIBRARY_API: LibraryApi = { addToLibrary, moveLibraryItem, removeLibraryItem };
+
+/** 从生成历史删除用到的接口 */
+const HISTORY_API: HistoryApi = { hideGeneratedAsset };
 
 /** 时间下拉的选项 */
 const RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
@@ -46,8 +69,9 @@ const ORDER_OPTIONS = [
 
 /**
  * 资产页「生成历史」：首页对话与所有画布生成的素材，按图片 / 视频 / 音频分标签，
- * 可按来源、时间、排序、提示词筛选，滚动到底加载下一页。只读，不提供删除。
+ * 可按来源、时间、排序、提示词筛选，滚动到底加载下一页。
  * 点卡片用灯箱预览；已在资产库的显示角标；其余可「加入资产库…」。
+ * 「删除」先确认，再只从生成历史隐藏：素材文件、画布与对话里的引用、资产库里的那份都不受影响。
  * 筛选和搜索都在一条半透明工具条里，素材按真实画幅排成瀑布流。
  */
 export function HistoryView() {
@@ -76,6 +100,8 @@ export function HistoryView() {
   /** 「加入资产库…」目标条目；null 表示选择器关着 */
   const [adding, setAdding] = useState<GeneratedItemDto | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  /** 等待确认删除的条目；null 表示确认框关着 */
+  const [deleting, setDeleting] = useState<GeneratedItemDto | null>(null);
 
   const entries = useMemo<AssetPreviewEntry[]>(
     () =>
@@ -92,6 +118,13 @@ export function HistoryView() {
     const result = await addGeneratedToLibrary(list, item, folderId, LIBRARY_API, name);
     if (!result) throw new Error("add to library failed");
     toast.success("已加入资产库");
+  };
+
+  const confirmDelete = async () => {
+    const target = deleting;
+    if (!target) return;
+    setDeleting(null);
+    if (await hideFromHistory(list, target.asset.id, HISTORY_API)) toast.success("已删除");
   };
 
   const clearFilters = () => {
@@ -174,6 +207,7 @@ export function HistoryView() {
                 onPreview={() => setPreviewId(item.asset.id)}
                 onAddToLibrary={() => setAdding(item)}
                 onOpenCanvas={(id) => window.open(`/canvas/${id}`, "_blank", "noopener")}
+                onDelete={() => setDeleting(item)}
               />
             ))}
           </AssetMasonry>
@@ -194,6 +228,23 @@ export function HistoryView() {
         assetName={adding?.asset.fileName ?? ""}
         onConfirm={(folderId, name) => (adding ? add(adding, folderId, name) : Promise.resolve())}
       />
+
+      <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>从生成历史删除？</AlertDialogTitle>
+            <AlertDialogDescription>
+              只是不再显示在生成历史里；画布、对话和个人资产库中的这份素材不受影响。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void confirmDelete()}>
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AssetPreview
         entries={entries}

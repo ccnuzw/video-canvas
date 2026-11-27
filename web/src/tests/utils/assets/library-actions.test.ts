@@ -10,6 +10,7 @@ import {
 } from "@/utils/assets/folder-list";
 import {
   addGeneratedToLibrary,
+  hideFromHistory,
   moveInLibrary,
   removeFromLibrary,
   type LibraryApi,
@@ -228,5 +229,48 @@ describe("文件夹列表的本地更新", () => {
     expect(adjustFolderCount(list, "1", 2)[0]!.itemCount).toBe(3);
     expect(adjustFolderCount(list, "1", -5)[0]!.itemCount).toBe(0);
     expect(adjustFolderCount(list, null, 1)).toEqual(list);
+  });
+});
+
+describe("hideFromHistory：从生成历史删除（乐观更新）", () => {
+  test("请求还没返回，卡片就已经从列表里消失；接口收到的是素材 ID", async () => {
+    const store = await loaded([generated("1"), generated("2", "lib2"), generated("3")]);
+    const calls: string[] = [];
+    let release: () => void = () => {};
+    const pending = hideFromHistory(store, "2", {
+      hideGeneratedAsset: (assetId) => {
+        calls.push(assetId);
+        return new Promise<void>((resolve) => (release = resolve));
+      },
+    });
+    expect(store.getState().items.map((item) => item.asset.id)).toEqual(["1", "3"]);
+    release();
+    expect(await pending).toBe(true);
+    expect(calls).toEqual(["2"]);
+  });
+
+  test("失败时回滚到原来的位置", async () => {
+    const store = await loaded([generated("1"), generated("2"), generated("3")]);
+    const ok = await hideFromHistory(store, "2", {
+      hideGeneratedAsset: async () => {
+        throw new Error("boom");
+      },
+    });
+    expect(ok).toBe(false);
+    expect(store.getState().items.map((item) => item.asset.id)).toEqual(["1", "2", "3"]);
+  });
+
+  test("404 说明别处已经删了：不回滚，重新拉取列表", async () => {
+    let reloads = 0;
+    const store = await loaded([generated("1"), generated("2")], () => reloads++);
+    const before = reloads;
+    const ok = await hideFromHistory(store, "2", {
+      hideGeneratedAsset: async () => {
+        throw notFound();
+      },
+    });
+    await tick();
+    expect(ok).toBe(false);
+    expect(reloads).toBe(before + 1);
   });
 });

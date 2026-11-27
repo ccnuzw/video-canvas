@@ -170,3 +170,11 @@ export const listGeneratedAssets = async (
     }),
     mapGeneratedItem,
   );
+
+/**
+ * 从生成历史删除一个素材：只是不再出现在生成历史，素材文件、画布与对话里的引用、资产库里的那份都不受影响
+ * @param assetId 素材 ID
+ */
+export const hideGeneratedAsset = async (assetId: string): Promise<void> => {
+  await service.delete(`/assets/generated/${assetId}`);
+};

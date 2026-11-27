@@ -80,6 +80,8 @@ export function LibraryView({
   const [deleting, setDeleting] = useState<FolderDto | null>(null);
   const [renamingItem, setRenamingItem] = useState<LibraryItemDto | null>(null);
   const [moving, setMoving] = useState<LibraryItemDto | null>(null);
+  /** 等待确认删除的素材；null 表示确认框关着 */
+  const [removing, setRemoving] = useState<LibraryItemDto | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState<AssetDto | null>(null);
 
@@ -141,7 +143,14 @@ export function LibraryView({
     if (!ok) return;
     folders.adjust(item.folderId, -1);
     folders.reload();
-    toast.success("已移出资产库");
+    toast.success("已删除");
+  };
+
+  const confirmRemove = () => {
+    const target = removing;
+    if (!target) return;
+    setRemoving(null);
+    void remove(target);
   };
 
   /** 移动；失败（请求层已弹提示，列表已回滚）抛出，让选择器保持打开 */
@@ -279,7 +288,7 @@ export function LibraryView({
                 onPreview={() => setPreviewId(item.asset.id)}
                 onRename={() => setRenamingItem(item)}
                 onMove={() => setMoving(item)}
-                onRemove={() => void remove(item)}
+                onRemove={() => setRemoving(item)}
                 humanName={ownerOf.get(item.asset.id)?.name ?? null}
                 onEnroll={
                   item.asset.kind === "image" && humans.filingReady && !ownerOf.has(item.asset.id)
@@ -351,6 +360,23 @@ export function LibraryView({
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={() => void confirmDelete()}>
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除这个素材？</AlertDialogTitle>
+            <AlertDialogDescription>
+              将从个人资产库移除；画布里已使用的素材不受影响。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={confirmRemove}>
               删除
             </AlertDialogAction>
           </AlertDialogFooter>

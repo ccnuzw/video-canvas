@@ -113,3 +113,34 @@ export function markTourSeen(storage: TourStorage | null = defaultStorage()) {
     // 存储不可用：下次 tourSeen 同样读不到，也不会再弹
   }
 }
+
+/** 高亮框的位置、大小和圆角（像素，相对视口） */
+export interface TourRingBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  radius: number;
+}
+
+/**
+ * 算高亮框该画在哪：和 driver.js 遮罩挖的洞一样大，四周扩出 padding，圆角不超过短边一半。
+ * @param rect 被高亮元素的视口位置
+ * @param padding 遮罩的 stagePadding
+ * @param radius 遮罩的 stageRadius
+ */
+export function tourRingBox(
+  rect: Pick<DOMRect, "left" | "top" | "width" | "height">,
+  padding: number,
+  radius: number,
+): TourRingBox {
+  const width = rect.width + padding * 2;
+  const height = rect.height + padding * 2;
+  return {
+    left: rect.left - padding,
+    top: rect.top - padding,
+    width,
+    height,
+    radius: Math.min(radius, width / 2, height / 2),
+  };
+}

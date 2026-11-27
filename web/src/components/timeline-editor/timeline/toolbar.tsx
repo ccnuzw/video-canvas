@@ -1,11 +1,7 @@
 import {
-  AudioLines,
-  Captions,
   CircleMinus,
   CirclePlus,
-  Layers,
   Magnet,
-  Plus,
   Redo2,
   Scan,
   Scissors,
@@ -14,16 +10,8 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-import { TRACK_LIMIT } from "../model";
-import type { TrackKind } from "../types";
 import { MAX_PPS, ppsToSlider, sliderToPps } from "./layout";
 import { ShortcutHelp } from "./shortcut-help";
 
@@ -60,16 +48,6 @@ function ToolButton({
   );
 }
 
-/** 可以新增的附属轨种类 */
-type AddableKind = Exclude<TrackKind, "main">;
-
-/** 新增轨道菜单里的各项 */
-const ADD_ITEMS: { kind: AddableKind; label: string; icon: ReactNode }[] = [
-  { kind: "overlay", label: "叠加轨", icon: <Layers /> },
-  { kind: "text", label: "字幕轨", icon: <Captions /> },
-  { kind: "audio", label: "音频轨", icon: <AudioLines /> },
-];
-
 /** 工具条的属性 */
 export interface ToolbarProps {
   /** 只读 */
@@ -88,8 +66,6 @@ export interface ToolbarProps {
   pps: number;
   /** 当前片长与视口决定的缩小下限 */
   minPps: number;
-  /** 各类附属轨现在有几条 */
-  trackCounts: Record<AddableKind, number>;
   /** 撤销 */
   onUndo: () => void;
   /** 重做 */
@@ -98,8 +74,6 @@ export interface ToolbarProps {
   onSplit: () => void;
   /** 删除选中片段 */
   onRemove: () => void;
-  /** 新增一条轨道 */
-  onAddTrack: (kind: AddableKind) => void;
   /** 切换吸附 */
   onToggleSnap: () => void;
   /** 缩放到指定值（每秒像素） */
@@ -108,7 +82,7 @@ export interface ToolbarProps {
   onFit: () => void;
 }
 
-/** 时间线上方的工具条：撤销重做、拆分删除、新增轨道、吸附、缩放 */
+/** 时间线上方的工具条：撤销重做、拆分删除、吸附、缩放 */
 export function Toolbar(props: ToolbarProps) {
   const { readOnly, pps, minPps } = props;
   const singleDisabled = readOnly || props.multiSelected;
@@ -146,33 +120,6 @@ export function Toolbar(props: ToolbarProps) {
         </ToolButton>
       </span>
       <span className="flex-1" />
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          disabled={readOnly}
-          render={
-            <button
-              type="button"
-              aria-label="新增轨道"
-              className="hover:bg-chrome-hover ring-chrome-border mr-1.5 flex h-7 items-center gap-1 rounded-full px-2.5 text-xs ring-1 disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-3.5"
-            />
-          }
-        >
-          <Plus />
-          轨道
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-36">
-          {ADD_ITEMS.map((item) => (
-            <DropdownMenuItem
-              key={item.kind}
-              disabled={props.trackCounts[item.kind] >= TRACK_LIMIT[item.kind]}
-              onClick={() => props.onAddTrack(item.kind)}
-            >
-              {item.icon}
-              {item.label}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
       <ToolButton label="吸附" shortcut="N" active={props.snapOn} onClick={props.onToggleSnap}>
         <Magnet />
       </ToolButton>

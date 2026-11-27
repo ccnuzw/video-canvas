@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import {
   TOUR_STEPS,
   markTourSeen,
+  tourRingBox,
   tourSeen,
   tourSteps,
 } from "@/pages/drama/workspace/final/final-tour";
@@ -66,4 +67,16 @@ test("存储不可用时当作已看过，不自动打扰；写入失败不报�
   };
   expect(tourSeen(broken)).toBe(true);
   expect(() => markTourSeen(broken)).not.toThrow();
+});
+
+test("高亮框按遮罩挖洞的大小扩出留白，圆角不超过短边一半", () => {
+  const rect = { left: 100, top: 50, width: 200, height: 10 };
+  expect(tourRingBox(rect, 6, 16)).toEqual({
+    left: 94,
+    top: 44,
+    width: 212,
+    height: 22,
+    radius: 11,
+  });
+  expect(tourRingBox({ left: 0, top: 0, width: 300, height: 300 }, 6, 16).radius).toBe(16);
 });

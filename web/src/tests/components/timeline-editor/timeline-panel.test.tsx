@@ -191,6 +191,13 @@ describe("锁定、隐藏与只读", () => {
     expect(html).not.toContain("cursor-ew-resize");
   });
 
+  test("新增轨道入口在刻度尺左侧的轨道头角落，不在工具条里", () => {
+    const html = render(sample());
+    const corner = html.indexOf('data-slot="track-corner"');
+    expect(corner).toBeGreaterThan(html.indexOf('aria-label="快捷键"'));
+    expect(html.indexOf('aria-label="新增轨道"')).toBeGreaterThan(corner);
+  });
+
   test("可编辑时：有裁剪手柄；没选中时删除不可用，选中后可用", () => {
     expect(render(sample())).toContain("cursor-ew-resize");
     expect(disabled(render(sample()), "删除")).toBe(true);
