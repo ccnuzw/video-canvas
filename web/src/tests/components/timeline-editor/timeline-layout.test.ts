@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { emptyTimeline } from "@/components/timeline-editor/model";
 import {
   LANE_PAD,
+  MAX_PPS,
   PANEL_CHROME,
   RULER_HEIGHT,
   TOOLBAR_HEIGHT,
@@ -11,6 +12,7 @@ import {
   clipBox,
   fitPanelHeight,
   fitPps,
+  formatClock,
   laneWidth,
   msToX,
   ppsToSlider,
@@ -26,18 +28,24 @@ describe("时间线布局换算", () => {
     expect(xToMs(LANE_PAD + 50, 20)).toBeCloseTo(2500);
   });
 
-  test("缩放范围夹在 2–160，滑杆来回换算误差在 5% 内", () => {
-    expect(clampPps(0.1)).toBe(2);
-    expect(clampPps(999)).toBe(160);
-    for (const pps of [2, 14, 60, 160]) {
-      expect(Math.abs(sliderToPps(ppsToSlider(pps)) / pps - 1)).toBeLessThan(0.05);
+  test("缩小下限等于当前序列的适配比例，滑杆两端与缩放限制一致", () => {
+    const min = fitPps(1200, 15_260);
+    expect(clampPps(14, min)).toBe(min);
+    expect(clampPps(999, min)).toBe(MAX_PPS);
+    expect(sliderToPps(0, min)).toBe(min);
+    expect(sliderToPps(100, min)).toBe(MAX_PPS);
+    for (const pps of [min, 100, 160, MAX_PPS]) {
+      expect(Math.abs(sliderToPps(ppsToSlider(pps, min), min) / pps - 1)).toBeLessThan(0.02);
     }
+    expect(ppsToSlider(MAX_PPS, MAX_PPS)).toBe(0);
   });
 
-  test("适配宽度：总长至少按 8 秒算，结果不超过上限", () => {
+  test("适配宽度：有内容用实际时长，长片可以继续缩小，空轨按 8 秒算", () => {
     expect(fitPps(912, 60_000)).toBeCloseTo((912 - 12 - 48) / 60);
-    expect(fitPps(912, 2_000)).toBeCloseTo((912 - 12 - 48) / 8);
-    expect(fitPps(5000, 2_000)).toBe(160);
+    expect(fitPps(912, 1_800_000)).toBeLessThan(2);
+    expect(fitPps(320, 2_000)).toBeCloseTo((320 - 12 - 48) / 2);
+    expect(fitPps(912, 0)).toBeCloseTo((912 - 12 - 48) / 8);
+    expect(fitPps(5000, 2_000)).toBe(240);
   });
 
   test("轨道宽度：内容装得下就铺满可见区域，装不下就撑开", () => {
@@ -48,6 +56,8 @@ describe("时间线布局换算", () => {
   test("刻度间隔取间距不小于 64px 的第一档", () => {
     expect(rulerTicks(200, 14)).toEqual([0, 5, 10]);
     expect(rulerTicks(400, 100)).toEqual([0, 1, 2, 3]);
+    expect(rulerTicks(400, MAX_PPS)).toEqual([0, 0.5, 1, 1.5]);
+    expect(formatClock(60.5)).toBe("01:00.5");
   });
 
   test("缩放锚点：缩放后滚动位置让播放头停在原来的屏幕位置，不会小于 0", () => {

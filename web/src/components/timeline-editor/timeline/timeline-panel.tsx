@@ -27,7 +27,7 @@ import { dropTargetFor, type DropMark } from "./drag-logic";
 import {
   addSubtitle,
   muteCommand,
-  removeCommand,
+  removeSelection,
   replaceTrackClips,
   restoreCommand,
   splitCommand,
@@ -41,6 +41,7 @@ import {
   msToX,
   rulerTicks,
 } from "./layout";
+import { useMarquee } from "./marquee";
 import { TimelineScrollbar } from "./scrollbar";
 import { Toolbar } from "./toolbar";
 import { TrackRow } from "./track-row";
@@ -61,7 +62,10 @@ const sameMark = (a: DropMark | null, b: DropMark | null) =>
  * 所有编辑都走 model 的纯函数，成功后 onChange 一次，失败 onError 提示；撤销历史和保存由宿主负责。
  */
 export function TimelinePanel(props: TimelinePanelProps) {
-  const { timeline, host, selectedId, onSelect, player, readOnly, onChange, onError } = props;
+  const { timeline, host, selectedIds, onSelect, player, readOnly, onChange, onError } = props;
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+  const multiSelected = selectedIds.length > 1;
+  const selectOne = (id: string | null) => onSelect(id ? [id] : []);
   const [snapOn, setSnapOn] = useState(true);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [dropMark, setDropMark] = useState<DropMark | null>(null);
@@ -71,6 +75,12 @@ export function TimelinePanel(props: TimelinePanelProps) {
   const knobRef = useRef<HTMLDivElement>(null);
   const view = useTimelineView(scrollRef, playheadRef, knobRef, player, timelineEnd(timeline));
   const { pps } = view;
+  const marquee = useMarquee(scrollRef, timeline.tracks, pps, onSelect, (clientX) => {
+    onSelect([]);
+    player.pause();
+    player.seek(view.timeAt(clientX));
+  });
+  const highlighted = new Set(marquee.previewIds ?? selectedIds);
   const drag = useTimelineDrag({
     timeline,
     host,
@@ -80,7 +90,7 @@ export function TimelinePanel(props: TimelinePanelProps) {
     snapOn,
     onChange,
     onError,
-    onSelect,
+    onSelect: selectOne,
     timeAt: view.timeAt,
     laneAt: view.laneAt,
   });
@@ -93,15 +103,21 @@ export function TimelinePanel(props: TimelinePanelProps) {
     after?.(result);
   };
 
-  const split = () =>
+  const split = () => {
+    if (multiSelected || marquee.box) return;
     apply(splitCommand(timeline, host.resolve, selectedId, player.time()), (r) =>
-      onSelect(r.selectId),
+      selectOne(r.selectId),
     );
-  const trim = (side: "left" | "right") =>
+  };
+  const trim = (side: "left" | "right") => {
+    if (multiSelected || marquee.box) return;
     apply(trimCommand(timeline, host.resolve, selectedId, player.time(), side), (r) =>
       player.seek(r.playhead),
     );
-  const remove = (id: string | null) => apply(removeCommand(timeline, id), () => onSelect(null));
+  };
+  const remove = (ids: readonly string[]) => {
+    if (!marquee.box) apply(removeSelection(timeline, ids), () => onSelect([]));
+  };
   const toggleSnap = () => setSnapOn((on) => !on);
 
   const addTrackOf = (kind: Exclude<TrackKind, "main">) => apply(addTrack(timeline, kind));
@@ -110,12 +126,11 @@ export function TimelinePanel(props: TimelinePanelProps) {
     if (track) onChange(updateTrack(timeline, trackId, { [toggle]: !track[toggle] }));
   };
   const deleteTrack = (trackId: string) => {
-    const selectedTrack = selectedId ? findClip(timeline, selectedId)?.track.id : null;
     onChange(removeTrack(timeline, trackId));
-    if (selectedTrack === trackId) onSelect(null);
+    onSelect(selectedIds.filter((id) => findClip(timeline, id)?.track.id !== trackId));
   };
   const addSub = (trackId: string) =>
-    apply(addSubtitle(timeline, trackId, player.time()), (r) => onSelect(r.selectId));
+    apply(addSubtitle(timeline, trackId, player.time()), (r) => selectOne(r.selectId));
   const generate = (trackId: string) => {
     const clips = host.generateSubtitles?.() ?? [];
     if (clips.length === 0) return onError("没有可生成的台词");
@@ -126,16 +141,19 @@ export function TimelinePanel(props: TimelinePanelProps) {
 
   useTimelineShortcuts({
     readOnly,
-    hasSelection: !!selectedId,
+    hasSelection: selectedIds.length > 0,
     toggle: player.toggle,
     split,
     trimLeft: () => trim("left"),
     trimRight: () => trim("right"),
-    remove: () => remove(selectedId),
+    remove: () => remove(selectedIds),
     toggleSnap,
     undo: props.onUndo,
     redo: props.onRedo,
-    deselect: () => onSelect(null),
+    deselect: () => {
+      marquee.cancel();
+      onSelect([]);
+    },
   });
 
   /** 素材拖在时间线上时指针下的落点 */
@@ -187,16 +205,18 @@ export function TimelinePanel(props: TimelinePanelProps) {
         readOnly={readOnly}
         canUndo={props.canUndo}
         canRedo={props.canRedo}
-        hasSelection={!!selectedId}
+        hasSelection={selectedIds.length > 0}
+        multiSelected={multiSelected}
         snapOn={snapOn}
         pps={pps}
+        minPps={view.minPps}
         trackCounts={trackCounts}
         onUndo={props.onUndo}
         onRedo={props.onRedo}
         onSplit={split}
         onTrimLeft={() => trim("left")}
         onTrimRight={() => trim("right")}
-        onRemove={() => remove(selectedId)}
+        onRemove={() => remove(selectedIds)}
         onAddTrack={addTrackOf}
         onToggleSnap={toggleSnap}
         onZoom={view.zoomTo}
@@ -221,7 +241,7 @@ export function TimelinePanel(props: TimelinePanelProps) {
                     return;
                   }
                   setMenuId(found.clip.id);
-                  onSelect(found.clip.id);
+                  selectOne(found.clip.id);
                 }}
               />
             }
@@ -229,6 +249,10 @@ export function TimelinePanel(props: TimelinePanelProps) {
             <div
               style={{ width: HEAD_WIDTH + view.width, paddingBottom: SCROLLBAR_GUTTER }}
               className="relative min-h-full"
+              onPointerMove={marquee.onPointerMove}
+              onPointerUp={marquee.onPointerUp}
+              onPointerCancel={marquee.onPointerCancel}
+              onLostPointerCapture={marquee.onPointerCancel}
               onDragOver={(event) => {
                 if (readOnly || !isMediaDrag(event)) return;
                 event.preventDefault();
@@ -291,7 +315,8 @@ export function TimelinePanel(props: TimelinePanelProps) {
                   host={host}
                   pps={pps}
                   width={view.width}
-                  selectedId={selectedId}
+                  selectedIds={highlighted}
+                  activeId={marquee.box ? null : selectedId}
                   readOnly={readOnly}
                   drag={drag.drag}
                   insertX={track.kind === "main" ? insertX : null}
@@ -302,9 +327,11 @@ export function TimelinePanel(props: TimelinePanelProps) {
                   }
                   onClipPointerDown={drag.startClip}
                   onLanePointerDown={(event) => {
-                    if (event.button !== 0) return;
-                    onSelect(null);
-                    drag.startSeek(event);
+                    if (event.button !== 0 || (event.target as Element).closest("button")) return;
+                    if (event.pointerType === "touch") {
+                      onSelect([]);
+                      drag.startSeek(event);
+                    } else if (!drag.drag) marquee.start(event);
                   }}
                   onToggle={toggleTrack}
                   onAddSubtitle={addSub}
@@ -312,6 +339,13 @@ export function TimelinePanel(props: TimelinePanelProps) {
                   onRemove={deleteTrack}
                 />
               ))}
+              {marquee.box && (
+                <div
+                  aria-hidden
+                  style={marquee.box}
+                  className="border-primary/70 bg-primary/15 pointer-events-none absolute z-20 border"
+                />
+              )}
               {snapAt !== null && (
                 <div
                   style={{ left: HEAD_WIDTH + msToX(snapAt, pps), top: RULER_HEIGHT }}
@@ -333,7 +367,7 @@ export function TimelinePanel(props: TimelinePanelProps) {
               host={host}
               onMute={() => apply(muteCommand(timeline, menuFound.clip.id))}
               onRestore={() => apply(restoreCommand(timeline, host.resolve, menuFound.clip.id))}
-              onRemove={() => remove(menuFound.clip.id)}
+              onRemove={() => remove([menuFound.clip.id])}
             />
           )}
         </ContextMenu>

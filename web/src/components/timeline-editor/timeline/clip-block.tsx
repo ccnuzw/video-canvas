@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { clipLength } from "../model";
 import type { ClipBadges, ClipMedia, EditorClip, EditorTrack } from "../types";
 import { AudioWave } from "./audio-wave";
-import { clipBox, formatSeconds } from "./layout";
+import { CLIP_INSET, clipBox, formatSeconds } from "./layout";
 import type { ClipPart } from "./use-timeline-drag";
 
 /** 音频轨角色的底色：配音、背景音乐、音效 */
@@ -31,6 +31,8 @@ export interface ClipBlockProps {
   pps: number;
   /** 是否选中 */
   selected: boolean;
+  /** 单选时直接显示调整手柄 */
+  active: boolean;
   /** 宿主的标记 */
   badges: ClipBadges;
   /** 是否正被拖动（变淡） */
@@ -143,6 +145,7 @@ export function ClipBlock({
   media,
   pps,
   selected,
+  active,
   badges,
   dragging,
   animate,
@@ -163,10 +166,10 @@ export function ClipBlock({
   return (
     <div
       data-clip={clip.id}
-      style={{ left, width }}
+      style={{ left, width, insetBlock: CLIP_INSET }}
       onPointerDown={(event) => onPointerDown(event, "body")}
       className={cn(
-        "group absolute inset-y-1 overflow-hidden rounded-[3px] before:pointer-events-none before:absolute before:inset-0 before:z-[3] before:rounded-[inherit] before:border-2",
+        "group absolute overflow-hidden rounded-[3px] before:pointer-events-none before:absolute before:inset-0 before:z-[3] before:rounded-[inherit] before:border-2",
         editable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
         invalidDrop
           ? "before:border-destructive"
@@ -190,7 +193,7 @@ export function ClipBlock({
           clip={clip}
           width={width}
           pps={pps}
-          selected={selected}
+          selected={active}
           editable={editable}
           onPointerDown={onPointerDown}
         />
@@ -237,7 +240,7 @@ export function ClipBlock({
             className={cn(
               "absolute inset-y-0 z-10 w-2.5 cursor-ew-resize after:absolute after:inset-y-[30%] after:left-[2.5px] after:w-1 after:rounded-full after:bg-white",
               side === "start" ? "left-0" : "right-0",
-              selected ? "bg-primary block" : "hidden bg-white/30 group-hover:block",
+              active ? "bg-primary block" : "hidden bg-white/30 group-hover:block",
             )}
           />
         ))}

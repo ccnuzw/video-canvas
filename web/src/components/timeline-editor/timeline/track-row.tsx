@@ -31,8 +31,10 @@ export interface TrackRowProps {
   pps: number;
   /** 内容区宽度（像素） */
   width: number;
-  /** 选中的片段 */
-  selectedId: string | null;
+  /** 当前高亮的片段，包含拖动中的选框预览 */
+  selectedIds: ReadonlySet<string>;
+  /** 单选时显示手柄的片段 */
+  activeId: string | null;
   /** 只读 */
   readOnly: boolean;
   /** 指针拖动中的状态 */
@@ -69,7 +71,7 @@ function pillOf(drag: Drag | null, track: EditorTrack, clipId: string): string |
  * 锁定的轨是斜纹底，隐藏的叠加和字幕轨、静音的音频轨上的片段变淡。
  */
 export function TrackRow(props: TrackRowProps) {
-  const { track, host, pps, width, selectedId, readOnly, drag } = props;
+  const { track, host, pps, width, selectedIds, activeId, readOnly, drag } = props;
   const editable = !readOnly && !track.locked;
   const faded = track.hidden || (track.kind === "audio" && track.muted);
   const moving = drag?.mode === "move" && drag.moving ? drag : null;
@@ -110,7 +112,8 @@ export function TrackRow(props: TrackRowProps) {
               track={track}
               media={clip.type === "text" ? null : host.resolve(clip)}
               pps={pps}
-              selected={selectedId === clip.id}
+              selected={selectedIds.has(clip.id)}
+              active={activeId === clip.id}
               badges={host.clipBadges?.(clip) ?? { pinned: false, marked: false }}
               dragging={!!moving && toMain && moving.id === clip.id}
               animate={!!moving && (moving.id !== clip.id || toMain)}

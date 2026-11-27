@@ -13,18 +13,16 @@ export const LANE_TAIL = 48;
 export const HEAD_WIDTH = 168;
 /** 刻度尺的高度（像素） */
 export const RULER_HEIGHT = 28;
+/** 片段距轨道行上下边缘的内缩（像素） */
+export const CLIP_INSET = 4;
 /** 工具条的高度（像素）：按钮 32px + 上下内边距 12px + 底边框 1px，改工具条样式时同步 */
 export const TOOLBAR_HEIGHT = 45;
 /** 轨道内容底部给自绘横向滚动条留的空（像素），免得滚动条压住最后一条轨 */
 export const SCROLLBAR_GUTTER = 14;
 /** 面板的其余占用（像素）：横向滚动条的留空，再加一点余量 */
 export const PANEL_CHROME = SCROLLBAR_GUTTER + 4;
-/** 缩放下限：每秒多少像素 */
-export const MIN_PPS = 2;
-/** 缩放上限：每秒多少像素 */
-export const MAX_PPS = 160;
-/** 默认缩放 */
-export const DEFAULT_PPS = 14;
+/** 缩放上限，每秒 240 像素可清楚显示半秒刻度 */
+export const MAX_PPS = 240;
 
 /** 各种轨道一行的高度（像素） */
 export const ROW_HEIGHT: Record<TrackKind, number> = {
@@ -35,18 +33,19 @@ export const ROW_HEIGHT: Record<TrackKind, number> = {
 };
 
 /** 刻度间隔候选（秒），取第一个间距不小于 64px 的 */
-const STEPS = [1, 2, 5, 10, 15, 30, 60, 120];
+const STEPS = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 180, 300, 600, 1200];
 
 /** 缩放夹在允许范围内 */
-export const clampPps = (pps: number): number => Math.min(MAX_PPS, Math.max(MIN_PPS, pps));
+export const clampPps = (pps: number, minPps: number): number =>
+  Math.min(MAX_PPS, Math.max(minPps, pps));
 
 /** 缩放值 → 滑杆位置（0–100，对数刻度） */
-export const ppsToSlider = (pps: number): number =>
-  Math.round((Math.log(pps / MIN_PPS) / Math.log(MAX_PPS / MIN_PPS)) * 100);
+export const ppsToSlider = (pps: number, minPps: number): number =>
+  minPps === MAX_PPS ? 0 : Math.round((Math.log(pps / minPps) / Math.log(MAX_PPS / minPps)) * 100);
 
 /** 滑杆位置（0–100）→ 缩放值 */
-export const sliderToPps = (value: number): number =>
-  MIN_PPS * Math.pow(MAX_PPS / MIN_PPS, value / 100);
+export const sliderToPps = (value: number, minPps: number): number =>
+  value === 100 ? MAX_PPS : minPps * Math.pow(MAX_PPS / minPps, value / 100);
 
 /** 毫秒 → 轨道内容里的 x 坐标（像素） */
 export const msToX = (ms: number, pps: number): number => LANE_PAD + (ms / 1000) * pps;
@@ -54,16 +53,19 @@ export const msToX = (ms: number, pps: number): number => LANE_PAD + (ms / 1000)
 /** 轨道内容里的 x 坐标（像素）→ 毫秒 */
 export const xToMs = (x: number, pps: number): number => ((x - LANE_PAD) / pps) * 1000;
 
-/** 适配宽度的缩放：整条时间线正好铺满可见区域；总长至少按 8 秒算 */
-export const fitPps = (viewportPx: number, totalMs: number): number =>
-  clampPps((viewportPx - LANE_PAD - LANE_TAIL) / Math.max(totalMs / 1000, 8));
+/** 适配宽度也是缩小下限；尚无片段时先显示约 8 秒 */
+export function fitPps(viewportPx: number, totalMs: number): number {
+  const usableWidth = Math.max(1, viewportPx - LANE_PAD - LANE_TAIL);
+  const seconds = totalMs > 0 ? totalMs / 1000 : 8;
+  return Math.min(MAX_PPS, usableWidth / seconds);
+}
 
 /** 轨道内容的宽度：装得下就铺满可见区域（不出滚动条），装不下就撑开 */
 export const laneWidth = (totalMs: number, pps: number, viewportPx: number): number =>
   Math.max(LANE_PAD + (totalMs / 1000) * pps + LANE_TAIL, viewportPx);
 
 /** 刻度间隔（秒） */
-export const rulerStep = (pps: number): number => STEPS.find((s) => s * pps >= 64) ?? 120;
+export const rulerStep = (pps: number): number => STEPS.find((s) => s * pps >= 64) ?? 1800;
 
 /** 刻度尺上要画的刻度（秒） */
 export function rulerTicks(widthPx: number, pps: number): number[] {
@@ -87,9 +89,12 @@ export const clipBox = (
   width: Math.max((lenMs / 1000) * pps - 1, 6),
 });
 
-/** 秒 → 「mm:ss」 */
-export const formatClock = (seconds: number): string =>
-  `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+/** 秒 → 「mm:ss」；半秒刻度加小数 */
+export function formatClock(seconds: number): string {
+  const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
+  const wholeSeconds = String(Math.floor(seconds % 60)).padStart(2, "0");
+  return `${minutes}:${wholeSeconds}${Number.isInteger(seconds) ? "" : ".5"}`;
+}
 
 /** 毫秒 → 「3.0s」 */
 export const formatSeconds = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;

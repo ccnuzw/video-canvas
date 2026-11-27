@@ -2,16 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { RefObject } from "react";
 
 import type { PlayerHandle } from "../types";
-import {
-  DEFAULT_PPS,
-  HEAD_WIDTH,
-  anchoredScroll,
-  clampPps,
-  fitPps,
-  laneWidth,
-  msToX,
-  xToMs,
-} from "./layout";
+import { HEAD_WIDTH, anchoredScroll, clampPps, fitPps, laneWidth, msToX, xToMs } from "./layout";
 
 /**
  * 时间线的视图状态：缩放（含适配宽度）、可见宽度、播放头位置、指针位置换算。
@@ -24,13 +15,12 @@ export function useTimelineView(
   player: PlayerHandle,
   totalMs: number,
 ) {
-  const [manualPps, setManualPps] = useState(DEFAULT_PPS);
-  const [fit, setFit] = useState(true);
+  const [manualPps, setManualPps] = useState<number | null>(null);
   /** 轨道内容的可见宽度（像素），不含左侧轨道头 */
   const [viewport, setViewport] = useState(900);
 
-  // 适配宽度时缩放由可见宽度和总长算出，手动缩放过就用手动值
-  const pps = fit ? fitPps(viewport, totalMs) : manualPps;
+  const minPps = fitPps(viewport, totalMs);
+  const pps = clampPps(manualPps ?? minPps, minPps);
   const ppsRef = useRef(pps);
   useLayoutEffect(() => {
     ppsRef.current = pps;
@@ -39,7 +29,7 @@ export function useTimelineView(
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const measure = () => setViewport(Math.max(200, el.clientWidth - HEAD_WIDTH));
+    const measure = () => setViewport(Math.max(0, el.clientWidth - HEAD_WIDTH));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -80,15 +70,22 @@ export function useTimelineView(
 
   /** 缩放时以播放头为锚：记下它在可见区域里的位置，缩放后滚到让它停在原处，画面不跳 */
   const anchor = useRef<{ t: number; x: number } | null>(null);
+  const fitNow = useCallback(() => {
+    anchor.current = null;
+    if (scrollRef.current) scrollRef.current.scrollLeft = 0;
+    setManualPps(null);
+  }, [scrollRef]);
   const zoomTo = useCallback(
     (next: number) => {
+      const target = clampPps(next, minPps);
+      if (target === ppsRef.current) return;
+      if (target === minPps) return fitNow();
       const el = scrollRef.current;
       const t = player.time();
       if (el) anchor.current = { t, x: msToX(t, ppsRef.current) - el.scrollLeft };
-      setFit(false);
-      setManualPps(clampPps(next));
+      setManualPps(target);
     },
-    [player, scrollRef],
+    [fitNow, minPps, player, scrollRef],
   );
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -139,10 +136,10 @@ export function useTimelineView(
 
   return {
     pps,
-    fit,
+    minPps,
     width: laneWidth(totalMs, pps, viewport),
     zoomTo,
-    fitNow: () => setFit(true),
+    fitNow,
     timeAt,
     laneAt,
   };

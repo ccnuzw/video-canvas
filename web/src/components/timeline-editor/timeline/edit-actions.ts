@@ -94,6 +94,25 @@ export function removeCommand(
   return { timeline: removeClip(timeline, target.found.clip.id) };
 }
 
+/** 批量删除只提交一次；主轨统一补位，锁定轨上的选中片段会阻止这次删除 */
+export function removeSelection(
+  timeline: EditorTimeline,
+  ids: readonly string[],
+): { timeline: EditorTimeline } | EditError {
+  if (ids.length <= 1) return removeCommand(timeline, ids[0] ?? null);
+  const selected = new Set(ids);
+  const tracks = timeline.tracks.map((track) => ({
+    ...track,
+    clips: track.clips.filter((clip) => !selected.has(clip.id)),
+  }));
+  const changed = timeline.tracks.filter(
+    (track, index) => tracks[index].clips.length !== track.clips.length,
+  );
+  if (!changed.length) return { error: "先选中一段" };
+  if (changed.some((track) => track.locked)) return { error: "这条轨已锁定" };
+  return { timeline: normalize({ ...timeline, tracks }) };
+}
+
 /** 切换一段的静音 */
 export function muteCommand(
   timeline: EditorTimeline,

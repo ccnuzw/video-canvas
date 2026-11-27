@@ -85,7 +85,7 @@ const render = (timeline: EditorTimeline, over: Partial<TimelinePanelProps> = {}
     <TimelinePanel
       timeline={timeline}
       host={host()}
-      selectedId={null}
+      selectedIds={[]}
       onSelect={noop}
       player={player}
       readOnly={false}
@@ -108,6 +108,12 @@ const disabled = (html: string, label: string) => {
 };
 
 describe("时间线面板渲染", () => {
+  test("默认适配整条时间线，缩小按钮到达下限", () => {
+    const html = render(sample());
+    expect(disabled(html, "缩小")).toBe(true);
+    expect(disabled(html, "放大")).toBe(false);
+  });
+
   test("每条轨有轨道头和编号，片段显示名字、时长和文字内容", () => {
     const html = render(sample());
     for (const badge of ["T1", "V2", "V1", "A1", "A2"]) expect(html).toContain(`>${badge}<`);
@@ -129,7 +135,7 @@ describe("时间线面板渲染", () => {
 
   test("选中的片段是主色描边，宿主标记显示图钉和蓝点", () => {
     const html = render(sample(), {
-      selectedId: "a",
+      selectedIds: ["a"],
       host: host({
         clipBadges: (c) => ({ pinned: c.id === "a", marked: c.id === "o1" }),
       }),
@@ -180,7 +186,20 @@ describe("锁定、隐藏与只读", () => {
   test("可编辑时：有裁剪手柄；没选中时删除不可用，选中后可用", () => {
     expect(render(sample())).toContain("cursor-ew-resize");
     expect(disabled(render(sample()), "删除")).toBe(true);
-    expect(disabled(render(sample(), { selectedId: "a" }), "删除")).toBe(false);
+    expect(disabled(render(sample(), { selectedIds: ["a"] }), "删除")).toBe(false);
     expect(disabled(render(sample(), { canUndo: false }), "撤销")).toBe(true);
+  });
+
+  test("多选时所有片段高亮，删除可用，单段裁剪与拆分禁用", () => {
+    const html = render(sample(), { selectedIds: ["a", "o1"] });
+    for (const id of ["a", "o1"]) {
+      expect(html.match(new RegExp(`<div data-clip="${id}"[^>]*>`))?.[0]).toContain(
+        "before:border-primary",
+      );
+    }
+    expect(disabled(html, "删除")).toBe(false);
+    for (const label of ["拆分", "删掉播放头左边", "删掉播放头右边"]) {
+      expect(disabled(html, label)).toBe(true);
+    }
   });
 });

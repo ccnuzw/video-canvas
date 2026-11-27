@@ -59,11 +59,12 @@ export function TimelineEditor({
   const portrait = rh > rw;
   const aspect = `${rw}/${rh}`;
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [mode, setMode] = useState<Mode>("media");
   const [draft, setDraft] = useState<Draft | null>(null);
   const shown = draft && draft.base === timeline ? draft.value : timeline;
-  const activeId = selectedId && findClip(shown, selectedId) ? selectedId : null;
+  const activeIds = selectedIds.filter((id) => findClip(shown, id));
+  const activeId = activeIds.length === 1 ? activeIds[0] : null;
   const player = usePlayer(shown, host.resolve);
 
   // 异步放置素材时要用最新的时间线
@@ -91,16 +92,16 @@ export function TimelineEditor({
   });
 
   /** 选中片段会自动切到属性；取消选中不强制切回素材 */
-  const select = useCallback((id: string | null) => {
-    setSelectedId(id);
-    if (id) setMode("props");
+  const select = useCallback((ids: string[]) => {
+    setSelectedIds(ids);
+    if (ids.length > 0) setMode("props");
   }, []);
 
   // 宿主要求定位到某个片段：选中它并切到属性（渲染期更新状态，nonce 变了才触发），播放头在下面的 effect 里移动
   const [handledFocus, setHandledFocus] = useState(focus?.nonce ?? null);
   if (focus && focus.nonce !== handledFocus) {
     setHandledFocus(focus.nonce);
-    setSelectedId(focus.clipId);
+    setSelectedIds([focus.clipId]);
     setMode("props");
   }
   const seekedFocus = useRef<number | null>(null);
@@ -134,7 +135,7 @@ export function TimelineEditor({
         return;
       }
       commit(placed.timeline);
-      select(placed.selectId);
+      select([placed.selectId]);
     },
     [readOnly, host, player.handle, commit, select],
   );
@@ -190,6 +191,8 @@ export function TimelineEditor({
           onImport={host.onImport}
           onRetryImport={host.onRetryImport}
         />
+      ) : activeIds.length > 1 ? (
+        <p className="text-muted-foreground px-4 pt-4 text-sm">已选中 {activeIds.length} 个片段</p>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-3">
           <Inspector
@@ -221,7 +224,7 @@ export function TimelineEditor({
     <TimelinePanel
       timeline={shown}
       host={host}
-      selectedId={activeId}
+      selectedIds={activeIds}
       onSelect={select}
       player={player.handle}
       readOnly={readOnly}

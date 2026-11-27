@@ -149,7 +149,13 @@ function Workspace({ id, viewer }: { id: string; viewer: boolean }) {
                     onDoc={nav.openDoc}
                   />
                 )}
-                <main className="relative min-w-0 flex-1 overflow-y-auto">
+                <main
+                  className={
+                    stage === "final"
+                      ? "relative min-w-0 flex-1"
+                      : "relative min-w-0 flex-1 overflow-y-auto"
+                  }
+                >
                   {stage === "overview" && (
                     <OverviewArea
                       onGo={nav.go}

@@ -250,10 +250,10 @@ export interface TimelinePanelProps {
   timeline: EditorTimeline;
   /** 宿主提供的能力 */
   host: TimelineEditorHost;
-  /** 选中的片段 ID；没有为 null */
-  selectedId: string | null;
-  /** 选中或取消选中片段 */
-  onSelect: (id: string | null) => void;
+  /** 选中的片段 ID */
+  selectedIds: readonly string[];
+  /** 替换当前选中的片段 */
+  onSelect: (ids: string[]) => void;
   /** 播放器句柄 */
   player: PlayerHandle;
   /** 只读：不能编辑 */

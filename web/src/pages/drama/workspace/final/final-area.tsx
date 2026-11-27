@@ -1,9 +1,11 @@
+import { motion, useAnimationControls, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ExportSpec } from "@/api/drama/type";
 import { TimelineEditor } from "@/components/timeline-editor";
 import { finalFileName } from "@/components/drama/final-file";
 import { useSharedWorkspace } from "@/hooks/use-shared-workspace";
+import { DURATION, EASE_OUT } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { segmentKey, useDramaSegmentsStore } from "@/store/drama-segments";
 import { useDramaTimelineStore } from "@/store/drama-timeline";
@@ -91,11 +93,18 @@ export function FinalArea({
   }, [drama.id, no, shared, segments, editor]);
   /** 剪辑台铺满窗口（盖住工作区顶栏和分集栏）；按浏览器记住上次的选择 */
   const [fullscreen, setFullscreen] = useState(readFullscreen);
+  const reduceMotion = useReducedMotion();
+  const fullscreenFade = useAnimationControls();
   const toggleFullscreen = () => {
-    setFullscreen((on) => {
-      writeFullscreen(!on);
-      return !on;
-    });
+    const next = !fullscreen;
+    writeFullscreen(next);
+    setFullscreen(next);
+    if (reduceMotion) {
+      void fullscreenFade.start({
+        opacity: [0.9, 1],
+        transition: { duration: DURATION.base, ease: EASE_OUT },
+      });
+    }
   };
   /** 顶栏「片场更新」点某一条：让编辑器选中并定位到那一段（nonce 每次加一） */
   const [focus, setFocus] = useState<{ clipId: string; nonce: number } | undefined>();
@@ -274,11 +283,18 @@ export function FinalArea({
   const exportReason = readOnly ? (final ? null : "作者还没有导出过这一集") : reason;
 
   return (
-    <div
+    <motion.div
+      layout={!reduceMotion}
+      layoutDependency={fullscreen}
+      initial={false}
+      animate={fullscreenFade}
+      transition={{
+        layout: { duration: fullscreen ? DURATION.slow : DURATION.slowExit, ease: EASE_OUT },
+      }}
       className={cn(
-        "flex min-h-0 flex-col",
-        // 全屏：铺满浏览器窗口，盖住工作区的顶栏和分集栏；菜单、弹层和提示挂在 body 上，层级更高，照常可见
-        fullscreen ? "bg-background fixed inset-0 z-40" : "h-full",
+        "bg-background z-40 flex min-h-0 flex-col",
+        // 两种布局共用剪辑台节点，退出时仍能盖在工作区顶栏和分集栏上
+        fullscreen ? "fixed inset-0" : "relative h-full",
       )}
     >
       <FinalBar
@@ -327,6 +343,6 @@ export function FinalArea({
         onDownload={() => phase.kind === "done" && void downloadFinal(phase.url)}
         onClose={() => setExportOpen(false)}
       />
-    </div>
+    </motion.div>
   );
 }
