@@ -103,10 +103,17 @@ describe("成片顶栏的同步条目", () => {
     expect(html).toContain("片场更新 1");
   });
 
-  test("导出进行中按钮禁用", () => {
-    const html = renderToStaticMarkup(<FinalBar {...barProps} exporting="保存中…" />);
-    expect(html).toContain("保存中…");
-    expect(html).toContain("disabled");
+  test("导出进行中按钮显示进度且可以点（重新打开导出弹窗），即使此刻有不能导出的原因", () => {
+    const html = renderToStaticMarkup(
+      <FinalBar {...barProps} exporting="合成中 45%" exportReason="已有进行中的合成任务" />,
+    );
+    expect(html).toContain("合成中 45%");
+    expect(html).toMatch(/<button(?![^>]* disabled="")[^>]*title="查看导出进度"/);
+  });
+
+  test("没在导出且有不能导出的原因时按钮禁用，原因放在悬停提示里", () => {
+    const html = renderToStaticMarkup(<FinalBar {...barProps} exportReason="时间线还没读完" />);
+    expect(html).toMatch(/<button(?=[^>]* disabled="")[^>]*title="时间线还没读完"/);
   });
 });
 

@@ -17,6 +17,8 @@ import { useCompose } from "../../use-compose";
 import { useWorkspace } from "../context";
 import { cn } from "@/lib/utils";
 
+import { ExportDialog } from "./export-dialog";
+import { summarizeExport, type ExportPhase } from "./export-flow";
 import { FinalBar } from "./final-bar";
 import { readFullscreen, writeFullscreen } from "./fullscreen";
 import { useFinalHost } from "./use-final-host";
@@ -58,8 +60,9 @@ export function FinalArea({
   const editor = useDramaTimelineStore.getState;
 
   const { compose } = useCompose(drama.id);
-  /** 导出进行到哪一步：保存时间线 / 等合成任务 / 下载；没在导出为 null */
-  const [exportStep, setExportStep] = useState<"saving" | "composing" | "downloading" | null>(null);
+  /** 导出走到哪一步；弹窗关掉流程照跑 */
+  const [phase, setPhase] = useState<ExportPhase>({ kind: "idle" });
+  const [exportOpen, setExportOpen] = useState(false);
   /** 这次导出提交的合成任务 ID，用来认出它结束了 */
   const exportJob = useRef<string | null>(null);
 
@@ -85,33 +88,37 @@ export function FinalArea({
   };
   /** 顶栏「片场更新」点某一条：让编辑器选中并定位到那一段（nonce 每次加一） */
   const [focus, setFocus] = useState<{ clipId: string; nonce: number } | undefined>();
-  // 换集：放下进行中的导出（合成任务照常在后台跑完）
+  // 换集：放下进行中的导出、关掉弹窗（合成任务照常在后台跑完）
   const [shownEpisode, setShownEpisode] = useState(no);
   if (shownEpisode !== no) {
     setShownEpisode(no);
-    setExportStep(null);
+    setPhase({ kind: "idle" });
+    setExportOpen(false);
   }
 
-  /** 下载这一集的成片 */
+  /** 下载这一集的成片；失败停在「下载」这一步 */
   const downloadFinal = useCallback(
     async (url: string) => {
-      setExportStep("downloading");
+      setPhase({ kind: "downloading" });
       try {
         await downloadMedia(url, finalFileName(drama.title, no));
-      } finally {
-        setExportStep(null);
+        setPhase({ kind: "done" });
+      } catch {
+        setPhase({ kind: "failed", at: "downloading", message: "下载没有完成，请重试" });
       }
     },
     [drama.title, no],
   );
 
-  // 导出提交了合成任务：任务失败或取消就停下；成功后等详情刷出新成片（不再过期）再下载
+  // 导出提交了合成任务：任务失败或取消就停在「合成」这一步；成功后等详情刷出新成片（不再过期）再下载
   useEffect(() => {
-    if (exportStep !== "composing") return;
+    if (phase.kind !== "composing") return;
     const job = jobs.find((item) => item.id === exportJob.current);
     if (job && (job.status === "failed" || job.status === "canceled")) {
       exportJob.current = null;
-      setExportStep(null);
+      const message =
+        job.status === "canceled" ? "合成已取消" : job.errorMessage || "合成失败，请重试";
+      setPhase({ kind: "failed", at: "composing", message });
       return;
     }
     if (job && job.status !== "succeeded") return;
@@ -119,7 +126,7 @@ export function FinalArea({
       exportJob.current = null;
       void downloadFinal(episode.final.url);
     }
-  }, [exportStep, jobs, episode, downloadFinal]);
+  }, [phase.kind, jobs, episode, downloadFinal]);
 
   // 片场改了采用、增删片段、改顺序：内容稳定后对账一次
   const signature = segments
@@ -185,6 +192,11 @@ export function FinalArea({
   });
   // 编辑器只认轨道；删除名单、已导入由短剧自己维护
   const editorTimeline = useMemo(() => ({ tracks: timeline.tracks }), [timeline.tracks]);
+  /** 导出单：时长、各轨段数、会跳过的片段、封面 */
+  const exportSummary = useMemo(
+    () => summarizeExport(editorTimeline, host.resolve),
+    [editorTimeline, host.resolve],
+  );
   const editorHistory = useMemo(
     () => ({
       canUndo: history.past.length > 0,
@@ -210,30 +222,42 @@ export function FinalArea({
       ? "时间线还没读完"
       : (composeReason({ timeline, segments, assets, invalid, save }) ?? busy);
 
+  /** 成片已是最新：时间线合成后没改过，直接下载上次的成片（共享只读只能下载已有的成片） */
+  const fresh = readOnly ? !!final : save === "saved" && !!final && state === "fresh";
+
   /**
    * 导出：先把没保存的剪辑存上（合成读的是服务端的时间线），再让后端按时间线合成，合成完自动下载；
-   * 时间线合成后没改过就直接下载上次的成片。共享只读只能下载已有的成片。
+   * 时间线合成后没改过就直接下载上次的成片。每一步失败都停在那一步，弹窗里显示原因和重试。
    */
   const exportNow = async () => {
     if (readOnly) {
       if (final) void downloadFinal(final.url);
       return;
     }
-    setExportStep("saving");
+    setPhase({ kind: "saving" });
     const wasSaved = editor().save === "saved";
-    if (!(await editor().flush())) return setExportStep(null);
+    if (!(await editor().flush())) {
+      return setPhase({ kind: "failed", at: "saving", message: "时间线没保存成功，请重试" });
+    }
     if (wasSaved && final && state === "fresh") return void downloadFinal(final.url);
-    setExportStep("composing");
-    if (!(await compose(no))) return setExportStep(null);
+    setPhase({ kind: "composing" });
+    if (!(await compose(no))) {
+      return setPhase({ kind: "failed", at: "composing", message: "合成任务没有提交成功，请重试" });
+    }
     exportJob.current =
       activeComposeJob(useDramaJobsStore.getState().byDrama[drama.id] ?? [], no)?.id ?? null;
   };
+  /** 顶栏「导出」：打开弹窗；上次已结束（完成或失败）就回到导出单，进行中就看进度 */
+  const openExport = () => {
+    if (phase.kind === "done" || phase.kind === "failed") setPhase({ kind: "idle" });
+    setExportOpen(true);
+  };
   const exportLabel =
-    exportStep === "saving"
+    phase.kind === "saving"
       ? "保存中…"
-      : exportStep === "composing"
+      : phase.kind === "composing"
         ? `合成中 ${running?.progress ?? 0}%`
-        : exportStep === "downloading"
+        : phase.kind === "downloading"
           ? "下载中…"
           : null;
   const exportReason = readOnly ? (final ? null : "作者还没有导出过这一集") : reason;
@@ -259,7 +283,7 @@ export function FinalArea({
         onLocate={(clipId) => setFocus((prev) => ({ clipId, nonce: (prev?.nonce ?? 0) + 1 }))}
         onAckSync={() => editor().ackSync()}
         onUndoSync={() => editor().undoSync()}
-        onExport={() => void exportNow()}
+        onExport={openExport}
         fullscreen={fullscreen}
         onToggleFullscreen={toggleFullscreen}
       />
@@ -275,6 +299,21 @@ export function FinalArea({
           layoutId="drama-final"
         />
       </div>
+      <ExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        title={`第 ${no} 集 · ${episode.title}`}
+        phase={phase}
+        composeProgress={running?.progress ?? (phase.kind === "composing" ? 0 : 100)}
+        summary={exportSummary}
+        fileName={finalFileName(drama.title, no)}
+        ratio={drama.ratio}
+        fresh={fresh}
+        onStart={() => void exportNow()}
+        onRetry={() => void exportNow()}
+        onDownload={() => final && void downloadFinal(final.url)}
+        onClose={() => setExportOpen(false)}
+      />
     </div>
   );
 }

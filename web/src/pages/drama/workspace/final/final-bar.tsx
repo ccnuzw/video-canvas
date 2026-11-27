@@ -165,8 +165,9 @@ export function FinalBar({
       <Button
         size="sm"
         className="min-w-24 rounded-full"
-        disabled={!!exportReason || !!exporting}
-        title={exportReason ?? "按时间线合成并下载 mp4，不扣积分"}
+        // 导出进行中按钮显示进度，点它重新打开导出弹窗看详情
+        disabled={!exporting && !!exportReason}
+        title={exporting ? "查看导出进度" : (exportReason ?? "按时间线合成并下载 mp4，不扣积分")}
         onClick={onExport}
       >
         {exporting ? <Loader2 className="animate-spin" /> : <Download />}
