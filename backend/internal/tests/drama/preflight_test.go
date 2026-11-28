@@ -72,13 +72,69 @@ func TestScriptEpisodesKeepScenes(t *testing.T) {
 		t.Fatalf("%+v", eps)
 	}
 	preface := drama.Preflight("序言不应成为额外的一集。\n第1集 开始\n甲：走。\n第2集 结束\n乙：好。", "script")
-	if eps := drama.ScriptEpisodes(preface.Units, 60); len(eps) != 2 || !strings.Contains(eps[0].ScriptMD, "序言") || eps[0].Title != "第1集 开始" {
-		t.Fatalf("序言应并入首集: %+v", eps)
+	if eps := drama.ScriptEpisodes(preface.Units, 60); len(eps) != 2 || strings.Contains(eps[0].ScriptMD, "序言") || eps[0].UnitFrom != 1 || eps[0].Title != "第1集 开始" {
+		t.Fatalf("分集标记之前的介绍应留在原文范围：%+v", eps)
 	}
 	unmarked := drama.Preflight("1-1 日 内\n"+strings.Repeat("甲：走。\n", 180)+"1-2 夜 外\n乙：好。\n1-3 日 内\n甲：回来。", "script")
 	eps := drama.ScriptEpisodes(unmarked.Units, 60)
 	if len(eps) < 1 || strings.Count(eps[0].ScriptMD, "甲：走。") != 180 {
 		t.Fatal("场次被拆开或台词丢失")
+	}
+}
+
+func TestScriptEpisodesKeepProjectIntroInSource(t *testing.T) {
+	const intro = "《开局一座幼儿园》\n对标剧：同类型\n类型：轻奇幻\n核心梗：萌娃穿梭\n一句话故事：林牧继承了幼儿园……第一集"
+	const scene = "小兕子寝宫 日 内\n人物：小兕子\n△ 小兕子趴着窗沿。"
+	for _, tc := range []struct {
+		name, opening string
+	}{
+		{name: "直接开场"},
+		{name: "有序幕戏", opening: "△ 风筝落在院子里。\n小兕子：风来了。\n"},
+		{name: "序幕有场次标题", opening: "院子 日 外\n△ 风筝落在院子里。\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := drama.Preflight(intro+"\n\n"+tc.opening+scene+"\n\n第二集\n小兕子：回来了。\n第三集\n小兕子：走吧。", "script")
+			episodes := drama.ScriptEpisodes(source.Units, 60)
+			if len(episodes) != 2 || episodes[0].UnitFrom != 1 {
+				t.Fatalf("首集应保留序言对应的原文范围：%+v", episodes)
+			}
+			if got := strings.SplitN(episodes[0].ScriptMD, "\n\n", 2)[0]; got != tc.opening+scene {
+				t.Fatalf("首集正文起始 = %q", got)
+			}
+			if !strings.Contains(source.Units[0].Text, intro) {
+				t.Fatal("原著对照应保留完整介绍")
+			}
+		})
+	}
+}
+
+func TestScriptEpisodesFindBodyWithoutProjectFieldNames(t *testing.T) {
+	const intro = "# 主创手记\n\n项目定位：写给异乡人的故事\n这段介绍跨了两行。"
+	for _, body := range []string{
+		"第一场：港口 · 夜 · 外\n阿遥：船要开了。",
+		"**INT. KITCHEN - DAY**\n阿遥：出发吧。",
+		"【空镜】雾从河面升起。\n阿遥：回家吧。",
+		"△ 阿遥合上门。\n阿遥：明天见。",
+	} {
+		units := []drama.Unit{
+			{No: 1, Kind: "prologue", Text: intro, Chars: 1000},
+			{No: 2, Kind: "scene", Text: body, Chars: 50},
+		}
+		episodes := drama.ScriptEpisodes(units, 60)
+		if len(episodes) != 1 || episodes[0].UnitFrom != 1 || episodes[0].UnitTo != 2 || episodes[0].ScriptMD != body {
+			t.Errorf("正文 %q 导入错误：%+v", body, episodes)
+		}
+		if units[0].Text != intro {
+			t.Fatal("导入应保留原文")
+		}
+	}
+}
+
+func TestScriptEpisodesKeepUnmarkedDialogueFragment(t *testing.T) {
+	const text = "阿遥：船要开了。\n小舟：等等我。"
+	episodes := drama.ScriptEpisodes(drama.Preflight(text, "script").Units, 60)
+	if len(episodes) != 1 || episodes[0].ScriptMD != text {
+		t.Fatalf("没有场次标记的对白片段应完整保留：%+v", episodes)
 	}
 }
 

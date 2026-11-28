@@ -109,6 +109,29 @@ func normalize(raw string) string {
 	return strings.TrimSpace(s)
 }
 
+// BodyStart 返回导入时首个明确的剧本结构所在的字节位置，找不到时返回 len(text)。
+// 「名称：内容」既可能是对白也可能是文头字段，不能单独用来确定边界。
+func BodyStart(text string) int {
+	offset := 0
+	for rest := text; rest != ""; {
+		raw, next, _ := strings.Cut(rest, "\n")
+		line := normalize(raw)
+		if _, ok := parseHeading(line); ok || reEpisode.MatchString(line) || isOpeningCue(line) {
+			return offset
+		}
+		offset += len(rest) - len(next)
+		rest = next
+	}
+	return len(text)
+}
+
+// isOpeningCue 识别场次标题前也可以独立出现的剧本元素。
+func isOpeningCue(line string) bool {
+	return reAction.MatchString(line) || reScreen.MatchString(line) || reShot.MatchString(line) ||
+		reSubtitle.MatchString(line) || reTransit.MatchString(line) ||
+		line == "【闪回】" || reFlashIn.MatchString(line)
+}
+
 func (p *parser) line(no int, s string) {
 	if s == "" {
 		p.speaking = false // 空行结束续行，但挂起的说话人继续等台词

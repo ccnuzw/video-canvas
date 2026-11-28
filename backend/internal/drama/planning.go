@@ -2,8 +2,11 @@ package drama
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"video-canvas/internal/drama/script"
 )
 
 // UnitSource 按单元号拼完整原文，供规划和剧本使用。
@@ -154,6 +157,7 @@ func (o PlanOutput) ValidateCoverage(from, to int) error {
 
 // ScriptEpisodes 带分集标记时一对一导入，否则按整场累计长度，绝不拆场。
 func ScriptEpisodes(units []Unit, seconds int) []PlanEpisode {
+	units = scriptBodyUnits(units)
 	marked := false
 	for _, u := range units {
 		if u.Kind == "episode" {
@@ -189,6 +193,28 @@ func ScriptEpisodes(units []Unit, seconds int) []PlanEpisode {
 	return out
 }
 
+// scriptBodyUnits 从第一个明确的正文标记开始计算正文字数，保留原文单元编号供对照。
+// 无法确定正文起点时，完整导入原文，例如没有场次标题的对白片段。
+func scriptBodyUnits(units []Unit) []Unit {
+	for i, unit := range units {
+		start := script.BodyStart(unit.Text)
+		if start == len(unit.Text) {
+			continue
+		}
+		if i == 0 && start == 0 {
+			return units
+		}
+		body := slices.Clone(units)
+		for j := range body[:i] {
+			body[j].Text, body[j].Chars = "", 0
+		}
+		body[i].Text = unit.Text[start:]
+		body[i].Chars = utf8.RuneCountInString(body[i].Text)
+		return body
+	}
+	return units
+}
+
 // ScriptBatches 按十二集或预算字数（最多三万字）拆解，超长单集独占一批，正文保持完整。
 func ScriptBatches(units []Unit, budget int) [][]Unit {
 	out := [][]Unit{}
@@ -209,18 +235,20 @@ func ScriptBatches(units []Unit, budget int) [][]Unit {
 	return out
 }
 
-// scriptEpisode 只整理换行与场次头格式，序言并入首集且保留全部对白。
+// scriptEpisode 整理分集正文与场次头格式，原文范围包含项目介绍，供原著对照。
 func scriptEpisode(units []Unit, marked bool) PlanEpisode {
-	texts := make([]string, len(units))
+	texts := make([]string, 0, len(units))
 	title := units[0].Title
-	for i, u := range units {
+	for _, u := range units {
 		lines := strings.Split(u.Text, "\n")
 		for k, line := range lines {
 			if sceneHead.MatchString(strings.TrimSpace(line)) {
 				lines[k] = "**" + line + "**"
 			}
 		}
-		texts[i] = strings.Join(lines, "\n")
+		if u.Text != "" {
+			texts = append(texts, strings.Join(lines, "\n"))
+		}
 		if marked && u.Kind == "episode" {
 			title = u.Title
 		}
