@@ -1,6 +1,6 @@
 import { expect, mock, spyOn, test } from "bun:test";
 
-import { installDom } from "@/tests/helpers/dom";
+import { installDom, installStaticMotionDom } from "@/tests/helpers/dom";
 import { ApiError } from "@/utils/requests/request";
 import service from "@/utils/requests/service";
 import { dispatchCanvasRoomMessage } from "@/utils/ws/canvas-room";
@@ -88,7 +88,7 @@ test.each([
   ["editor", 30018, 409, "当前协作会话已结束", "/canvas/closed/reader"],
   ["editor", "HTTP_404", 404, "你已失去这张画布的协作权限", null],
 ] as const)("在线 %s 收到 %s 时显示对应状态和入口", async (role, code, status, message, href) => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   const { MemoryRouter, Routes, Route } = await import("react-router");
   const { default: CollaborationPage } = await import("@/pages/canvas/collaboration");
   const get = spyOn(service, "get").mockImplementation(async (url) => {

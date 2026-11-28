@@ -39,7 +39,7 @@ func (r *CanvasCollaborationRepository) CopyHistoricalVersion(ctx context.Contex
 		if err != nil {
 			return err
 		}
-		if err := tx.Create(result).Error; err != nil {
+		if err := tx.Clauses(clause.Returning{}).Create(result).Error; err != nil {
 			return err
 		}
 		receipt.Result, err = json.Marshal(result.ID)

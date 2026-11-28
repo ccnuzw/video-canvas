@@ -1,14 +1,14 @@
 import { expect, spyOn, test } from "bun:test";
 import { canvasSharing } from "@/api/drama/share";
 import { useDirectorStore } from "@/store/director";
-import { installDom } from "@/tests/helpers/dom";
+import { installDom, installStaticMotionDom } from "@/tests/helpers/dom";
 import { createDefaultScene } from "@/utils/director/scene";
 import { ApiError } from "@/utils/requests/request";
 import service from "@/utils/requests/service";
 import { dispatchCanvasRoomMessage } from "@/utils/ws/canvas-room";
 
 test("协作查看开启实时订阅后同步标题，关闭后仍检查访问权限", async () => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   const { MemoryRouter, Routes, Route } = await import("react-router");
   const { default: Reader } = await import("@/pages/canvas/shared-reader");
   const canvas = {
@@ -109,7 +109,7 @@ test("协作查看开启实时订阅后同步标题，关闭后仍检查访问�
 });
 
 test("60 秒定时刷新期间独立检查权限，撤权后丢弃在途内容", async () => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   const { MemoryRouter, Routes, Route } = await import("react-router");
   const { default: Reader } = await import("@/pages/canvas/shared-reader");
   localStorage.setItem("canvas:shared-refresh-seconds", "60");
@@ -173,7 +173,7 @@ test("60 秒定时刷新期间独立检查权限，撤权后丢弃在途内容",
 });
 
 test("实时查看的增量达到字节预算后改读共享快照", async () => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   const { MemoryRouter, Routes, Route } = await import("react-router");
   const { default: Reader } = await import("@/pages/canvas/shared-reader");
   const canvas = {
@@ -231,98 +231,6 @@ test("实时查看的增量达到字节预算后改读共享快照", async () =>
     dom.restore();
   }
 });
-
-test("导演台刷新沿用查看者的进度和有效机位，移除机位后回到导演视角", async () => {
-  const dom = await installDom();
-  const { default: SharedDirectorPreview } =
-    await import("@/components/director/shared-director-preview");
-  const figures = await import("@/utils/director/figure");
-  const load = spyOn(figures, "loadFigureModels").mockReturnValue(new Promise(() => {}));
-  const scene = createDefaultScene();
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = dom.createRoot(container);
-  const render = (next: typeof scene) =>
-    dom.act(async () => root.render(<SharedDirectorPreview scene={next} />));
-  try {
-    await render(scene);
-    await dom.act(async () => {
-      useDirectorStore.getState().enterCameraView(scene.activeCameraId);
-      useDirectorStore.getState().setTime(2);
-    });
-    await render({ ...scene, duration: 3 });
-    expect(container.querySelector("input")?.value).toBe("2");
-    expect(container.querySelector("select")?.value).toBe(scene.activeCameraId);
-    await render({ ...scene, duration: 1, activeCameraId: "", cameras: [] });
-    expect(container.querySelector("input")?.value).toBe("1");
-    expect(container.querySelector("select")?.value).toBe("");
-    expect(useDirectorStore.getState().viewMode).toBe("director");
-  } finally {
-    await dom.act(async () => root.unmount());
-    load.mockRestore();
-    dom.restore();
-  }
-  expect(useDirectorStore.getState().scene).toBeNull();
-});
-
-test("已打开的素材详情跟随作者保存的当前版本，保留查看者主动选择并允许重试素材", async () => {
-  const dom = await installDom();
-  const { SharedNodeDetails } = await import("@/components/canvas-editor/shared-node-details");
-  const outputs = ["first", "second", "third"].map((id, createdAt) => ({
-    id,
-    src: `/media/${id}.png`,
-    mediaType: "image" as const,
-    createdAt,
-  }));
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = dom.createRoot(container);
-  const render = (activeOutputId: string) =>
-    dom.act(async () =>
-      root.render(
-        <SharedNodeDetails
-          data={{ kind: "image", label: "图片", outputs, activeOutputId }}
-          onClose={() => {}}
-        />,
-      ),
-    );
-  try {
-    await render("first");
-    const dialog = document.querySelector('[role="dialog"]');
-    if (!dialog) throw new Error("缺少素材详情弹窗");
-    expect(dialog?.querySelector("img")?.getAttribute("src")).toBe("/media/first.png");
-    await render("second");
-    expect(dialog?.querySelector("img")?.getAttribute("src")).toBe("/media/second.png");
-    await dom.act(async () => {
-      const select = dialog?.querySelector("select");
-      if (!select) throw new Error("缺少历史选择器");
-      select.value = "first";
-      select.dispatchEvent(new dom.win.Event("change", { bubbles: true }));
-    });
-    await render("third");
-    expect(dialog?.querySelector("img")?.getAttribute("src")).toBe("/media/first.png");
-    await dom.act(async () =>
-      dialog?.querySelector("img")?.dispatchEvent(new dom.win.Event("error")),
-    );
-    expect(dialog?.textContent).toContain("素材不可用");
-    await dom.click(
-      [...dialog.querySelectorAll("button")].find((button) => button.textContent === "重试"),
-    );
-    expect(dialog?.querySelector("img")?.getAttribute("src")).toBe("/media/first.png");
-  } finally {
-    await dom.act(async () => root.unmount());
-    dom.restore();
-  }
-});
-
-async function installReaderDom() {
-  const dom = await installDom();
-  return {
-    ...dom,
-    async mount(element: ReactNode) {
-      const { MotionConfig } = await import("motion/react");
-      return dom.mount(<MotionConfig isStatic>{element}</MotionConfig>);
-    },
-  };
-}
 
 test("导演台刷新沿用查看者的进度和有效机位，移除机位后回到导演视角", async () => {
   const dom = await installDom();
@@ -410,7 +318,7 @@ test("已打开的素材详情跟随作者保存的当前版本，保留查看�
 });
 
 test("编辑器共享遇到保存失败时停在原画布", async () => {
-  const dom = await installReaderDom();
+  const dom = await installStaticMotionDom();
   const { MemoryRouter } = await import("react-router");
   const { TopLeftBar } = await import("@/pages/canvas/chrome/top-left-bar");
   const { TooltipProvider } = await import("@/components/ui/tooltip");
@@ -490,7 +398,7 @@ test("个人画布回前台时可看到接收的作品", async () => {
 });
 
 test("查看者打开和刷新只读画布只读取共享投影，撤权后清除画布", async () => {
-  const dom = await installReaderDom();
+  const dom = await installStaticMotionDom();
   const { MemoryRouter, Routes, Route } = await import("react-router");
   const { default: Reader } = await import("@/pages/canvas/shared-reader");
   const get = spyOn(service, "get")
@@ -561,7 +469,7 @@ test("查看者打开和刷新只读画布只读取共享投影，撤权后清�
 });
 
 test("查看历史和关联分镜只改变预览，撤权后的旧响应不会恢复画布", async () => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   const imageConstructor = Object.getOwnPropertyDescriptor(globalThis, "Image");
   Object.defineProperty(globalThis, "Image", { configurable: true, value: dom.win.Image });
   const { MemoryRouter, Routes, Route } = await import("react-router");
@@ -686,7 +594,7 @@ test("查看历史和关联分镜只改变预览，撤权后的旧响应不会�
 });
 
 test("刷新读取新版画布并保留查看者调整后的视口", async () => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   if (!dom.win.customElements.get("number-flow-react")) {
     dom.win.customElements.define(
       "number-flow-react",
@@ -760,7 +668,7 @@ test("刷新读取新版画布并保留查看者调整后的视口", async () =>
 });
 
 test("共享画布使用工作台外壳并定时检查已保存版本", async () => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   const { MemoryRouter, Routes, Route } = await import("react-router");
   const { default: Reader } = await import("@/pages/canvas/shared-reader");
   const first = { id: "c1", title: "第一版", revision: 1, payload_json: { nodes: [], edges: [] } };
@@ -801,7 +709,7 @@ test("共享画布使用工作台外壳并定时检查已保存版本", async ()
 });
 
 test("查看者可调整刷新间隔，慢请求期间和后台停留时跳过自动检查", async () => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   const { MemoryRouter, Routes, Route } = await import("react-router");
   const { default: Reader } = await import("@/pages/canvas/shared-reader");
   const first = {
@@ -877,7 +785,7 @@ test("查看者可调整刷新间隔，慢请求期间和后台停留时跳过�
 });
 
 test("不刷新会停止自动检查并保留当前画布，仍可手动刷新", async () => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   localStorage.setItem("canvas:shared-refresh-seconds", "23");
   const { MemoryRouter, Routes, Route } = await import("react-router");
   const { default: Reader } = await import("@/pages/canvas/shared-reader");
@@ -945,7 +853,7 @@ test("不刷新会停止自动检查并保留当前画布，仍可手动刷新",
 });
 
 test("退出共享先说明权限变化，取消保留画布，确认成功后返回共享列表", async () => {
-  const dom = await installDom();
+  const dom = await installStaticMotionDom();
   const { MemoryRouter, Routes, Route, useLocation } = await import("react-router");
   const { default: Reader } = await import("@/pages/canvas/shared-reader");
   const get = spyOn(service, "get").mockResolvedValue({

@@ -8,6 +8,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"gorm.io/gorm"
 
 	"video-canvas/internal/handler"
 	"video-canvas/internal/middleware"
@@ -30,7 +33,9 @@ func TestCanvasCollaborationHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	shareRepo := repository.NewCanvasShareRepository(db)
-	repo := repository.NewCanvasCollaborationRepository(db)
+	repo := repository.NewCanvasCollaborationRepository(db.Session(&gorm.Session{
+		NowFunc: func() time.Time { return time.Date(2026, time.November, 28, 8, 0, 0, 123456789, time.UTC) },
+	}))
 	const secret = "collaboration-http-test-secret"
 	engine := router.New("test", secret, router.Handlers{
 		Health: &handler.HealthHandler{}, CanvasShare: handler.NewCanvasShareHandler(shared),
