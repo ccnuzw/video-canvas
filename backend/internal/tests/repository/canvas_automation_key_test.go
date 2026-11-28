@@ -26,14 +26,14 @@ import (
 
 func TestCanvasAutomationScopeAndRevocation(t *testing.T) {
 	db, repo, owner, editor, _, project := newCollaborationFixtureWithPayload(t, imageCollaborationFixture)
-	ddl, err := migrations.FS.ReadFile("0070_canvas_automation_keys.sql")
+	ddl, err := migrations.FS.ReadFile("0074_canvas_automation_keys.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec(strings.ReplaceAll(string(ddl), "ADD COLUMN source", "ADD COLUMN IF NOT EXISTS source")).Error; err != nil {
 		t.Fatal(err)
 	}
-	budgetDDL, err := migrations.FS.ReadFile("0072_canvas_automation_budget.sql")
+	budgetDDL, err := migrations.FS.ReadFile("0076_canvas_automation_budget.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
