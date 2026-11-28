@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useDirectorStore } from "@/store/director";
@@ -6,19 +6,9 @@ import type { DirectorScene } from "@/types";
 import { loadFigureModels } from "@/utils/director/figure";
 import { sceneModels } from "@/utils/director/preload";
 
-const DirectorViewport = lazy(() =>
-  import("./director-viewport").then((module) => ({ default: module.DirectorViewport })),
-);
+import { DirectorViewport } from "./director-viewport";
 
 const PREVIEW_SESSION = "shared-preview";
-
-function LoadingScene() {
-  return (
-    <p role="status" className="p-4">
-      正在加载场景…
-    </p>
-  );
-}
 
 export default function SharedDirectorPreview({ scene }: { scene: DirectorScene }) {
   const [ready, setReady] = useState(false);
@@ -90,11 +80,11 @@ export default function SharedDirectorPreview({ scene }: { scene: DirectorScene 
     <div className="space-y-3">
       <div className="bg-muted relative h-[min(56dvh,36rem)] overflow-hidden rounded-lg">
         {ready ? (
-          <Suspense fallback={<LoadingScene />}>
-            <DirectorViewport readOnly />
-          </Suspense>
+          <DirectorViewport readOnly />
         ) : (
-          <LoadingScene />
+          <p role="status" className="p-4">
+            正在加载场景…
+          </p>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">
