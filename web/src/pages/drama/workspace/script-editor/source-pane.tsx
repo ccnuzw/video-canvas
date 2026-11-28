@@ -3,6 +3,7 @@ import { useEffect, useState, type RefObject } from "react";
 import { getUnit } from "@/api/drama";
 import type { DramaUnit } from "@/api/drama/type";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 /** 一次最多读多少个原文单元：一集对应的原文通常是几章，极端情况只读前面这些 */
 const MAX_UNITS = 30;
@@ -14,6 +15,7 @@ const MAX_UNITS = 30;
  * @param to 结束单元号
  * @param paneRef 这一栏自己，供滚动同步读写 scrollTop
  * @param onLoaded 原文读完（内容高度有了）时调用，用来对齐一次滚动位置
+ * @param className 外层追加样式，用来按吸顶位置调整最大高度
  */
 export function SourcePane({
   dramaId,
@@ -21,12 +23,14 @@ export function SourcePane({
   to,
   paneRef,
   onLoaded,
+  className,
 }: {
   dramaId: string;
   from: number;
   to: number;
   paneRef?: RefObject<HTMLElement | null>;
   onLoaded?: () => void;
+  className?: string;
 }) {
   const [units, setUnits] = useState<DramaUnit[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -52,7 +56,10 @@ export function SourcePane({
     <aside
       ref={paneRef}
       aria-label="原著对照"
-      className="bg-card ring-border sticky top-6 max-h-[calc(100svh-7rem)] min-w-0 self-start overflow-y-auto rounded-2xl px-6 py-5 ring-1"
+      className={cn(
+        "bg-card ring-border max-h-[calc(100svh-7rem)] min-w-0 overflow-y-auto rounded-2xl px-6 py-5 ring-1",
+        className,
+      )}
     >
       {failed ? (
         <p className="text-muted-foreground py-8 text-center text-sm">原文读取失败，请稍后重试</p>

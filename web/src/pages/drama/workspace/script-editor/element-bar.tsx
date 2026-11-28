@@ -68,7 +68,7 @@ export function ElementBar({
     <div
       role="toolbar"
       aria-label="剧本元素"
-      className="border-border bg-background/85 sticky top-0 z-20 flex justify-center gap-0.5 overflow-x-auto border-b px-2 py-1.5 backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="border-border bg-background/85 sticky top-0 z-20 flex h-14 items-center justify-center gap-0.5 overflow-x-auto border-b px-2 backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       <button
         type="button"

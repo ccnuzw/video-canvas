@@ -22,6 +22,12 @@ interface Cursor {
 const PAPER =
   "bg-paper text-paper-foreground ring-border font-display relative rounded-b-[20px] px-[clamp(20px,7vw,88px)] pt-10 pb-24 text-[16px] leading-[2.05] shadow-[0_30px_60px_-30px_rgb(0_0_0/0.6)] ring-1 transition-[filter] duration-200";
 
+/** 稿纸自己滚时，读取中 / 失败（没有类型条）整栏就是滚动区；左右上下各留 1px，稿纸描边不被裁掉 */
+const ROOT_SCROLL = "self-stretch overflow-y-auto p-px";
+/** 稿纸自己滚时的正常编辑态：类型条固定在上面，下面的稿纸单独滚 */
+const ROOT_SCROLL_WITH_BAR = "flex flex-col self-stretch";
+const PAPER_SCROLL = "min-h-0 flex-1 overflow-y-auto p-px";
+
 /**
  * 结构化剧本编辑器（稿纸，版式参考 reveric 的剧本编辑器）：上方一行元素类型条，下面是场次标题 + 元素行。
  * 用户不用输入任何格式符号，Enter 换行并按规则接下一种元素（角色后接对白），Tab 切类型，
@@ -29,15 +35,18 @@ const PAPER =
  * @param editor 编辑状态与动作（由外层的 useScriptEditor 创建，侧栏也要用同一份）
  * @param no 集号，用来显示场号
  * @param paperRef 稿纸元素，原著对照时用来同步滚动
+ * @param scroll 稿纸自己滚：类型条固定在上面，滚动条从稿纸顶边开始、落在稿纸旁边
  */
 export function ScriptEditor({
   editor,
   no,
   paperRef,
+  scroll = false,
 }: {
   editor: ScriptEditorApi;
   no: number;
   paperRef?: React.Ref<HTMLDivElement>;
+  scroll?: boolean;
 }) {
   const { scenes, scenesRef, readOnly } = editor;
   // 根节点用 state 持有（回调 ref）：弹层定位的函数要在渲染外读它，闭包 state 比闭包 ref 更干净
@@ -138,7 +147,7 @@ export function ScriptEditor({
 
   if (editor.phase === "loading") {
     return (
-      <div className="min-w-0 flex-1">
+      <div className={cn("min-w-0 flex-1", scroll && ROOT_SCROLL)}>
         <div ref={paperRef} className={PAPER}>
           <div className="grid gap-2.5 py-2">
             {[90, 70, 80, 55].map((width) => (
@@ -155,7 +164,7 @@ export function ScriptEditor({
   }
   if (editor.phase === "failed") {
     return (
-      <div className="min-w-0 flex-1">
+      <div className={cn("min-w-0 flex-1", scroll && ROOT_SCROLL)}>
         <div ref={paperRef} className={PAPER}>
           <p className="text-muted-foreground py-10 text-center text-sm">
             这一集读取失败，请稍后重试
@@ -191,7 +200,7 @@ export function ScriptEditor({
       onKeyDown={onKeyDown}
       onPaste={onPaste}
       onFocus={onFocus}
-      className="min-w-0 flex-1"
+      className={cn("min-w-0 flex-1", scroll && ROOT_SCROLL_WITH_BAR)}
     >
       <ElementBar
         els={curScene.elements}
@@ -201,93 +210,95 @@ export function ScriptEditor({
         onMarker={(type) => editor.insertMarker(curScene.key, curIndex, type)}
         onNewScene={() => editor.addScene(curScene.key)}
       />
-      <div ref={paperRef} className={cn(PAPER, readOnly && "saturate-[.7]")}>
-        {editor.status === "conflict" && (
-          <div
-            role="alert"
-            className="bg-destructive/10 mb-4 flex items-center gap-2 rounded-xl px-3 py-2 font-sans text-sm"
-          >
-            <GitCompareArrows className="text-destructive size-4 shrink-0" />
-            <span className="flex-1">内容已在别处修改</span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-full"
-              onClick={() => void editor.reload()}
+      <div className={cn(scroll && PAPER_SCROLL)}>
+        <div ref={paperRef} className={cn(PAPER, readOnly && "saturate-[.7]")}>
+          {editor.status === "conflict" && (
+            <div
+              role="alert"
+              className="bg-destructive/10 mb-4 flex items-center gap-2 rounded-xl px-3 py-2 font-sans text-sm"
             >
-              重新加载
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-full"
-              onClick={() => void editor.overwrite()}
+              <GitCompareArrows className="text-destructive size-4 shrink-0" />
+              <span className="flex-1">内容已在别处修改</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => void editor.reload()}
+              >
+                重新加载
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => void editor.overwrite()}
+              >
+                覆盖
+              </Button>
+            </div>
+          )}
+          {problem && (
+            <div
+              role="alert"
+              className="bg-destructive/10 mb-4 flex items-center gap-2 rounded-xl px-3 py-2 font-sans text-sm"
             >
-              覆盖
-            </Button>
-          </div>
-        )}
-        {problem && (
-          <div
-            role="alert"
-            className="bg-destructive/10 mb-4 flex items-center gap-2 rounded-xl px-3 py-2 font-sans text-sm"
-          >
-            <CircleAlert className="text-destructive size-4 shrink-0" />
-            <span className="flex-1">
-              剧本结构不合法：第 {no}-{problem.scene + 1} 场第 {problem.element + 1} 行，
-              {problem.message}
-              ，改好后会自动保存
-            </span>
-          </div>
-        )}
-        {scenes.map((scene, si) => {
-          const loc = scene.locationId ? locationName.get(scene.locationId) : undefined;
-          return (
-            <section key={scene.key} data-scene-key={scene.key} className="mb-11 scroll-mt-16">
-              <SceneHeading
-                scene={scene}
-                label={`${no}-${si + 1}`}
-                locationName={loc?.name ?? null}
-                unconfirmed={!!loc && !loc.confirmed}
-                editable={!readOnly}
-                canDelete={scenes.length > 1}
-                onChange={(patch) => editor.patchScene(scene.key, patch)}
-                onPickLocation={(anchor) =>
-                  setPicked({ kind: "location", sceneKey: scene.key, anchor })
-                }
-                onDelete={() => editor.deleteScene(scene.key)}
-              />
-              {cast(scene) && (
-                <p
-                  data-scene-cast
-                  className="text-muted-foreground -mt-1.5 mb-1 text-[13.5px] leading-[1.8]"
-                >
-                  出场人物：<span className="text-foreground/70">{cast(scene)}</span>
-                </p>
-              )}
-              {scene.elements.map((el, ei) => {
-                const person = el.characterId ? characterName.get(el.characterId) : undefined;
-                return (
-                  <ElementRow
-                    key={el.key}
-                    el={el}
-                    sceneKey={scene.key}
-                    editable={!readOnly}
-                    characterName={person?.name ?? null}
-                    unconfirmed={!!person && !person.confirmed}
-                    highlighted={false}
-                    invalid={!!problem && problem.scene === si && problem.element === ei}
-                    onText={editor.setText}
-                    onPick={(sceneKey, elKey, anchor) =>
-                      setPicked({ kind: "character", sceneKey, elKey, anchor })
-                    }
-                    onExtension={editor.cycleExtension}
-                  />
-                );
-              })}
-            </section>
-          );
-        })}
+              <CircleAlert className="text-destructive size-4 shrink-0" />
+              <span className="flex-1">
+                剧本结构不合法：第 {no}-{problem.scene + 1} 场第 {problem.element + 1} 行，
+                {problem.message}
+                ，改好后会自动保存
+              </span>
+            </div>
+          )}
+          {scenes.map((scene, si) => {
+            const loc = scene.locationId ? locationName.get(scene.locationId) : undefined;
+            return (
+              <section key={scene.key} data-scene-key={scene.key} className="mb-11 scroll-mt-16">
+                <SceneHeading
+                  scene={scene}
+                  label={`${no}-${si + 1}`}
+                  locationName={loc?.name ?? null}
+                  unconfirmed={!!loc && !loc.confirmed}
+                  editable={!readOnly}
+                  canDelete={scenes.length > 1}
+                  onChange={(patch) => editor.patchScene(scene.key, patch)}
+                  onPickLocation={(anchor) =>
+                    setPicked({ kind: "location", sceneKey: scene.key, anchor })
+                  }
+                  onDelete={() => editor.deleteScene(scene.key)}
+                />
+                {cast(scene) && (
+                  <p
+                    data-scene-cast
+                    className="text-muted-foreground -mt-1.5 mb-1 text-[13.5px] leading-[1.8]"
+                  >
+                    出场人物：<span className="text-foreground/70">{cast(scene)}</span>
+                  </p>
+                )}
+                {scene.elements.map((el, ei) => {
+                  const person = el.characterId ? characterName.get(el.characterId) : undefined;
+                  return (
+                    <ElementRow
+                      key={el.key}
+                      el={el}
+                      sceneKey={scene.key}
+                      editable={!readOnly}
+                      characterName={person?.name ?? null}
+                      unconfirmed={!!person && !person.confirmed}
+                      highlighted={false}
+                      invalid={!!problem && problem.scene === si && problem.element === ei}
+                      onText={editor.setText}
+                      onPick={(sceneKey, elKey, anchor) =>
+                        setPicked({ kind: "character", sceneKey, elKey, anchor })
+                      }
+                      onExtension={editor.cycleExtension}
+                    />
+                  );
+                })}
+              </section>
+            );
+          })}
+        </div>
       </div>
       <EntityPicker
         target={picker}

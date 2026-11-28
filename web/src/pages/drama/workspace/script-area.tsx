@@ -119,6 +119,15 @@ function EpisodeDoc({ no, onGenerate }: { no: number; onGenerate: (no: number) =
 
   if (!summary) return null;
   const empty = showEmptyScript(summary, episode?.scriptMd ?? "");
+  /**
+   * 结构化剧本编辑器：标题、原著栏、页边固定不动，只有稿纸这一栏自己滚，
+   * 滚动条落在稿纸旁边而不是窗口最右边
+   */
+  const editing = !shared && !empty && summary.scriptStatus !== "generating";
+  /**
+   * 稿纸上方有没有元素类型条（h-14）：有的话原著栏和页边都往下让出这一条，三栏顶边和稿纸顶边对齐
+   */
+  const hasBar = editing && editor.phase === "ready" && !editor.readOnly;
   /** 改开场钩子 / 结尾悬念：带 revision 乐观锁；冲突时载入最新内容并提示，失败让输入框留在编辑态 */
   const saveMeta = async (field: MetaField, value: string) => {
     if (!episode) return;
@@ -176,12 +185,19 @@ function EpisodeDoc({ no, onGenerate }: { no: number; onGenerate: (no: number) =
   }
 
   return (
-    <div className="flex justify-center gap-8 px-6 pt-6 pb-28 max-sm:px-3">
+    <div
+      className={cn(
+        "flex justify-center gap-8 px-6 pt-6 max-sm:px-3",
+        // 编辑器占满剩余高度，底部留白由稿纸自己的 pb-24 给出（给「下一步」浮条让位）
+        editing ? "min-h-0 flex-1" : "pb-28",
+      )}
+    >
       <div
         className={cn(
           // 打开原著对照时内容区平滑变宽，和原著栏展开同时进行
           "w-full min-w-0 transition-[max-width] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
           compare ? "max-w-[1240px]" : "max-w-[720px]",
+          editing && "flex flex-col",
         )}
       >
         <div className="flex items-center gap-2">
@@ -269,21 +285,24 @@ function EpisodeDoc({ no, onGenerate }: { no: number; onGenerate: (no: number) =
             />
           </div>
         ) : (
-          <div className="mt-4 flex items-start">
+          <div className="mt-4 flex min-h-0 flex-1 items-start">
             {/* 原著栏：宽度从 0 展开到 40%，内容稍后淡入并从左滑进来，稿纸跟着平滑变窄；收起时反过来、更快 */}
             <AnimatePresence initial={false}>
               {compare && summary.unitFrom !== null && summary.unitTo !== null && (
                 <motion.div
                   key="source"
-                  // 吸顶放在最外层：原著栏自己的 sticky 包在动画容器里不起作用
-                  className="sticky top-6 min-w-0 shrink-0 self-start overflow-hidden"
+                  // 拉满这一行的高度，原著栏在里面自己滚；底部留一点空，卡片不贴着窗口底边
+                  className={cn(
+                    "min-w-0 shrink-0 self-stretch overflow-hidden pb-6",
+                    hasBar && "mt-14",
+                  )}
                   initial={reduceMotion ? false : { width: 0, marginRight: 0 }}
                   animate={{ width: "40%", marginRight: 16 }}
                   exit={reduceMotion ? undefined : { width: 0, marginRight: 0 }}
                   transition={reduceMotion ? { duration: 0 } : SPRING}
                 >
                   <motion.div
-                    className="p-px"
+                    className="h-full p-px"
                     initial={reduceMotion ? false : { opacity: 0, x: -24 }}
                     animate={{
                       opacity: 1,
@@ -306,17 +325,29 @@ function EpisodeDoc({ no, onGenerate }: { no: number; onGenerate: (no: number) =
                       to={summary.unitTo}
                       paneRef={sourceRef}
                       onLoaded={syncSource}
+                      className="max-h-full"
                     />
                   </motion.div>
                 </motion.div>
               )}
             </AnimatePresence>
-            <ScriptEditor editor={editor} no={no} paperRef={paperRef} />
+            {/* 稿纸这一栏自己滚，滚动条从稿纸顶边开始 */}
+            <ScriptEditor editor={editor} no={no} paperRef={paperRef} scroll />
           </div>
         )}
       </div>
       {/* 页边：场次目录、梗概 / 钩子 / 悬念和对应原文，宽屏才有 */}
-      <aside className="sticky top-6 hidden w-52 shrink-0 self-start pt-12 xl:block">
+      <aside
+        className={cn(
+          "hidden w-52 shrink-0 self-start xl:block",
+          // 标题行 h-9 + 稿纸区 mt-4 = 52px，再加类型条 h-14，顶边和稿纸对齐
+          hasBar ? "mt-[108px]" : "mt-[52px]",
+          // 编辑器不跟着页面滚，场次多时页边自己滚
+          !editing && "sticky top-6",
+          editing && "overflow-x-hidden overflow-y-auto pb-6",
+          editing && (hasBar ? "max-h-[calc(100%-108px)]" : "max-h-[calc(100%-52px)]"),
+        )}
+      >
         {!empty && !shared && (
           <>
             <div className="text-muted-foreground mb-2 font-mono text-[10.5px] tracking-[0.14em]">
@@ -439,7 +470,8 @@ export function ScriptArea({
         onOpenChange={(open) => setScripts((prev) => ({ ...prev, open }))}
       />
       <div className="relative min-w-0 flex-1">
-        <div className="h-full overflow-y-auto">
+        {/* 纵向排开：剧本编辑器占满剩余高度自己滚，其他页面照常整页滚 */}
+        <div className="flex h-full flex-col overflow-y-auto">
           {drama.status === "failed" && !analyzing && (
             <div
               role="alert"
